@@ -10,8 +10,11 @@ var LINE_CONFIG = {
   // ฐานข้อมูล: ใช้ Spreadsheet นี้ "เท่านั้น" (ห้ามชี้ไปไฟล์ของไลน์อื่น)
   SPREADSHEET_ID: '1tz5Unlu2W5Zz5AUCfD1vBTdyj-FPLzOpEaUibOyhcfM',
 
-  // โฟลเดอร์เก็บรูปใน Google Drive (สร้างอัตโนมัติ)
-  DRIVE_FOLDER: 'Assembly_MC_Photos',
+  // โฟลเดอร์เก็บรูปใน Google Drive — แยกเป็น หัวข้อ / เดือน / วัน อัตโนมัติ (ดู DriveService.gs)
+  // https://drive.google.com/drive/folders/1dMBIj2vMWPtc46d0ijKoDfTaaddYEN4B
+  DRIVE_FOLDER_ID: '1dMBIj2vMWPtc46d0ijKoDfTaaddYEN4B',
+  DRIVE_FOLDER: 'Assembly_MC_Photos', // ใช้เมื่อเปิดโฟลเดอร์ตาม ID ไม่ได้ (สร้างใหม่ตามชื่อ)
+  PHOTO_CATEGORIES: { maintenance: 'แจ้งซ่อม', rawmaterial: 'รับวัตถุดิบ' },
 
   // ---- เวลา / กะ ----
   WORKDAY_START_HOUR: 8,   // วันทำงานตัดรอบ 08:00

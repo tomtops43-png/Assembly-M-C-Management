@@ -50,7 +50,7 @@ function submitRawMaterial(token, d) {
   var v = validateRawMaterialForMachine(d.machineId, d.partCode, d.partName);
   if (!v.valid) throw new Error(v.message);
   var id = makeId('RM');
-  var photos = savePhotos(d.photos, id, 'RawMaterial');
+  var photos = savePhotos(d.photos, id + '_' + (d.machineId || '') + '_' + String(d.partCode).replace(/[\\/:*?"<>|]/g, '-'), { category: 'rawmaterial', date: getWorkDate() });
   appendRow('RawMaterialLog', {
     ReceiveID: id, Timestamp: formatDate(), Date: getWorkDate(), ReceivedBy: u.employeeId, ReceiverName: u.name,
     MachineID: d.machineId, PartCode: v.matchedComponents[0].componentCode, SupplierCode: d.partCode,
