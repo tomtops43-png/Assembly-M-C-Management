@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>สถิติ Alarm</title>
+<link rel="icon" href="https://img.icons8.com/color/48/factory.png">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<main class="main"><div class="container">
+  <div class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="entry">บันทึก</button>
+    <button class="tab-btn" data-tab="history">ประวัติ</button>
+    <button class="tab-btn" data-tab="stats">สถิติ</button>
+  </div>
+  <section data-panel="entry">
+    <div class="card">
+      <div class="notice info">การอ่าน Alarm จากรูปหน้าจอ HMI (OCR) จะเปิดหลังได้ตัวอย่างหน้าจอของเครื่องในไลน์นี้</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">เครื่องจักร</label><select class="form-input" id="machine"></select></div>
+        <div class="form-group"><label class="form-label">ชนิด Alarm</label><div class="d-flex gap-2"><select class="form-input" id="type"></select><button class="btn btn-outline" id="manage"><i class="bi bi-gear"></i></button></div></div>
+        <div class="form-group"><label class="form-label">จำนวนครั้ง</label><input type="number" class="form-input" id="count" value="1"></div>
+        <div class="form-group"><label class="form-label">Downtime (นาที)</label><input type="number" class="form-input" id="dur"></div>
+        <div class="form-group"><label class="form-label">วันเวลา</label><input type="datetime-local" class="form-input" id="at"></div>
+      </div>
+      <div class="form-group"><label class="form-label">หมายเหตุ</label><input class="form-input" id="remark"></div>
+      <button class="btn btn-success btn-full btn-lg" id="save">บันทึก Alarm</button>
+    </div>
+  </section>
+  <section data-panel="history" class="hidden">
+    <div class="card">
+      <div class="date-selector mb-2"><input type="date" class="date-input" id="hFrom"> – <input type="date" class="date-input" id="hTo">
+        <select class="date-input" id="hMachine"></select><button class="btn btn-outline btn-sm" id="hSearch">ค้นหา</button></div>
+      <div class="table-wrap"><table class="data-table" id="hist"></table></div>
+    </div>
+  </section>
+  <section data-panel="stats" class="hidden">
+    <div class="card">
+      <div class="date-selector mb-2"><input type="date" class="date-input" id="sFrom"> – <input type="date" class="date-input" id="sTo">
+        <select class="date-input" id="sShift"><option value="">ทุกกะ</option><option>Day</option><option>Night</option></select>
+        <button class="btn btn-outline btn-sm" id="sSearch">ดูสถิติ</button></div>
+      <div class="kpi-grid" id="sKpi"></div>
+      <div class="grid-2"><div><div class="form-label">Pareto ตามชนิด</div><div id="sType"></div></div><div><div class="form-label">ตามเครื่อง</div><div id="sMachine"></div></div></div>
+      <div class="form-label mt-3">แนวโน้มรายวัน</div><div id="sDate"></div>
+    </div>
+  </section>
+</div></main>
+
+<div class="modal-overlay" id="typeModal"><div class="modal-content">
+  <button class="modal-close" data-close-modal>&times;</button>
+  <h3 class="modal-title">จัดการชนิด Alarm</h3>
+  <div class="d-flex gap-2 mb-2"><input class="form-input" id="newType" placeholder="ชื่อชนิดใหม่"><button class="btn btn-primary" id="addType">เพิ่ม</button></div>
+  <div id="typeList"></div>
+</div></div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async function () {
+  if (!UI.initPage('alarm', 'สถิติ Alarm', 'bi-bell')) return;
+  const $ = (id) => document.getElementById(id);
+  $('tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tab]'); if (!b) return;
+    document.querySelectorAll('.tab-btn').forEach((x) => x.classList.toggle('active', x === b));
+    document.querySelectorAll('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== b.dataset.tab));
+    if (b.dataset.tab === 'history') loadHist(); if (b.dataset.tab === 'stats') loadStats();
+  });
+  async function loadMasters() {
+    const [m, t] = await Promise.all([API.get('getMachines'), API.get('getAlarmTypes')]);
+    const ms = m.success ? m.data.filter((x) => x.installed) : [];
+    $('machine').innerHTML = UI.machineOptions(ms) || '<option value="">ยังไม่มีเครื่อง</option>';
+    $('hMachine').innerHTML = '<option value="">ทุกเครื่อง</option>' + UI.machineOptions(ms);
+    const ts = t.success ? t.data : [];
+    $('type').innerHTML = ts.map((x) => `<option>${UI.esc(x.typeName)}</option>`).join('') || '<option value="">ยังไม่มีชนิด — กดปุ่มเฟือง</option>';
+    $('typeList').innerHTML = ts.map((x) => `<div class="entry-card d-flex justify-between align-center">${UI.esc(x.typeName)}<button class="btn btn-outline btn-sm" data-del="${UI.esc(x.typeId)}"><i class="bi bi-trash"></i></button></div>`).join('');
+  }
+  $('save').onclick = () => UI.withButton($('save'), async () => {
+    const r = await API.post('submitAlarm', { data: { machineId: $('machine').value, alarmType: $('type').value, count: Number($('count').value) || 1, durationMinutes: Number($('dur').value) || 0, recordedAt: $('at').value, remark: $('remark').value.trim() } });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    $('count').value = 1; $('dur').value = ''; $('remark').value = ''; $('at').value = UI.nowLocalInput();
+    UI.showToast('บันทึกแล้ว', 'success');
+  });
+  $('manage').onclick = () => UI.openModal('typeModal');
+  $('addType').onclick = async () => { const r = await API.post('addAlarmType', { typeName: $('newType').value }); if (!r.success) return UI.showToast(r.message, 'error'); $('newType').value = ''; loadMasters(); };
+  $('typeList').addEventListener('click', async (e) => { const b = e.target.closest('[data-del]'); if (b && confirm('ลบชนิดนี้?')) { await API.post('deleteAlarmType', { typeId: b.dataset.del }); loadMasters(); } });
+
+  async function loadHist() {
+    const r = await API.get('getAlarmHistory', { filters: { dateFrom: $('hFrom').value, dateTo: $('hTo').value, machineId: $('hMachine').value } });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    $('hist').innerHTML = '<thead><tr><th>วันเวลา</th><th>กะ</th><th>เครื่อง</th><th>ชนิด</th><th class="num">ครั้ง</th><th class="num">นาที</th><th>ผู้บันทึก</th></tr></thead><tbody>' +
+      (r.data.map((a) => `<tr><td>${UI.esc(a.timestamp)}</td><td>${UI.esc(a.shift)}</td><td>${UI.esc(a.machineId)}</td><td>${UI.esc(a.alarmType)}</td><td class="num">${a.count}</td><td class="num">${a.durationMinutes}</td><td>${UI.esc(a.recorderName)}</td></tr>`).join('') || '<tr><td colspan="7" class="text-center text-gray">ไม่มีข้อมูล</td></tr>') + '</tbody>';
+  }
+  $('hSearch').onclick = loadHist;
+
+  function bars(obj, key = 'count') {
+    const rows = Array.isArray(obj) ? obj : Object.keys(obj).map((k) => Object.assign({ label: k }, obj[k]));
+    const max = Math.max(1, ...rows.map((r) => r[key]));
+    return rows.map((r) => `<div class="bar-row"><span>${UI.esc(r.label || r.alarmType)}</span><div class="bar" style="width:${r[key] / max * 100}%"></div><span>${r[key]}${r.pct !== undefined ? ' (' + r.pct + '%)' : ''}</span></div>`).join('') || '<div class="small text-gray">ไม่มีข้อมูล</div>';
+  }
+  async function loadStats() {
+    const r = await API.get('getAlarmStats', { filters: { dateFrom: $('sFrom').value, dateTo: $('sTo').value, shift: $('sShift').value } });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    const d = r.data;
+    $('sKpi').innerHTML = `<div class="kpi-card danger"><div class="kpi-value">${d.totalAlarms}</div><div class="kpi-label">Alarm ทั้งหมด</div></div>
+      <div class="kpi-card warning"><div class="kpi-value">${UI.formatNumber(d.totalDowntime)}</div><div class="kpi-label">Downtime (นาที)</div></div>`;
+    $('sType').innerHTML = bars(d.byType); $('sMachine').innerHTML = bars(d.byMachine);
+    const byDate = {}; Object.keys(d.byDate).sort().forEach((k) => { byDate[k] = d.byDate[k]; });
+    $('sDate').innerHTML = bars(byDate);
+  }
+  $('sSearch').onclick = loadStats;
+
+  const today = UI.getToday();
+  $('at').value = UI.nowLocalInput();
+  ['hTo', 'sTo'].forEach((id) => { $(id).value = today; });
+  ['hFrom', 'sFrom'].forEach((id) => { $(id).value = UI.addDays(today, -6); });
+  UI.showLoading(); await loadMasters(); UI.hideLoading();
+})();
+</script>
+</body>
+</html>

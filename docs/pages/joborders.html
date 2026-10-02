@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>วางแผนการผลิต</title>
+<link rel="icon" href="https://img.icons8.com/color/48/factory.png">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<main class="main"><div class="container">
+  <div class="card">
+    <div class="card-title"><i class="bi bi-plus-circle"></i> สร้าง Job Order</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">เลข JO (ว่าง = อัตโนมัติ)</label><input class="form-input" id="joId" placeholder="JO-yyyyMMdd-XXXXXX"></div>
+      <div class="form-group"><label class="form-label">วันที่แผน</label><input type="date" class="form-input" id="joDate"></div>
+      <div class="form-group"><label class="form-label">รุ่นสินค้า <span class="req">*</span></label><select class="form-input" id="joProduct"></select></div>
+      <div class="form-group"><label class="form-label">จำนวนเป้าหมาย <span class="req">*</span></label><input type="number" class="form-input" id="joQty"></div>
+      <div class="form-group"><label class="form-label">เครื่องจักร <span class="req">*</span></label><select class="form-input" id="joMachine"></select></div>
+      <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="joShift"><option value="ALL">ทุกกะ</option><option>A</option><option>B</option></select></div>
+      <div class="form-group"><label class="form-label">กำหนดส่ง</label><input type="date" class="form-input" id="joDue"></div>
+      <div class="form-group"><label class="form-label">ความสำคัญ</label><select class="form-input" id="joPrio"><option value="normal">ปกติ</option><option value="low">ต่ำ</option><option value="high">สูง</option><option value="urgent">เร่งด่วน</option></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">หมายเหตุ</label><input class="form-input" id="joRemark"></div>
+    <button class="btn btn-primary" id="joCreate"><i class="bi bi-plus-lg"></i> สร้าง Job Order</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><i class="bi bi-list-ol"></i> รายการ Job Order <span class="spacer"></span>
+      <select class="date-input" id="fStatus"><option value="active">กำลังใช้งาน</option><option value="all">ทั้งหมด</option><option value="open">open</option><option value="in-progress">in-progress</option><option value="completed">completed</option><option value="cancelled">cancelled</option></select>
+      <input class="date-input" id="fSearch" placeholder="ค้นหา" style="max-width:140px">
+      <button class="btn btn-outline btn-sm" id="reload"><i class="bi bi-arrow-clockwise"></i></button></div>
+    <div id="list"></div>
+  </div>
+</div></main>
+
+<div class="modal-overlay" id="editModal"><div class="modal-content">
+  <button class="modal-close" data-close-modal>&times;</button>
+  <h3 class="modal-title" id="eTitle"></h3>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">สถานะ</label><select class="form-input" id="eStatus"><option>open</option><option>in-progress</option><option>completed</option><option>cancelled</option></select></div>
+    <div class="form-group"><label class="form-label">กำหนดส่ง</label><input type="date" class="form-input" id="eDue"></div>
+    <div class="form-group"><label class="form-label">ความสำคัญ</label><select class="form-input" id="ePrio"><option value="normal">ปกติ</option><option value="low">ต่ำ</option><option value="high">สูง</option><option value="urgent">เร่งด่วน</option></select></div>
+    <div class="form-group"><label class="form-label">จำนวนเป้าหมาย</label><input type="number" class="form-input" id="eQty"></div>
+  </div>
+  <div class="form-group"><label class="form-label">หมายเหตุ</label><input class="form-input" id="eRemark"></div>
+  <button class="btn btn-primary btn-full" id="eSave">บันทึก</button>
+</div></div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async function () {
+  if (!UI.initPage('joborders', 'วางแผนการผลิต', 'bi-calendar2-week')) return;
+  const $ = (id) => document.getElementById(id);
+  const PRIO = { urgent: 'เร่งด่วน', high: 'สูง', normal: 'ปกติ', low: 'ต่ำ' };
+  let products = [], list = [], editing = null;
+
+  async function loadMasters() {
+    const [m, p] = await Promise.all([API.get('getMachines'), API.get('getProducts')]);
+    products = p.success ? p.data : [];
+    $('joProduct').innerHTML = '<option value="">— เลือก —</option>' + products.map((x) => `<option value="${UI.esc(x.productCode)}">${UI.esc(x.productCode)} — ${UI.esc(x.productName)}</option>`).join('');
+    $('joMachine').innerHTML = '<option value="">— เลือก —</option><option value="ALL">ทุกเครื่อง</option>' +
+      (m.success ? UI.machineOptions(m.data.filter((x) => x.installed)) : '');
+  }
+  $('joProduct').onchange = () => { const p = products.find((x) => x.productCode === $('joProduct').value); if (p && !$('joQty').value) $('joQty').value = p.defaultQty || ''; };
+
+  $('joCreate').onclick = () => UI.withButton($('joCreate'), async () => {
+    const data = { jobOrderId: $('joId').value.trim(), workDate: $('joDate').value, productCode: $('joProduct').value, plannedQty: Number($('joQty').value) || 0,
+      machineId: $('joMachine').value, shift: $('joShift').value, dueDate: $('joDue').value, priority: $('joPrio').value, remark: $('joRemark').value.trim() };
+    if (data.dueDate && data.dueDate < data.workDate) return UI.showToast('กำหนดส่งต้องไม่ก่อนวันที่แผน', 'warning');
+    const r = await API.post('createJobOrder', { data });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.showToast('สร้าง ' + r.jobOrderId + ' แล้ว', 'success');
+    ['joId', 'joQty', 'joDue', 'joRemark'].forEach((id) => { $(id).value = ''; });
+    load();
+  });
+
+  async function load() {
+    const st = $('fStatus').value;
+    const r = await API.get('getJobOrders', { filters: { status: st === 'active' ? '' : st } });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    list = st === 'active' ? r.data.filter((j) => j.status === 'open' || j.status === 'in-progress') : r.data;
+    render();
+  }
+  function render() {
+    const q = $('fSearch').value.trim().toLowerCase();
+    const rows = list.filter((j) => !q || [j.jobOrderId, j.productCode, j.machineId, j.remark].join(' ').toLowerCase().includes(q));
+    $('list').innerHTML = rows.length ? rows.map((j) => {
+      const pct = j.plannedQty ? Math.min(100, j.actualQty / j.plannedQty * 100) : 0;
+      return `<div class="entry-card priority-${j.priority}">
+        <div class="entry-head"><span>${j.queueNo ? `<span class="badge badge-info">คิว ${j.queueNo}</span> ` : ''}${UI.esc(j.jobOrderId)}</span>
+          <span class="badge badge-${j.status}">${UI.esc(j.status)}</span></div>
+        <div class="entry-meta">${UI.esc(j.productCode)} · เครื่อง ${j.machineId === 'ALL' ? 'ทุกเครื่อง' : UI.esc(j.machineId)} · กะ ${UI.esc(j.shift)} · วันที่ ${UI.formatDate(j.workDate)}
+          ${j.dueDate ? '· ส่ง ' + UI.formatDate(j.dueDate) : ''} · ${PRIO[j.priority] || j.priority}${j.remark ? ' · ' + UI.esc(j.remark) : ''}</div>
+        <div class="d-flex justify-between small mt-2"><span>แผน <b>${UI.formatNumber(j.plannedQty)}</b></span><span>ผลิตได้ <b class="text-success">${UI.formatNumber(j.actualQty)}</b></span>
+          <span>NG <b class="text-danger">${UI.formatNumber(j.defectQty)}</b></span><span>คงเหลือ <b>${UI.formatNumber(j.remaining)}</b></span><span><b>${j.completionRate}%</b></span></div>
+        <div class="progress-bar-container mt-1"><div class="progress-bar-fill ${pct >= 100 ? 'over' : pct >= 90 ? 'near' : ''}" style="width:${pct}%"></div></div>
+        ${j.sortedGood || j.sortedDefect ? `<div class="small text-gray mt-1">คัดแยก: ดี ${UI.formatNumber(j.sortedGood)} · เสีย ${UI.formatNumber(j.sortedDefect)}</div>` : ''}
+        <div class="entry-actions"><button class="btn btn-outline btn-sm" data-edit="${UI.esc(j.jobOrderId)}"><i class="bi bi-pencil"></i> แก้ไข</button></div>
+      </div>`;
+    }).join('') : UI.emptyState('bi-calendar2-x', 'ไม่มี Job Order');
+  }
+  $('list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-edit]');
+    if (!b) return;
+    editing = list.find((j) => j.jobOrderId === b.dataset.edit);
+    $('eTitle').textContent = editing.jobOrderId;
+    $('eStatus').value = editing.status; $('eDue').value = editing.dueDate || ''; $('ePrio').value = editing.priority;
+    $('eQty').value = editing.plannedQty; $('eRemark').value = editing.remark;
+    UI.openModal('editModal');
+  });
+  $('eSave').onclick = () => UI.withButton($('eSave'), async () => {
+    const r = await API.post('updateJobOrder', { jobOrderId: editing.jobOrderId, updates: {
+      status: $('eStatus').value, dueDate: $('eDue').value, priority: $('ePrio').value, plannedQty: Number($('eQty').value) || 0, remark: $('eRemark').value.trim() } });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.closeModal('editModal'); UI.showToast('บันทึกแล้ว', 'success'); load();
+  });
+  $('fStatus').onchange = load; $('reload').onclick = load; $('fSearch').oninput = render;
+
+  $('joDate').value = UI.getToday();
+  UI.showLoading();
+  await Promise.all([loadMasters(), load()]);
+  UI.hideLoading();
+})();
+</script>
+</body>
+</html>
