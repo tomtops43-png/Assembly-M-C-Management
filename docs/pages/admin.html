@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>จัดการระบบ</title>
+<link rel="icon" href="https://img.icons8.com/color/48/factory.png">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<main class="main"><div class="container">
+  <div class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="users">พนักงาน</button>
+    <button class="tab-btn" data-tab="machines">เครื่องจักร</button>
+    <button class="tab-btn" data-tab="products">สินค้า / BOM</button>
+    <button class="tab-btn" data-tab="alias">Material Alias</button>
+    <button class="tab-btn" data-tab="log">Action History</button>
+  </div>
+
+  <!-- พนักงาน -->
+  <section data-panel="users">
+    <div class="card">
+      <div class="card-title"><i class="bi bi-person-plus"></i> เพิ่มพนักงาน</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">รหัสพนักงาน *</label><input class="form-input" id="uId" autocapitalize="characters"></div>
+        <div class="form-group"><label class="form-label">ชื่อ *</label><input class="form-input" id="uName"></div>
+        <div class="form-group"><label class="form-label">PIN 4 หลัก *</label><input class="form-input" id="uPin" inputmode="numeric" maxlength="4"></div>
+        <div class="form-group"><label class="form-label">บทบาท</label><select class="form-input" id="uRole"></select></div>
+        <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="uShift"><option value="">-</option><option>A</option><option>B</option></select></div>
+      </div>
+      <button class="btn btn-primary" id="uAdd"><i class="bi bi-plus-lg"></i> เพิ่ม</button>
+    </div>
+    <div class="card"><div class="table-wrap"><table class="data-table" id="uTable"></table></div></div>
+  </section>
+
+  <!-- เครื่องจักร -->
+  <section data-panel="machines" class="hidden">
+    <div class="card">
+      <div class="card-title"><i class="bi bi-plus-square"></i> เพิ่ม / แก้ไขเครื่องจักร</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">รหัสเครื่อง *</label><input class="form-input" id="mId" autocapitalize="characters" placeholder="เช่น AM-01"></div>
+        <div class="form-group"><label class="form-label">ชื่อเครื่อง *</label><input class="form-input" id="mName"></div>
+        <div class="form-group"><label class="form-label">Capacity (ชิ้น/ชม.)</label><input type="number" class="form-input" id="mCap"></div>
+      </div>
+      <button class="btn btn-primary" id="mSave"><i class="bi bi-save"></i> บันทึก</button>
+    </div>
+    <div class="card"><div class="table-wrap"><table class="data-table" id="mTable"></table></div></div>
+  </section>
+
+  <!-- สินค้า -->
+  <section data-panel="products" class="hidden">
+    <div class="card">
+      <div class="card-title"><i class="bi bi-box"></i> เพิ่ม / แก้ไขสินค้า</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">รหัสสินค้า *</label><input class="form-input" id="pCode"></div>
+        <div class="form-group"><label class="form-label">ชื่อสินค้า *</label><input class="form-input" id="pName"></div>
+        <div class="form-group"><label class="form-label">ยอดเริ่มต้น (DefaultQty)</label><input type="number" class="form-input" id="pQty"></div>
+      </div>
+      <button class="btn btn-primary" id="pSave"><i class="bi bi-save"></i> บันทึก</button>
+    </div>
+    <div class="card"><div class="table-wrap"><table class="data-table" id="pTable"></table></div></div>
+  </section>
+
+  <!-- alias -->
+  <section data-panel="alias" class="hidden">
+    <div class="card">
+      <div class="card-title"><i class="bi bi-arrow-left-right"></i> รหัสบนฉลาก → รหัส BOM</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">รหัสบนฉลาก</label><input class="form-input" id="aAlias"></div>
+        <div class="form-group"><label class="form-label">รหัส BOM</label><input class="form-input" id="aCanon"></div>
+        <div class="form-group"><label class="form-label">หมายเหตุ</label><input class="form-input" id="aNote"></div>
+      </div>
+      <button class="btn btn-primary" id="aSave">บันทึก</button>
+    </div>
+    <div class="card"><div class="table-wrap"><table class="data-table" id="aTable"></table></div></div>
+  </section>
+
+  <section data-panel="log" class="hidden">
+    <div class="card"><div class="table-wrap"><table class="data-table" id="lTable"></table></div></div>
+  </section>
+</div></main>
+
+<div class="modal-overlay" id="userModal"><div class="modal-content">
+  <button class="modal-close" data-close-modal>&times;</button>
+  <h3 class="modal-title" id="euTitle"></h3>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">ชื่อ</label><input class="form-input" id="euName"></div>
+    <div class="form-group"><label class="form-label">บทบาท</label><select class="form-input" id="euRole"></select></div>
+    <div class="form-group"><label class="form-label">PIN ใหม่ (ว่าง = ไม่เปลี่ยน)</label><input class="form-input" id="euPin" inputmode="numeric" maxlength="4"></div>
+    <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="euShift"><option value="">-</option><option>A</option><option>B</option></select></div>
+    <div class="form-group"><label class="form-label">สถานะ</label><select class="form-input" id="euActive"><option value="1">ใช้งาน</option><option value="0">ระงับ</option></select></div>
+  </div>
+  <div class="form-group">
+    <label class="form-label d-flex justify-between">สิทธิ์การเข้าถึง <button class="btn btn-outline btn-sm" id="euReset">ค่า default ตามบทบาท</button></label>
+    <div class="perm-grid" id="euPerms"></div>
+  </div>
+  <button class="btn btn-primary btn-full" id="euSave">บันทึก</button>
+</div></div>
+
+<div class="modal-overlay" id="bomModal"><div class="modal-content wide">
+  <button class="modal-close" data-close-modal>&times;</button>
+  <h3 class="modal-title" id="bomTitle"></h3>
+  <div class="table-wrap"><table class="data-table"><thead><tr><th>Component Code</th><th>ชื่อ</th><th>Qty/Unit</th><th>Supplier</th><th></th></tr></thead><tbody id="bomRows"></tbody></table></div>
+  <div class="btn-group mt-2"><button class="btn btn-outline" id="bomAdd"><i class="bi bi-plus"></i> เพิ่มแถว</button><button class="btn btn-primary" id="bomSave">บันทึก BOM</button></div>
+</div></div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async function () {
+  if (!UI.initPage('admin', 'จัดการระบบ', 'bi-person-gear')) return;
+  const $ = (id) => document.getElementById(id);
+  const roleOpts = Object.keys(Auth.ROLE_LEVELS).map((r) => `<option value="${r}">${Auth.ROLE_LABELS[r]} (${r})</option>`).join('');
+  $('uRole').innerHTML = roleOpts; $('uRole').value = 'operator'; $('euRole').innerHTML = roleOpts;
+  let users = [], machines = [], products = [], editingUser = null, editingProduct = null;
+
+  // tabs
+  const loaders = { users: loadUsers, machines: loadMachines, products: loadProducts, alias: loadAliases, log: loadLog };
+  $('tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tab]');
+    if (!b) return;
+    document.querySelectorAll('.tab-btn').forEach((x) => x.classList.toggle('active', x === b));
+    document.querySelectorAll('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== b.dataset.tab));
+    loaders[b.dataset.tab]();
+  });
+  const check = (r) => { if (!r.success) UI.showToast(r.message, 'error'); return r.success; };
+
+  // ---------- users ----------
+  async function loadUsers() {
+    const r = await API.get('getAllUsers');
+    if (!check(r)) return;
+    users = r.data;
+    $('uTable').innerHTML = '<thead><tr><th>รหัส</th><th>ชื่อ</th><th>บทบาท</th><th>กะ</th><th>สิทธิ์</th><th>สถานะ</th><th></th></tr></thead><tbody>' +
+      users.map((u) => `<tr><td>${UI.esc(u.employeeId)}</td><td>${UI.esc(u.name)}</td><td>${Auth.ROLE_LABELS[u.role] || u.role}</td><td>${UI.esc(u.shift || '-')}</td>
+        <td class="small">${Object.keys(u.permissions).filter((k) => u.permissions[k]).length} หน้า${Object.keys(u.permissionOverrides || {}).length ? ' *' : ''}</td>
+        <td><span class="badge ${u.active ? 'badge-running' : 'badge-down'}">${u.active ? 'ใช้งาน' : 'ระงับ'}</span></td>
+        <td><button class="btn btn-outline btn-sm" data-u="${UI.esc(u.employeeId)}">แก้ไข</button></td></tr>`).join('') + '</tbody>';
+  }
+  $('uAdd').onclick = () => UI.withButton($('uAdd'), async () => {
+    const r = await API.post('addUser', { userData: { employeeId: $('uId').value.trim().toUpperCase(), name: $('uName').value.trim(), pin: $('uPin').value.trim(), role: $('uRole').value, shift: $('uShift').value } });
+    if (!check(r)) return;
+    ['uId', 'uName', 'uPin'].forEach((id) => { $(id).value = ''; });
+    UI.showToast('เพิ่มพนักงานแล้ว', 'success'); loadUsers();
+  });
+  $('uTable').addEventListener('click', (e) => { const b = e.target.closest('[data-u]'); if (b) openUser(b.dataset.u); });
+  function renderPerms(perms) {
+    $('euPerms').innerHTML = Auth.PERMISSION_KEYS.map((k) => `<label class="perm-item"><input type="checkbox" data-perm="${k}" ${perms[k] ? 'checked' : ''} ${k === 'inbox' ? 'disabled' : ''}> ${Auth.PERMISSION_LABELS[k]}</label>`).join('');
+  }
+  function openUser(id) {
+    editingUser = users.find((u) => u.employeeId === id);
+    $('euTitle').textContent = `แก้ไข ${editingUser.employeeId}`;
+    $('euName').value = editingUser.name; $('euRole').value = editingUser.role; $('euPin').value = '';
+    $('euShift').value = editingUser.shift || ''; $('euActive').value = editingUser.active ? '1' : '0';
+    renderPerms(editingUser.permissions);
+    UI.openModal('userModal');
+  }
+  $('euReset').onclick = () => renderPerms(Auth.defaultPermissions($('euRole').value));
+  $('euRole').onchange = () => renderPerms(Auth.defaultPermissions($('euRole').value));
+  $('euSave').onclick = () => UI.withButton($('euSave'), async () => {
+    const role = $('euRole').value, defs = Auth.defaultPermissions(role), ov = {};
+    document.querySelectorAll('[data-perm]').forEach((c) => { if (c.checked !== !!defs[c.dataset.perm]) ov[c.dataset.perm] = c.checked; });
+    const updates = { name: $('euName').value.trim(), role, shift: $('euShift').value, active: $('euActive').value === '1', permissions: Object.keys(ov).length ? ov : null };
+    if ($('euPin').value) updates.pin = $('euPin').value.trim();
+    const r = await API.post('updateUser', { employeeId: editingUser.employeeId, updates });
+    if (!check(r)) return;
+    UI.closeModal('userModal'); UI.showToast('บันทึกแล้ว', 'success'); loadUsers();
+  });
+
+  // ---------- machines ----------
+  async function loadMachines() {
+    const r = await API.get('getMachines');
+    if (!check(r)) return;
+    machines = r.data;
+    $('mTable').innerHTML = '<thead><tr><th>รหัส</th><th>ชื่อ</th><th>สถานะ</th><th class="num">Capacity</th><th>ติดตั้ง</th><th>สินค้าที่ผลิตได้</th><th></th></tr></thead><tbody>' +
+      (machines.map((m) => `<tr><td>${UI.esc(m.machineId)}</td><td>${UI.esc(m.machineName)}</td><td><span class="badge badge-${m.status}">${UI.statusLabel(m.status)}</span></td>
+        <td class="num"><input type="number" class="date-input" style="width:90px" value="${m.capacity}" data-cap="${UI.esc(m.machineId)}"></td>
+        <td><input type="checkbox" ${m.installed ? 'checked' : ''} data-inst="${UI.esc(m.machineId)}"></td>
+        <td class="small">${UI.esc(m.assignedProducts.join(', ') || '-')}</td>
+        <td><button class="btn btn-outline btn-sm" data-medit="${UI.esc(m.machineId)}"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-outline btn-sm" data-mdel="${UI.esc(m.machineId)}"><i class="bi bi-trash"></i></button></td></tr>`).join('') ||
+        '<tr><td colspan="7" class="text-center text-gray">ยังไม่มีเครื่องจักร</td></tr>') + '</tbody>';
+  }
+  $('mSave').onclick = () => UI.withButton($('mSave'), async () => {
+    const r = await API.post('saveMachine', { data: { machineId: $('mId').value.trim().toUpperCase(), machineName: $('mName').value.trim(), capacity: Number($('mCap').value) || 0 } });
+    if (!check(r)) return;
+    ['mId', 'mName', 'mCap'].forEach((id) => { $(id).value = ''; });
+    UI.showToast('บันทึกเครื่องจักรแล้ว', 'success'); loadMachines();
+  });
+  $('mTable').addEventListener('change', async (e) => {
+    const t = e.target;
+    let r;
+    if (t.dataset.cap) r = await API.post('updateMachineCapacity', { machineId: t.dataset.cap, capacity: Number(t.value) || 0 });
+    else if (t.dataset.inst) r = await API.post('updateMachineInstalled', { machineId: t.dataset.inst, installed: t.checked });
+    if (r && check(r)) UI.showToast('บันทึกแล้ว', 'success');
+  });
+  $('mTable').addEventListener('click', async (e) => {
+    const ed = e.target.closest('[data-medit]'), del = e.target.closest('[data-mdel]');
+    if (ed) { const m = machines.find((x) => x.machineId === ed.dataset.medit); $('mId').value = m.machineId; $('mName').value = m.machineName; $('mCap').value = m.capacity; window.scrollTo(0, 0); }
+    if (del && confirm('ลบเครื่อง ' + del.dataset.mdel + '? (ประวัติการผลิตยังอยู่)')) {
+      if (check(await API.post('deleteMachine', { machineId: del.dataset.mdel }))) loadMachines();
+    }
+  });
+
+  // ---------- products + BOM ----------
+  async function loadProducts() {
+    const r = await API.get('getAllProductsWithBOM', { includeInactive: true });
+    if (!check(r)) return;
+    products = r.data;
+    $('pTable').innerHTML = '<thead><tr><th>รหัส</th><th>ชื่อ</th><th class="num">DefaultQty</th><th>BOM</th><th>สถานะ</th><th></th></tr></thead><tbody>' +
+      (products.map((p) => `<tr><td>${UI.esc(p.productCode)}</td><td>${UI.esc(p.productName)}</td><td class="num">${p.defaultQty}</td>
+        <td class="small">${p.bom.map((b) => UI.esc(b.componentCode)).join(', ') || '<span class="text-danger">ยังไม่มี</span>'}</td>
+        <td><span class="badge ${p.active ? 'badge-running' : 'badge-closed'}">${p.active ? 'ใช้งาน' : 'ปิด'}</span></td>
+        <td><button class="btn btn-outline btn-sm" data-pedit="${UI.esc(p.productCode)}"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-outline btn-sm" data-bom="${UI.esc(p.productCode)}">BOM</button></td></tr>`).join('') ||
+        '<tr><td colspan="6" class="text-center text-gray">ยังไม่มีสินค้า</td></tr>') + '</tbody>';
+  }
+  $('pSave').onclick = () => UI.withButton($('pSave'), async () => {
+    const r = await API.post('saveProduct', { data: { productCode: $('pCode').value.trim(), productName: $('pName').value.trim(), defaultQty: Number($('pQty').value) || 0 } });
+    if (!check(r)) return;
+    ['pCode', 'pName', 'pQty'].forEach((id) => { $(id).value = ''; });
+    UI.showToast('บันทึกสินค้าแล้ว', 'success'); loadProducts();
+  });
+  $('pTable').addEventListener('click', (e) => {
+    const ed = e.target.closest('[data-pedit]'), bom = e.target.closest('[data-bom]');
+    if (ed) { const p = products.find((x) => x.productCode === ed.dataset.pedit); $('pCode').value = p.productCode; $('pName').value = p.productName; $('pQty').value = p.defaultQty; window.scrollTo(0, 0); }
+    if (bom) openBom(bom.dataset.bom);
+  });
+  function bomRow(b = {}) {
+    return `<tr><td><input class="form-input" data-f="componentCode" value="${UI.esc(b.componentCode || '')}"></td><td><input class="form-input" data-f="componentName" value="${UI.esc(b.componentName || '')}"></td>
+      <td><input type="number" class="form-input" style="width:80px" data-f="qtyPerUnit" value="${b.qtyPerUnit || 1}"></td><td><input class="form-input" data-f="supplier" value="${UI.esc(b.supplier || '')}"></td>
+      <td><button class="btn btn-outline btn-sm" data-rmrow><i class="bi bi-x"></i></button></td></tr>`;
+  }
+  function openBom(code) {
+    editingProduct = products.find((p) => p.productCode === code);
+    $('bomTitle').textContent = 'BOM — ' + code;
+    $('bomRows').innerHTML = (editingProduct.bom.length ? editingProduct.bom : [{}]).map(bomRow).join('');
+    UI.openModal('bomModal');
+  }
+  $('bomAdd').onclick = () => $('bomRows').insertAdjacentHTML('beforeend', bomRow());
+  $('bomRows').addEventListener('click', (e) => { const b = e.target.closest('[data-rmrow]'); if (b) b.closest('tr').remove(); });
+  $('bomSave').onclick = () => UI.withButton($('bomSave'), async () => {
+    const components = [...$('bomRows').querySelectorAll('tr')].map((tr) => {
+      const o = {}; tr.querySelectorAll('[data-f]').forEach((i) => { o[i.dataset.f] = i.value.trim(); }); return o;
+    }).filter((c) => c.componentCode);
+    const r = await API.post('saveProductBOM', { productCode: editingProduct.productCode, components });
+    if (!check(r)) return;
+    UI.closeModal('bomModal'); UI.showToast('บันทึก BOM แล้ว', 'success'); loadProducts();
+  });
+
+  // ---------- alias ----------
+  async function loadAliases() {
+    const r = await API.get('getMaterialAliases');
+    if (!check(r)) return;
+    $('aTable').innerHTML = '<thead><tr><th>รหัสบนฉลาก</th><th>รหัส BOM</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>' +
+      (r.data.map((a) => `<tr><td>${UI.esc(a.alias)}</td><td>${UI.esc(a.canonical)}</td><td>${UI.esc(a.note)}</td>
+        <td><button class="btn btn-outline btn-sm" data-adel="${UI.esc(a.alias)}"><i class="bi bi-trash"></i></button></td></tr>`).join('') ||
+        '<tr><td colspan="4" class="text-center text-gray">ยังไม่มี</td></tr>') + '</tbody>';
+  }
+  $('aSave').onclick = async () => {
+    if (check(await API.post('saveMaterialAlias', { data: { alias: $('aAlias').value, canonical: $('aCanon').value.trim(), note: $('aNote').value } }))) {
+      ['aAlias', 'aCanon', 'aNote'].forEach((id) => { $(id).value = ''; }); loadAliases();
+    }
+  };
+  $('aTable').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-adel]');
+    if (b && confirm('ลบ ' + b.dataset.adel + '?') && check(await API.post('deleteMaterialAlias', { alias: b.dataset.adel }))) loadAliases();
+  });
+
+  // ---------- log ----------
+  async function loadLog() {
+    const r = await API.get('getActionLogs', { limit: 300 });
+    if (!check(r)) return;
+    $('lTable').innerHTML = '<thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>Action</th><th>รายละเอียด</th></tr></thead><tbody>' +
+      r.data.map((l) => `<tr><td>${UI.esc(l.timestamp)}</td><td>${UI.esc(l.employeeName)}</td><td>${UI.esc(l.action)}</td>
+        <td class="small" style="white-space:normal;max-width:480px">${UI.esc(String(l.payload).slice(0, 300))}</td></tr>`).join('') + '</tbody>';
+  }
+
+  loadUsers();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>คัดแยกงาน</title>
+<link rel="icon" href="https://img.icons8.com/color/48/factory.png">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<main class="main"><div class="container">
+  <div class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="register">ลงทะเบียน / รายการงาน</button>
+    <button class="tab-btn" data-tab="dash">Dashboard</button>
+  </div>
+  <section data-panel="register">
+    <div class="card">
+      <div class="card-title"><i class="bi bi-funnel"></i> ลงทะเบียนงานคัดแยก</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">วันที่งาน</label><input type="date" class="form-input" id="date"></div>
+        <div class="form-group"><label class="form-label">เครื่องที่พบ</label><select class="form-input" id="machine"></select></div>
+        <div class="form-group"><label class="form-label">สินค้า</label><select class="form-input" id="product"></select></div>
+        <div class="form-group"><label class="form-label">Job Order (ไม่บังคับ)</label><select class="form-input" id="jo"><option value="">ไม่ระบุ</option></select></div>
+        <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="shift"><option>A</option><option>B</option></select></div>
+        <div class="form-group"><label class="form-label">จำนวนที่ต้อง Sort</label><input type="number" class="form-input" id="qty"></div>
+      </div>
+      <div class="form-group"><label class="form-label">กระบวนการที่พบ</label><div class="choice-grid" id="procGrid"></div></div>
+      <div class="form-group"><label class="form-label">หมายเหตุ <span class="req">*</span></label><select class="form-input" id="reason"></select>
+        <input class="form-input mt-2 hidden" id="reasonOther" placeholder="ระบุ"></div>
+      <button class="btn btn-primary btn-full btn-lg" id="register">ลงทะเบียน</button>
+    </div>
+    <div class="card">
+      <div class="card-title"><i class="bi bi-list-task"></i> รายการงาน <span class="spacer"></span>
+        <select class="date-input" id="fRange"><option value="active">ค้าง + วันนี้</option><option value="today">วันนี้</option><option value="yesterday">เมื่อวาน</option><option value="all">ทั้งหมด</option></select>
+        <input class="date-input" id="fSearch" placeholder="ค้นหา" style="max-width:130px"></div>
+      <div id="list"></div>
+    </div>
+  </section>
+  <section data-panel="dash" class="hidden">
+    <div class="card">
+      <div class="date-selector mb-2"><input type="date" class="date-input" id="dFrom"> – <input type="date" class="date-input" id="dTo"><button class="btn btn-outline btn-sm" id="dLoad">ดู</button></div>
+      <div class="kpi-grid" id="dKpi"></div>
+      <div class="grid-2"><div><div class="form-label">ตามเครื่อง</div><div class="table-wrap"><table class="data-table" id="dMachine"></table></div></div>
+        <div><div class="form-label">ตามกระบวนการ</div><div class="table-wrap"><table class="data-table" id="dProc"></table></div></div></div>
+    </div>
+  </section>
+</div></main>
+
+<div class="modal-overlay" id="resultModal"><div class="modal-content">
+  <button class="modal-close" data-close-modal>&times;</button>
+  <h3 class="modal-title" id="rTitle"></h3>
+  <div class="small text-gray mb-2" id="rInfo"></div>
+  <div class="form-group"><label class="form-label">งานดี (รอบนี้)</label><input type="number" class="form-input form-input-lg" id="rGood"></div>
+  <div class="form-row" id="rParts"></div>
+  <button class="btn btn-success btn-full" id="rSave">บันทึกผล (บวกสะสม)</button>
+</div></div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async function () {
+  if (!UI.initPage('sorting', 'คัดแยกงาน', 'bi-funnel')) return;
+  const $ = (id) => document.getElementById(id);
+  const user = Auth.getUser(), OTHER = 'อื่นๆ';
+  let cfg, machines = [], products = [], jobs = [], proc = '', current = null;
+
+  $('tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tab]'); if (!b) return;
+    document.querySelectorAll('.tab-btn').forEach((x) => x.classList.toggle('active', x === b));
+    document.querySelectorAll('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== b.dataset.tab));
+    if (b.dataset.tab === 'dash') loadDash();
+  });
+  const parts = () => cfg.defectPartGroups.length ? cfg.defectPartGroups : [{ code: 'NG', label: 'เสีย' }];
+
+  function renderProc() { $('procGrid').innerHTML = cfg.sortingProcesses.map((p) => `<button class="choice-btn ${proc === p ? 'active' : ''}" data-proc="${UI.esc(p)}">${UI.esc(p)}</button>`).join(''); }
+  $('procGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-proc]'); if (b) { proc = b.dataset.proc; renderProc(); } });
+  $('reason').onchange = () => $('reasonOther').classList.toggle('hidden', $('reason').value !== OTHER);
+
+  async function loadJoOptions() {
+    $('jo').innerHTML = '<option value="">ไม่ระบุ</option>';
+    if (!$('machine').value || !$('product').value) return;
+    const r = await API.get('getJobOrderOptions', { filters: { machineId: $('machine').value, productCode: $('product').value, includeAll: true } });
+    if (r.success) $('jo').innerHTML += r.data.map((j) => `<option value="${UI.esc(j.jobOrderId)}">${UI.esc(j.jobOrderId)} (${UI.esc(j.status)})</option>`).join('');
+  }
+  $('machine').onchange = () => {
+    const m = machines.find((x) => x.machineId === $('machine').value);
+    if (m && m.currentProduct) $('product').value = m.currentProduct;
+    loadJoOptions().then(() => { if (m && m.currentJobOrder) $('jo').value = m.currentJobOrder; });
+  };
+  $('product').onchange = loadJoOptions;
+
+  $('register').onclick = () => UI.withButton($('register'), async () => {
+    const remark = $('reason').value === OTHER ? ($('reasonOther').value.trim() ? OTHER + ': ' + $('reasonOther').value.trim() : '') : $('reason').value;
+    if (!proc) return UI.showToast('กรุณาเลือกกระบวนการที่พบ', 'warning');
+    if (!remark) return UI.showToast('กรุณาระบุหมายเหตุ', 'warning');
+    const r = await API.post('submitSortingJob', { data: { date: $('date').value, machineId: $('machine').value, productCode: $('product').value, jobOrderId: $('jo').value,
+      foundProcess: proc, shift: $('shift').value, totalQty: Number($('qty').value) || 0, remark } });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.showToast('ลงทะเบียน ' + r.jobId, 'success'); $('qty').value = ''; proc = ''; renderProc(); loadJobs();
+  });
+
+  async function loadJobs() {
+    const rg = $('fRange').value, t = UI.getToday();
+    const r = rg === 'active' ? await API.get('getTodaySortingJobs')
+      : await API.get('getSortingJobs', { filters: rg === 'today' ? { date: t } : rg === 'yesterday' ? { date: UI.addDays(t, -1) } : {} });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    jobs = r.data; renderJobs();
+  }
+  function renderJobs() {
+    const q = $('fSearch').value.trim().toLowerCase();
+    const rows = jobs.filter((j) => !q || [j.jobId, j.machineId, j.productCode, j.jobOrderId, j.remark].join(' ').toLowerCase().includes(q));
+    $('list').innerHTML = rows.length ? rows.map((j) => {
+      const done = j.goodQty + j.defectQty, pct = j.totalQty ? Math.min(100, done / j.totalQty * 100) : 0;
+      return `<div class="entry-card">
+        <div class="entry-head"><span>${UI.esc(j.jobId)}</span><span class="badge badge-${j.status}">${UI.statusLabel(j.status)}</span></div>
+        <div class="entry-meta">${UI.formatDate(j.date)} · ${UI.esc(j.machineId)} · ${UI.esc(j.productCode)} · ${UI.esc(j.foundProcess)} · กะ ${UI.esc(j.shift)} ${j.jobOrderId ? '· ' + UI.esc(j.jobOrderId) : ''}<br>${UI.esc(j.remark)} · ลงทะเบียนโดย ${UI.esc(j.registeredByName)} ${j.sortedByName ? '· คัดโดย ' + UI.esc(j.sortedByName) : ''}</div>
+        <div class="d-flex justify-between small mt-1"><span>คัดแล้ว ${UI.formatNumber(done)}/${UI.formatNumber(j.totalQty)}</span><span class="text-success">ดี ${UI.formatNumber(j.goodQty)}</span><span class="text-danger">เสีย ${UI.formatNumber(j.defectQty)}</span></div>
+        <div class="progress-bar-container mt-1"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+        <div class="entry-actions">
+          ${j.status === 'pending' ? `<button class="btn btn-primary btn-sm" data-act="pull" data-id="${j.jobId}">ดึงงาน</button>` : ''}
+          ${j.status === 'in-progress' ? `<button class="btn btn-success btn-sm" data-act="result" data-id="${j.jobId}">บันทึกผล</button>` : ''}
+          ${j.status === 'in-progress' && done === 0 ? `<button class="btn btn-outline btn-sm" data-act="return" data-id="${j.jobId}">คืนงาน</button>` : ''}
+        </div></div>`;
+    }).join('') : UI.emptyState('bi-funnel', 'ไม่มีงานคัดแยก');
+  }
+  $('list').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const id = b.dataset.id;
+    if (b.dataset.act === 'result') return openResult(jobs.find((j) => j.jobId === id));
+    const r = await API.post(b.dataset.act === 'pull' ? 'pullSortingJob' : 'returnSortingJob', { jobId: id });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    loadJobs();
+  });
+  $('fRange').onchange = loadJobs; $('fSearch').oninput = renderJobs;
+
+  function openResult(j) {
+    current = j;
+    $('rTitle').textContent = 'บันทึกผล ' + j.jobId;
+    $('rInfo').textContent = `คงเหลือ ${UI.formatNumber(j.totalQty - j.goodQty - j.defectQty)} ชิ้น · กระบวนการ ${j.foundProcess}`;
+    $('rGood').value = '';
+    $('rParts').innerHTML = parts().map((p) => `<div class="form-group"><label class="form-label">เสีย ${UI.esc(p.label)}</label><input type="number" class="form-input" data-part="${UI.esc(p.code)}"></div>`).join('');
+    UI.openModal('resultModal');
+  }
+  $('rSave').onclick = () => UI.withButton($('rSave'), async () => {
+    const defectByPart = {};
+    $('rParts').querySelectorAll('[data-part]').forEach((i) => { defectByPart[i.dataset.part] = Number(i.value) || 0; });
+    const r = await API.post('recordSortingResult', { jobId: current.jobId, result: { goodQty: Number($('rGood').value) || 0, defectByPart } });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.closeModal('resultModal'); UI.showToast(r.completed ? 'คัดแยกครบแล้ว' : 'บันทึกผลแล้ว', 'success'); loadJobs();
+  });
+
+  async function loadDash() {
+    const r = await API.get('getSortingDashboard', { filters: { dateFrom: $('dFrom').value, dateTo: $('dTo').value } });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    const s = r.data.summary, done = s.goodQty + s.defectQty;
+    $('dKpi').innerHTML = `<div class="kpi-card"><div class="kpi-value">${s.total}</div><div class="kpi-label">งานทั้งหมด</div></div>
+      <div class="kpi-card warning"><div class="kpi-value">${s.pending}</div><div class="kpi-label">รอ Sort</div></div>
+      <div class="kpi-card"><div class="kpi-value">${s.inProgress}</div><div class="kpi-label">กำลังทำ</div></div>
+      <div class="kpi-card success"><div class="kpi-value">${s.completed}</div><div class="kpi-label">เสร็จ</div></div>
+      <div class="kpi-card"><div class="kpi-value">${UI.formatNumber(done)}/${UI.formatNumber(s.totalQty)}</div><div class="kpi-label">คัดแล้ว</div></div>
+      <div class="kpi-card success"><div class="kpi-value">${done ? (s.goodQty / done * 100).toFixed(1) : 0}%</div><div class="kpi-label">% ดี</div></div>
+      <div class="kpi-card danger"><div class="kpi-value">${done ? (s.defectQty / done * 100).toFixed(1) : 0}%</div><div class="kpi-label">% เสีย ${Object.keys(s.defectByPart).map((k) => k + ' ' + s.defectByPart[k]).join(' / ')}</div></div>`;
+    const tbl = (obj) => '<thead><tr><th></th><th class="num">งาน</th><th class="num">ทั้งหมด</th><th class="num">ดี</th><th class="num">เสีย</th></tr></thead><tbody>' +
+      Object.keys(obj).map((k) => `<tr><td>${UI.esc(k)}</td><td class="num">${obj[k].jobs}</td><td class="num">${UI.formatNumber(obj[k].totalQty)}</td><td class="num">${UI.formatNumber(obj[k].goodQty)}</td><td class="num">${UI.formatNumber(obj[k].defectQty)}</td></tr>`).join('') + '</tbody>';
+    $('dMachine').innerHTML = tbl(r.data.byMachine); $('dProc').innerHTML = tbl(r.data.byProcess);
+  }
+  $('dLoad').onclick = loadDash;
+
+  UI.showLoading();
+  try {
+    cfg = await UI.getLineConfig();
+    const [m, p] = await Promise.all([API.get('getMachines'), API.get('getProducts')]);
+    machines = m.success ? m.data.filter((x) => x.installed) : []; products = p.success ? p.data : [];
+    $('machine').innerHTML = machines.map((x) => `<option value="${UI.esc(x.machineId)}">${UI.esc(x.machineId)}</option>`).join('') || '<option value="">ยังไม่มีเครื่อง</option>';
+    $('product').innerHTML = products.map((x) => `<option value="${UI.esc(x.productCode)}">${UI.esc(x.productCode)}</option>`).join('') || '<option value="">ยังไม่มีสินค้า</option>';
+    $('reason').innerHTML = '<option value="">— เลือก —</option>' + cfg.ngReasons.map((r) => `<option>${UI.esc(r)}</option>`).join('');
+    $('date').max = UI.getToday(); $('date').value = UI.getToday();
+    $('dTo').value = UI.getToday(); $('dFrom').value = UI.addDays(UI.getToday(), -6);
+    if (user.shift) { $('shift').value = user.shift; }
+    renderProc(); $('machine').onchange(); await loadJobs();
+  } catch (err) { UI.showToast(err.message, 'error'); }
+  UI.hideLoading();
+})();
+</script>
+</body>
+</html>

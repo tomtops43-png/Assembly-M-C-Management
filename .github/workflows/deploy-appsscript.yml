@@ -1,0 +1,72 @@
+name: Deploy Apps Script
+
+on:
+  push:
+    branches: [main, 'claude/**']
+    paths: ['src/**', 'appsscript.json', '.github/workflows/deploy-appsscript.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: appsscript-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install clasp
+        run: npm i -g @google/clasp@3
+
+      - name: Check secrets
+        id: secrets
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.SCRIPT_ID }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ]; then
+            echo "::warning::ยังไม่ได้ตั้ง CLASPRC_JSON / SCRIPT_ID — ข้ามการ deploy"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write clasp credentials and project config
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.SCRIPT_ID }}
+        run: |
+          printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+          printf '{"scriptId":"%s","rootDir":"src"}' "$SCRIPT_ID" > .clasp.json
+          cp appsscript.json src/
+
+      - name: Verify web app access settings
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          node -e '
+            const m = require("./appsscript.json");
+            if (!m.webapp || m.webapp.access !== "ANYONE_ANONYMOUS" || m.webapp.executeAs !== "USER_DEPLOYING") {
+              console.error("appsscript.json webapp ต้องเป็น access=ANYONE_ANONYMOUS, executeAs=USER_DEPLOYING");
+              process.exit(1);
+            }'
+
+      - name: Push code
+        if: steps.secrets.outputs.ready == 'true'
+        run: clasp push --force
+
+      - name: Update deployment (keep /exec URL)
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
+        run: |
+          if [ -n "$DEPLOYMENT_ID" ]; then
+            clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "auto-deploy ${GITHUB_SHA::7}"
+          else
+            echo "ไม่มี DEPLOYMENT_ID — push โค้ดแล้วแต่ไม่อัปเดต deployment"
+          fi

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>รับวัตถุดิบ</title>
+<link rel="icon" href="https://img.icons8.com/color/48/factory.png">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<main class="main"><div class="container">
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><i class="bi bi-box-seam"></i> รับวัตถุดิบ</div>
+      <div class="form-group"><label class="form-label">เครื่องจักร</label><div class="machine-grid" id="machineGrid"></div></div>
+      <div id="bomBox" class="hidden">
+        <div class="form-group"><label class="form-label">เลือกจาก BOM</label><select class="form-input" id="bomSel"></select></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Part Code *</label><input class="form-input" id="partCode"></div>
+          <div class="form-group"><label class="form-label">Part Name</label><input class="form-input" id="partName"></div>
+          <div class="form-group"><label class="form-label">Spec</label><input class="form-input" id="spec"></div>
+          <div class="form-group"><label class="form-label">จำนวน *</label><input type="number" class="form-input" id="qty"></div>
+          <div class="form-group"><label class="form-label">หน่วย</label><input class="form-input" id="unit" value="PCS"></div>
+          <div class="form-group"><label class="form-label">Lot / PO</label><input class="form-input" id="lot"></div>
+          <div class="form-group"><label class="form-label">ผู้ตรวจ</label><input class="form-input" id="inspector"></div>
+          <div class="form-group"><label class="form-label">ลูกค้า</label><input class="form-input" id="customer"></div>
+          <div class="form-group"><label class="form-label">Carton No.</label><input class="form-input" id="carton"></div>
+          <div class="form-group"><label class="form-label">N.W.</label><input class="form-input" id="nw"></div>
+          <div class="form-group"><label class="form-label">G.W.</label><input class="form-input" id="gw"></div>
+          <div class="form-group"><label class="form-label">Packing Date</label><input class="form-input" id="packDate"></div>
+          <div class="form-group"><label class="form-label">Ref No.</label><input class="form-input" id="ref"></div>
+        </div>
+        <div class="form-group"><label class="form-label">หมายเหตุ</label><input class="form-input" id="remark"></div>
+        <div class="form-group"><label class="form-label">รูปฉลาก</label>
+          <div class="photo-upload-area"><label class="photo-add-btn"><i class="bi bi-camera"></i>ถ่าย/เลือก<input type="file" accept="image/*" multiple class="hidden" id="photoInput"></label>
+          <div class="photo-previews" id="preview"></div></div>
+          <button class="btn btn-outline btn-sm mt-2" id="ocrBtn"><i class="bi bi-magic"></i> อ่านข้อความจากรูปแรก (OCR)</button>
+          <pre class="small hidden" id="ocrText" style="white-space:pre-wrap;background:var(--bg);padding:8px;border-radius:8px"></pre>
+        </div>
+        <div id="validateMsg"></div>
+        <button class="btn btn-success btn-full btn-lg" id="save">บันทึกรับวัตถุดิบ</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><i class="bi bi-clock-history"></i> ประวัติรับ</div>
+      <div class="date-selector mb-2">
+        <button class="date-btn active" data-r="0">วันนี้</button><button class="date-btn" data-r="1">เมื่อวาน</button><button class="date-btn" data-r="7">7 วัน</button>
+      </div>
+      <div id="hist"></div>
+    </div>
+  </div>
+</div></main>
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async function () {
+  if (!UI.initPage('rawmaterial', 'รับวัตถุดิบ', 'bi-box-seam')) return;
+  const $ = (id) => document.getElementById(id);
+  let machines = [], bom = [], selMachine = '', photos = [], rawFiles = [];
+
+  function renderMachines() {
+    $('machineGrid').innerHTML = machines.map((m) => `<button class="machine-btn ${selMachine === m.machineId ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.machineId)}<small>${UI.esc(m.assignedProducts.join(', ') || '-')}</small></button>`).join('') || UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร');
+  }
+  $('machineGrid').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    selMachine = b.dataset.m; renderMachines();
+    const m = machines.find((x) => x.machineId === selMachine);
+    const lists = await Promise.all(m.assignedProducts.map((p) => API.get('getProductBOM', { productCode: p })));
+    bom = [].concat(...lists.filter((r) => r.success).map((r) => r.data));
+    $('bomSel').innerHTML = '<option value="">— เลือก —</option>' + bom.map((c, i) => `<option value="${i}">${UI.esc(c.componentCode)} — ${UI.esc(c.componentName)} (${UI.esc(c.productCode)})</option>`).join('');
+    $('bomBox').classList.remove('hidden');
+    if (!bom.length) $('validateMsg').innerHTML = '<div class="notice">เครื่องนี้ยังไม่มี BOM — ตั้งสินค้าให้เครื่อง และใส่ BOM ที่เมนูจัดการ</div>';
+  });
+  $('bomSel').onchange = () => { const c = bom[Number($('bomSel').value)]; if (c) { $('partCode').value = c.componentCode; $('partName').value = c.componentName; validate(); } };
+  $('partCode').onchange = validate;
+
+  async function validate() {
+    if (!$('partCode').value.trim()) return true;
+    const r = await API.get('validateRawMaterial', { machineId: selMachine, partCode: $('partCode').value.trim(), partName: $('partName').value.trim() });
+    const v = r.success ? r.data : { valid: false, message: r.message };
+    $('validateMsg').innerHTML = `<div class="notice ${v.valid ? (v.warning ? '' : 'info') : 'danger'}">${UI.esc(v.warning || v.message)}</div>`;
+    return v.valid;
+  }
+
+  $('photoInput').addEventListener('change', async () => {
+    for (const f of $('photoInput').files) { rawFiles.push(f); photos.push(await API.compressImage(f, 1200, 1200, 0.7)); }
+    $('photoInput').value = ''; renderPreview();
+  });
+  function renderPreview() { $('preview').innerHTML = photos.map((p, i) => `<div class="photo-thumb"><img src="${p.dataUrl}"><button data-rp="${i}">&times;</button></div>`).join(''); }
+  $('preview').addEventListener('click', (e) => { const b = e.target.closest('[data-rp]'); if (b) { photos.splice(Number(b.dataset.rp), 1); rawFiles.splice(Number(b.dataset.rp), 1); renderPreview(); } });
+
+  $('ocrBtn').onclick = () => UI.withButton($('ocrBtn'), async () => {
+    if (!rawFiles.length) return UI.showToast('กรุณาเพิ่มรูปฉลากก่อน', 'warning');
+    const image = await API.prepareOcrImage(rawFiles[0]);
+    const r = await API.postLarge('ocrWithDrive', { data: { image } });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    $('ocrText').textContent = r.text || '(ไม่พบข้อความ)';
+    $('ocrText').classList.remove('hidden');
+    UI.showToast('อ่านข้อความแล้ว — คัดลอกค่าลงฟอร์ม (การกรอกอัตโนมัติจะทำหลังได้ตัวอย่างฉลาก)', 'info');
+  });
+
+  $('save').onclick = () => UI.withButton($('save'), async () => {
+    if (!(await validate())) return UI.showToast('Part Code ไม่ตรงกับ BOM ของเครื่องนี้', 'error');
+    const data = { machineId: selMachine, partCode: $('partCode').value.trim(), partName: $('partName').value.trim(), specification: $('spec').value.trim(),
+      quantity: Number($('qty').value) || 0, unit: $('unit').value.trim(), lotNumber: $('lot').value.trim(), inspector: $('inspector').value.trim(),
+      customer: $('customer').value.trim(), cartonNo: $('carton').value.trim(), netWeight: $('nw').value.trim(), grossWeight: $('gw').value.trim(),
+      packingDate: $('packDate').value.trim(), refNo: $('ref').value.trim(), remark: $('remark').value.trim(), photos };
+    const r = await API.postLarge('submitRawMaterial', { data });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.showToast('บันทึก ' + r.receiveId + (r.warning ? ' (' + r.warning + ')' : ''), r.warning ? 'warning' : 'success');
+    ['partCode', 'partName', 'spec', 'qty', 'lot', 'inspector', 'customer', 'carton', 'nw', 'gw', 'packDate', 'ref', 'remark'].forEach((id) => { $(id).value = ''; });
+    photos = []; rawFiles = []; renderPreview(); $('ocrText').classList.add('hidden'); $('validateMsg').innerHTML = '';
+    loadHist(0);
+  });
+
+  async function loadHist(days) {
+    const t = UI.getToday();
+    const f = days === 0 ? { dateFrom: t, dateTo: t } : days === 1 ? { dateFrom: UI.addDays(t, -1), dateTo: UI.addDays(t, -1) } : { dateFrom: UI.addDays(t, -6), dateTo: t };
+    const r = await API.get('getRawMaterialHistory', { filters: f });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    $('hist').innerHTML = r.data.map((x) => `<div class="entry-card"><div class="entry-head"><span>${UI.esc(x.partCode)}</span><span>${UI.formatNumber(x.quantity)} ${UI.esc(x.unit)}</span></div>
+      <div class="entry-meta">${UI.esc(x.timestamp)} · ${UI.esc(x.machineId)} · ${UI.esc(x.partName)} ${x.lotNumber ? '· Lot ' + UI.esc(x.lotNumber) : ''} · ${UI.esc(x.receiverName)}</div></div>`).join('') || UI.emptyState('bi-inbox', 'ไม่มีข้อมูล');
+  }
+  document.querySelectorAll('[data-r]').forEach((b) => b.onclick = () => { document.querySelectorAll('[data-r]').forEach((x) => x.classList.toggle('active', x === b)); loadHist(Number(b.dataset.r)); });
+
+  UI.showLoading();
+  const m = await API.get('getMachines');
+  machines = m.success ? m.data.filter((x) => x.installed) : [];
+  renderMachines(); await loadHist(0);
+  UI.hideLoading();
+})();
+</script>
+</body>
+</html>

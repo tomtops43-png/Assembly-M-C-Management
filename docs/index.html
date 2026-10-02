@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>เข้าสู่ระบบ · Assembly M/C</title>
+<link rel="icon" href="https://img.icons8.com/color/48/factory.png">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="login-page">
+  <section class="login-hero">
+    <h1 id="heroTitle">Assembly M/C</h1>
+    <p>Production Management System</p>
+    <ul class="login-features">
+      <li><i class="bi bi-clipboard-data"></i> บันทึกยอดผลิตรายชั่วโมง</li>
+      <li><i class="bi bi-wrench"></i> แจ้งซ่อมและติดตามสถานะเครื่องจักร</li>
+      <li><i class="bi bi-calendar2-week"></i> วางแผนการผลิต (Job Order)</li>
+      <li><i class="bi bi-graph-up"></i> Dashboard OEE / NG แบบเรียลไทม์</li>
+    </ul>
+  </section>
+  <section class="login-side">
+    <div class="login-card">
+      <div class="login-logo" id="logo">
+        <i class="bi bi-cpu"></i>
+        <h2 id="logoTitle">Assembly M/C</h2>
+        <div>เข้าสู่ระบบด้วยรหัสพนักงาน</div>
+      </div>
+      <div class="login-error" id="loginError"></div>
+      <div class="form-group">
+        <label class="form-label">รหัสพนักงาน</label>
+        <input class="form-input form-input-lg" id="empId" autocomplete="username" autocapitalize="characters" placeholder="เช่น A001">
+      </div>
+      <div class="form-group">
+        <label class="form-label">PIN 4 หลัก</label>
+        <input class="form-input form-input-lg" id="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="current-password" placeholder="••••">
+        <div class="pin-display mobile-only" id="pinDots"></div>
+      </div>
+      <div class="numpad mobile-only" id="numpad"></div>
+      <button class="btn btn-primary btn-full login-btn" id="loginBtn"><i class="bi bi-box-arrow-in-right"></i> เข้าสู่ระบบ</button>
+
+      <div class="hidden mt-3" id="apiBox">
+        <label class="form-label">API URL (Apps Script /exec)</label>
+        <input class="form-input" id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec">
+        <button class="btn btn-outline btn-full mt-2" id="saveApi">บันทึก URL</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/ui.js"></script>
+<script>
+(function () {
+  UI.applyDeviceClass();
+  const C = window.APP_CONFIG;
+  document.getElementById('heroTitle').textContent = C.LINE_NAME;
+  document.getElementById('logoTitle').textContent = C.LINE_NAME;
+
+  if (Auth.isLoggedIn()) { location.href = Auth.getHomePage(); return; }
+  if (new URLSearchParams(location.search).get('expired')) showError('หมดเวลาการใช้งาน กรุณาเข้าสู่ระบบใหม่');
+
+  const empEl = document.getElementById('empId');
+  const pinEl = document.getElementById('pin');
+  const mobile = !UI.isDesktop();
+  let renderDots = () => {};
+
+  empEl.addEventListener('input', () => { empEl.value = empEl.value.toUpperCase(); });
+  empEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); mobile ? empEl.blur() : pinEl.focus(); } });
+  pinEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+  // มือถือ: numpad บนจอ
+  if (mobile) {
+    pinEl.readOnly = true;
+    pinEl.classList.add('hidden');
+    const dots = document.getElementById('pinDots');
+    const pad = document.getElementById('numpad');
+    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back'];
+    pad.innerHTML = keys.map((k) => `<button class="numpad-btn" data-k="${k}">${k === 'clear' ? '✕' : k === 'back' ? '⌫' : k}</button>`).join('');
+    renderDots = () => { dots.innerHTML = [0, 1, 2, 3].map((i) => `<span class="pin-dot ${i < pinEl.value.length ? 'filled' : ''}"></span>`).join(''); };
+    pad.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-k]');
+      if (!b) return;
+      const k = b.dataset.k;
+      if (k === 'clear') pinEl.value = '';
+      else if (k === 'back') pinEl.value = pinEl.value.slice(0, -1);
+      else if (pinEl.value.length < 4) pinEl.value += k;
+      renderDots();
+      if (pinEl.value.length === 4 && empEl.value) doLogin();
+    });
+    renderDots();
+  }
+
+  // แตะโลโก้ 5 ครั้งใน 2 วินาที → ตั้ง API URL
+  let taps = [];
+  document.getElementById('logo').addEventListener('click', () => {
+    const now = Date.now();
+    taps = taps.filter((t) => now - t < 2000).concat(now);
+    if (taps.length >= 5) {
+      document.getElementById('apiBox').classList.remove('hidden');
+      document.getElementById('apiUrl').value = API.getUrl();
+      taps = [];
+    }
+  });
+  document.getElementById('saveApi').onclick = () => {
+    API.setUrl(document.getElementById('apiUrl').value);
+    UI.showToast('บันทึก API URL แล้ว', 'success');
+  };
+  if (!API.getUrl()) showError('ยังไม่ได้ตั้งค่า API URL — แตะโลโก้ 5 ครั้งเพื่อตั้งค่า');
+
+  function showError(msg) {
+    const el = document.getElementById('loginError');
+    el.textContent = msg;
+    el.style.display = msg ? 'block' : 'none';
+  }
+
+  const btn = document.getElementById('loginBtn');
+  btn.onclick = doLogin;
+
+  async function doLogin() {
+    showError('');
+    const employeeId = empEl.value.trim().toUpperCase();
+    const pin = pinEl.value.trim();
+    if (!employeeId) return showError('กรุณากรอกรหัสพนักงาน');
+    if (!/^\d{4}$/.test(pin)) return showError('กรุณากรอก PIN 4 หลัก');
+    await UI.withButton(btn, async () => {
+      try {
+        const res = await API.post('login', { employeeId, pin }, { retries: 2 });
+        if (!res.success) { showError(res.message || 'เข้าสู่ระบบไม่สำเร็จ'); pinEl.value = ''; renderDots(); return; }
+        Auth.setToken(res.token);
+        Auth.setUser(res.user);
+        location.href = Auth.getHomePage();
+      } catch (err) {
+        showError(err.message);
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

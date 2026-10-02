@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Dashboard</title>
+<link rel="icon" href="https://img.icons8.com/color/48/factory.png">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+<main class="main"><div class="container">
+  <div class="card">
+    <div class="date-selector" id="rangeSel">
+      <button class="date-btn active" data-range="today">วันนี้</button><button class="date-btn" data-range="week">สัปดาห์</button>
+      <button class="date-btn" data-range="month">เดือน</button><button class="date-btn" data-range="all">ทั้งหมด</button>
+      <button class="date-btn" data-range="custom">ช่วงวันที่</button>
+      <span id="customBox" class="hidden"><input type="date" class="date-input" id="from"> – <input type="date" class="date-input" id="to"></span>
+    </div>
+    <div class="date-selector mt-2">
+      <select class="date-input" id="fShiftAB"><option value="">กะ A+B</option><option>A</option><option>B</option></select>
+      <select class="date-input" id="fShiftDN"><option value="">Day+Night</option><option>Day</option><option>Night</option></select>
+      <select class="date-input" id="fProduct"><option value="">ทุกรุ่น</option></select>
+      <select class="date-input" id="fJo"><option value="">ทุก Job Order</option><option value="__unassigned__">ไม่ระบุ JO</option></select>
+      <button class="btn btn-primary btn-sm" id="apply"><i class="bi bi-search"></i> ค้นหา</button>
+    </div>
+    <div class="progress-bar-container mt-2 hidden" id="loadBar"><div class="progress-bar-fill" style="width:100%;background:var(--primary)"></div></div>
+    <div class="small text-gray mt-1 hidden" id="slowMsg">ช่วงวันที่กว้าง กำลังประมวลผล...</div>
+  </div>
+
+  <div class="kpi-grid" id="kpi"></div>
+  <div class="card"><div class="card-title"><i class="bi bi-chat-square-text"></i> สรุปอัตโนมัติ</div><div id="autoReport" class="small"></div></div>
+
+  <div class="grid-2">
+    <div class="card"><div class="card-title">ยอดผลิตตามเครื่อง</div><div class="chart-container"><canvas id="cMachine"></canvas></div></div>
+    <div class="card"><div class="card-title">แนวโน้มรายวัน</div><div class="chart-container"><canvas id="cTrend"></canvas></div></div>
+    <div class="card"><div class="card-title">สัดส่วนผลิตภัณฑ์</div><div class="chart-container"><canvas id="cProduct"></canvas></div></div>
+    <div class="card"><div class="card-title">NG ตามอาการ (Pareto)</div><div class="chart-container"><canvas id="cReason"></canvas></div></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card"><div class="card-title">สรุปแยกรุ่น</div><div class="table-wrap"><table class="data-table" id="tProduct"></table></div></div>
+    <div class="card"><div class="card-title">NG แยกกลุ่มชิ้นส่วน</div><div class="table-wrap"><table class="data-table" id="tPart"></table></div></div>
+    <div class="card"><div class="card-title">ความคืบหน้า Job Order</div><div class="table-wrap"><table class="data-table" id="tJo"></table></div></div>
+    <div class="card"><div class="card-title">สรุปซ่อมบำรุง</div><div id="tMaint"></div></div>
+    <div class="card"><div class="card-title">สรุป Daily Check</div><div id="tDc"></div></div>
+    <div class="card"><div class="card-title">กะการทำงาน</div><div class="table-wrap"><table class="data-table" id="tShift"></table></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">ข้อมูลการผลิต <span class="spacer"></span>
+      <button class="btn btn-outline btn-sm" id="exportCsv"><i class="bi bi-filetype-csv"></i> Export CSV</button></div>
+    <div class="table-wrap" style="max-height:420px"><table class="data-table" id="tData"></table></div>
+  </div>
+
+  <div class="card hidden" id="ngExportCard">
+    <div class="card-title"><i class="bi bi-file-earmark-spreadsheet"></i> ส่งออก NG (QC)</div>
+    <div class="date-selector">
+      <input type="date" class="date-input" id="nFrom"><input type="time" class="date-input" id="nTimeFrom" value="08:00"> –
+      <input type="date" class="date-input" id="nTo"><input type="time" class="date-input" id="nTimeTo" value="07:59">
+      <select class="date-input" id="nMode"><option value="workDate">ตามวันที่ทำงาน</option><option value="timestamp">ตามเวลาที่บันทึกจริง</option></select>
+      <button class="btn btn-primary btn-sm" id="nExport">ส่งออก CSV</button>
+    </div>
+  </div>
+</div></main>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async function () {
+  if (!UI.initPage('dashboard', 'Dashboard', 'bi-graph-up')) return;
+  const $ = (id) => document.getElementById(id);
+  const PART_OTHER = 'อื่นๆ';
+  let range = 'today', ctrl = null, data = null, rows = [], sort = { f: 'timestamp', o: 'desc' };
+  const charts = {};
+  const hasChart = typeof Chart !== 'undefined';
+  if (hasChart) Chart.defaults.font.family = "'Sarabun', sans-serif";
+  else UI.showToast('โหลดไลบรารีกราฟไม่ได้ — แสดงเฉพาะตัวเลข/ตาราง', 'warning');
+
+  function rangeParam() { return range === 'custom' ? JSON.stringify({ from: $('from').value, to: $('to').value }) : range; }
+  $('rangeSel').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-range]'); if (!b) return;
+    range = b.dataset.range;
+    document.querySelectorAll('[data-range]').forEach((x) => x.classList.toggle('active', x === b));
+    $('customBox').classList.toggle('hidden', range !== 'custom');
+    if (range !== 'custom') load();
+  });
+  $('apply').onclick = load;
+
+  async function load() {
+    if (ctrl) ctrl.abort();
+    ctrl = new AbortController();
+    const my = ctrl;
+    $('loadBar').classList.remove('hidden');
+    const slow = setTimeout(() => $('slowMsg').classList.remove('hidden'), 12000);
+    const params = { dateRange: rangeParam(), shiftAB: $('fShiftAB').value, shiftDN: $('fShiftDN').value, productCode: $('fProduct').value, jobOrderId: $('fJo').value };
+    try {
+      const [d, t] = await Promise.all([
+        API.get('getDashboardData', params, { long: true, signal: my.signal }),
+        API.get('getSortedProductionData', { sortField: sort.f, sortOrder: sort.o, filters: { dateRange: rangeParam(), shiftAB: params.shiftAB, shiftDN: params.shiftDN, productCode: params.productCode, jobOrderId: params.jobOrderId, limit: 500 } }, { long: true, signal: my.signal })
+      ]);
+      if (!d.success) return UI.showToast(d.message, 'error');
+      data = d.data; rows = t.success ? t.data : [];
+      render();
+    } catch (err) {
+      if (!err.cancelled) UI.showToast(err.message, 'error');
+    } finally {
+      clearTimeout(slow);
+      if (my === ctrl) { $('loadBar').classList.add('hidden'); $('slowMsg').classList.add('hidden'); }
+    }
+  }
+
+  const n = (v, d = 0) => UI.formatNumber(v, d);
+  function chart(id, cfg) { if (!hasChart) return; if (charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), Object.assign({ options: {} }, cfg)); }
+
+  function render() {
+    const k = data.kpi;
+    $('kpi').innerHTML = `
+      <div class="kpi-card success"><div class="kpi-value">${n(k.actual)}</div><div class="kpi-label">ยอดผลิต (FG) · แผน ${n(k.plan)}</div></div>
+      <div class="kpi-card"><div class="kpi-value">${k.oee === null ? '-' : k.oee + '%'}</div><div class="kpi-label">% OEE</div></div>
+      <div class="kpi-card danger"><div class="kpi-value">${k.defectRate}%</div><div class="kpi-label">% NG (${n(k.defect)} ชิ้น)</div></div>
+      <div class="kpi-card warning"><div class="kpi-value">${k.openTickets}</div><div class="kpi-label">แจ้งซ่อมค้าง</div></div>`;
+
+    const worst = data.byMachine.slice().sort((a, b) => b.defectRate - a.defectRate)[0];
+    const topReason = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a])[0];
+    $('autoReport').innerHTML = `ช่วง ${data.range.from || 'เริ่มต้น'} ถึง ${data.range.to || 'ปัจจุบัน'}: ผลิตได้ <b>${n(k.actual)}</b> ชิ้น จากแผน ${n(k.plan)} ชิ้น,
+      NG ${n(k.defect)} ชิ้น (${k.defectRate}%), OEE ${k.oee === null ? '-' : k.oee + '%'}.
+      ${worst && worst.defect ? `เครื่องที่ %NG สูงสุด: <b>${UI.esc(worst.machineId)}</b> (${worst.defectRate}%).` : ''}
+      ${topReason ? `อาการ NG อันดับ 1: <b>${UI.esc(topReason)}</b> (${n(data.ngByReason[topReason])} ชิ้น).` : ''}
+      แจ้งซ่อม ${data.maintenance.total} ใบ (ค้าง ${data.maintenance.open}) downtime ${n(data.maintenance.downtime)} นาที.`;
+
+    chart('cMachine', { type: 'bar', data: { labels: data.byMachine.map((m) => m.machineId), datasets: [
+      { label: 'FG', data: data.byMachine.map((m) => m.actual), backgroundColor: '#34a853', yAxisID: 'y' },
+      { label: 'NG', data: data.byMachine.map((m) => m.defect), backgroundColor: '#ea4335', yAxisID: 'y' },
+      { label: '% OEE', type: 'line', data: data.byMachine.map((m) => m.oee), borderColor: '#1a73e8', yAxisID: 'y1' }] },
+      options: { maintainAspectRatio: false, scales: { y1: { position: 'right', min: 0, grid: { display: false } } } } });
+    chart('cTrend', { type: 'line', data: { labels: data.trend.map((t) => t.date.slice(5)), datasets: [
+      { label: 'FG', data: data.trend.map((t) => t.actual), borderColor: '#34a853', yAxisID: 'y' },
+      { label: 'NG', data: data.trend.map((t) => t.defect), borderColor: '#ea4335', yAxisID: 'y' },
+      { label: 'แผน', data: data.trend.map((t) => t.plan), borderColor: '#9aa0a6', borderDash: [6, 4], yAxisID: 'y' },
+      { label: '% NG', data: data.trend.map((t) => t.defectRate), borderColor: '#f57c00', yAxisID: 'y1' }] },
+      options: { maintainAspectRatio: false, scales: { y1: { position: 'right', min: 0, grid: { display: false } } } } });
+    chart('cProduct', { type: 'doughnut', data: { labels: data.byProduct.map((p) => p.productCode), datasets: [{ data: data.byProduct.map((p) => p.actual) }] }, options: { maintainAspectRatio: false } });
+    const reasons = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a]);
+    chart('cReason', { type: 'bar', data: { labels: reasons, datasets: [{ label: 'NG', data: reasons.map((r) => data.ngByReason[r]), backgroundColor: '#ea4335' }] }, options: { maintainAspectRatio: false, indexAxis: 'y' } });
+
+    $('tProduct').innerHTML = '<thead><tr><th>รุ่น</th><th class="num">แผน</th><th class="num">FG</th><th class="num">NG</th><th class="num">%Yield</th><th class="num">%NG</th></tr></thead><tbody>' +
+      data.byProduct.map((p) => `<tr><td>${UI.esc(p.productCode)}</td><td class="num">${n(p.plan)}</td><td class="num">${n(p.actual)}</td><td class="num">${n(p.defect)}</td><td class="num">${p.yield}%</td><td class="num">${p.defectRate}%</td></tr>`).join('') + '</tbody>';
+    const groups = (data.defectPartGroups || []).reduce((o, g) => { o[g.code] = g.label; return o; }, { OTHER: PART_OTHER });
+    $('tPart').innerHTML = Object.keys(data.ngByPart).length ? '<thead><tr><th>กลุ่ม</th><th class="num">NG</th></tr></thead><tbody>' +
+      Object.keys(data.ngByPart).map((g) => `<tr><td>${UI.esc(groups[g] || g)}</td><td class="num">${n(data.ngByPart[g])}</td></tr>`).join('') + '</tbody>'
+      : '<tbody><tr><td class="text-gray">ไม่มี NG (กลุ่มชิ้นส่วนตั้งใน Config.gs → DEFECT_PART_GROUPS)</td></tr></tbody>';
+    $('tJo').innerHTML = '<thead><tr><th>JO</th><th>รุ่น</th><th class="num">แผน</th><th class="num">ผลิตได้</th><th class="num">%</th></tr></thead><tbody>' +
+      data.jobOrders.map((j) => `<tr><td>${j.jobOrderId === '__unassigned__' ? 'ไม่ระบุ JO' : UI.esc(j.jobOrderId)}</td><td>${UI.esc(j.productCode)}</td><td class="num">${n(j.plannedQty)}</td><td class="num">${n(j.actualQty)}</td><td class="num">${j.completionRate === undefined ? '-' : j.completionRate + '%'}</td></tr>`).join('') + '</tbody>';
+    const mt = data.maintenance;
+    $('tMaint').innerHTML = `<div class="small mb-2">ทั้งหมด ${mt.total} · ค้าง ${mt.open} (ยกมา ${mt.carriedOver}) · เสร็จ ${mt.resolved} · Downtime ${n(mt.downtime)} นาที</div>
+      <table class="data-table"><thead><tr><th>เครื่อง</th><th class="num">ใบ</th><th class="num">นาที</th></tr></thead><tbody>` +
+      Object.keys(mt.byMachine).map((m) => `<tr><td>${UI.esc(m)}</td><td class="num">${mt.byMachine[m].tickets}</td><td class="num">${n(mt.byMachine[m].downtime)}</td></tr>`).join('') + '</tbody></table>';
+    const dc = data.dailyCheck;
+    $('tDc').innerHTML = dc ? `<div class="kpi-grid"><div class="kpi-card"><div class="kpi-value">${dc.compliance === null ? '-' : dc.compliance + '%'}</div><div class="kpi-label">Compliance (${dc.checked}/${dc.expected})</div></div>
+      <div class="kpi-card success"><div class="kpi-value">${dc.accept}</div><div class="kpi-label">Accept</div></div><div class="kpi-card danger"><div class="kpi-value">${dc.reject}</div><div class="kpi-label">Reject</div></div></div>
+      ${dc.missing.length ? '<div class="small text-gray">ช่องที่ขาด: ' + dc.missing.slice(0, 20).map((m) => `${m.machineId} ${m.timePeriod.slice(0, 5)}`).join(', ') + (dc.missing.length > 20 ? ' …' : '') + '</div>' : ''}` : '<div class="small text-gray">เลือกช่วงวันที่เพื่อดู</div>';
+    $('tShift').innerHTML = '<thead><tr><th>กะ</th><th class="num">FG</th><th class="num">NG</th></tr></thead><tbody>' +
+      Object.keys(data.byShift).map((s) => `<tr><td>${UI.esc(s)}</td><td class="num">${n(data.byShift[s].actual)}</td><td class="num">${n(data.byShift[s].defect)}</td></tr>`).join('') + '</tbody>';
+    renderTable();
+  }
+
+  const COLS = [['date', 'วันที่'], ['timePeriod', 'ช่วง'], ['shift', 'กะ'], ['machineId', 'เครื่อง'], ['productCode', 'รุ่น'], ['jobOrderId', 'JO'], ['actualQty', 'FG'], ['defectQty', 'NG'], ['remark', 'อาการ'], ['employeeName', 'ผู้บันทึก'], ['status', 'สถานะ']];
+  function renderTable() {
+    $('tData').innerHTML = '<thead><tr>' + COLS.map((c) => `<th class="sortable" data-sort="${c[0]}">${c[1]}${sort.f === c[0] ? (sort.o === 'asc' ? ' ▲' : ' ▼') : ''}</th>`).join('') + '</tr></thead><tbody>' +
+      rows.map((r) => '<tr>' + COLS.map((c) => `<td class="${typeof r[c[0]] === 'number' ? 'num' : ''}">${UI.esc(r[c[0]])}</td>`).join('') + '</tr>').join('') + '</tbody>';
+  }
+  $('tData').addEventListener('click', (e) => {
+    const th = e.target.closest('[data-sort]'); if (!th) return;
+    sort = { f: th.dataset.sort, o: sort.f === th.dataset.sort && sort.o === 'desc' ? 'asc' : 'desc' };
+    const dir = sort.o === 'asc' ? 1 : -1;
+    rows.sort((a, b) => (a[sort.f] > b[sort.f] ? 1 : a[sort.f] < b[sort.f] ? -1 : 0) * dir);
+    renderTable();
+  });
+
+  $('exportCsv').onclick = async () => {
+    if (!Auth.hasRole('supervisor')) return UI.showToast('ต้องเป็นหัวหน้าขึ้นไป', 'warning');
+    const r = await API.get('exportProductionCSV', { dateFrom: data.range.from || '2000-01-01', dateTo: data.range.to || UI.getToday() });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.downloadText(r.filename, r.csv);
+  };
+  if (Auth.hasPermission('ngExport')) $('ngExportCard').classList.remove('hidden');
+  $('nExport').onclick = () => UI.withButton($('nExport'), async () => {
+    const r = await API.get('exportQCDefectCSV', { dateFrom: $('nFrom').value, dateTo: $('nTo').value, dateMode: $('nMode').value, timeFrom: $('nTimeFrom').value, timeTo: $('nTimeTo').value }, { long: true });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.downloadText(r.filename, r.csv);
+    UI.showToast(`ส่งออก ${r.rows} แถว`, 'success');
+  });
+
+  // ตัวกรองสินค้า / JO
+  const [p, jo] = await Promise.all([API.get('getProducts'), Auth.hasRole('supervisor') ? API.get('getJobOrders', { filters: {} }) : API.get('getJobOrderOptions', { filters: { includeAll: true } })]);
+  if (p.success) $('fProduct').innerHTML += p.data.map((x) => `<option value="${UI.esc(x.productCode)}">${UI.esc(x.productCode)}</option>`).join('');
+  if (jo.success) $('fJo').innerHTML += jo.data.slice(0, 200).map((x) => `<option value="${UI.esc(x.jobOrderId)}">${UI.esc(x.jobOrderId)}</option>`).join('');
+  const t = UI.getToday();
+  $('from').value = UI.addDays(t, -6); $('to').value = t; $('nFrom').value = t; $('nTo').value = UI.addDays(t, 1);
+  await load();
+  setInterval(() => { if (!document.hidden && range !== 'all') load(); }, 60000);
+})();
+</script>
+</body>
+</html>

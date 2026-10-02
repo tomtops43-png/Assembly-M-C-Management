@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>แจ้งซ่อม</title>
+<link rel="icon" href="https://img.icons8.com/color/48/factory.png">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<main class="main"><div class="container">
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><i class="bi bi-wrench"></i> แจ้งซ่อมใหม่</div>
+      <div class="form-group"><label class="form-label">1. เครื่องจักร</label><div class="machine-grid" id="machineGrid"></div></div>
+      <div class="form-group"><label class="form-label">2. ประเภทปัญหา</label><div class="choice-grid" id="issueGrid"></div></div>
+      <div class="form-group"><label class="form-label">3. ความเร่งด่วน</label><div class="choice-grid" id="prioGrid"></div></div>
+      <div class="form-group"><label class="form-label">4. เวลาที่พบปัญหา</label><input type="datetime-local" class="form-input" id="reportTime"></div>
+      <div class="form-group">
+        <label class="form-label">5. รายละเอียด / อาการ</label>
+        <div class="d-flex gap-2"><select class="form-input" id="symptomSel"></select><button class="btn btn-outline" id="symptomAdd">เพิ่ม</button></div>
+        <div class="chips mt-2" id="symptomChips"></div>
+        <textarea class="form-input mt-2" id="desc" rows="3" placeholder="อธิบายเพิ่มเติม / พิมพ์อาการใหม่"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">6. แนบรูป/ไฟล์ (สูงสุด 5)</label>
+        <div class="photo-upload-area">
+          <label class="photo-add-btn"><i class="bi bi-camera"></i>ถ่ายรูป<input type="file" accept="image/*" capture="environment" class="hidden" data-photo></label>
+          <label class="photo-add-btn"><i class="bi bi-images"></i>เลือกรูป<input type="file" accept="image/*" multiple class="hidden" data-photo></label>
+          <label class="photo-add-btn"><i class="bi bi-paperclip"></i>ไฟล์<input type="file" accept=".pdf,.txt,image/*" multiple class="hidden" data-photo></label>
+          <div class="photo-previews" id="photoPreview"></div>
+        </div>
+      </div>
+      <button class="btn btn-danger btn-full btn-lg" id="submitBtn"><i class="bi bi-exclamation-triangle"></i> แจ้งซ่อม</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="bi bi-list-task"></i> ใบแจ้งซ่อมที่เปิดอยู่ <span class="spacer"></span>
+        <button class="btn btn-outline btn-sm" id="reload"><i class="bi bi-arrow-clockwise"></i></button></div>
+      <div id="tickets"></div>
+    </div>
+  </div>
+</div></main>
+
+<div class="modal-overlay" id="detailModal"><div class="modal-content">
+  <button class="modal-close" data-close-modal>&times;</button>
+  <h3 class="modal-title" id="dTitle"></h3><div id="dBody"></div>
+</div></div>
+
+<div class="modal-overlay" id="resolveModal"><div class="modal-content">
+  <button class="modal-close" data-close-modal>&times;</button>
+  <h3 class="modal-title">ปิดงานซ่อม</h3>
+  <div class="form-group"><label class="form-label">เวลาซ่อมเสร็จ</label><input type="datetime-local" class="form-input" id="rTime"></div>
+  <div class="form-group"><label class="form-label">ผลการซ่อม *</label><textarea class="form-input" id="rText" rows="3"></textarea></div>
+  <div class="form-group"><label class="form-label">รูปหลังซ่อม (สูงสุด 5)</label>
+    <div class="photo-upload-area"><label class="photo-add-btn"><i class="bi bi-camera"></i>เพิ่มรูป<input type="file" accept="image/*" multiple class="hidden" id="rPhotoInput"></label>
+    <div class="photo-previews" id="rPreview"></div></div></div>
+  <button class="btn btn-success btn-full" id="rSave">ซ่อมเสร็จ</button>
+</div></div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async function () {
+  if (!UI.initPage('maintenance', 'แจ้งซ่อม', 'bi-wrench')) return;
+  const $ = (id) => document.getElementById(id);
+  const user = Auth.getUser();
+  const isTech = Auth.hasRole('maintenance'), isSup = Auth.hasRole('supervisor');
+  const PRIOS = [{ k: 'low', l: 'ต่ำ' }, { k: 'medium', l: 'กลาง' }, { k: 'high', l: 'สูง' }, { k: 'critical', l: 'วิกฤต' }];
+  let cfg, machines = [], tickets = [];
+  let sel = { machineId: '', issueType: '', priority: 'medium' }, symptoms = [], photos = [], rPhotos = [], reqId = null, resolving = null;
+
+  function renderChoices() {
+    $('machineGrid').innerHTML = machines.filter((m) => m.installed).map((m) => `<button class="machine-btn status-${m.status} ${sel.machineId === m.machineId ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.machineId)}<small>${UI.statusLabel(m.status)}</small></button>`).join('') || UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร');
+    $('issueGrid').innerHTML = cfg.issueTypes.map((i) => `<button class="choice-btn ${sel.issueType === i.key ? 'active' : ''}" data-i="${i.key}"><i class="bi ${i.icon}"></i>${UI.esc(i.label)}</button>`).join('');
+    $('prioGrid').innerHTML = PRIOS.map((p) => `<button class="choice-btn ${sel.priority === p.k ? 'active' : ''}" data-p="${p.k}">${p.l}</button>`).join('');
+  }
+  document.querySelector('.card').addEventListener('click', (e) => {
+    const m = e.target.closest('[data-m]'), i = e.target.closest('[data-i]'), p = e.target.closest('[data-p]');
+    if (m) sel.machineId = m.dataset.m; if (i) sel.issueType = i.dataset.i; if (p) sel.priority = p.dataset.p;
+    if (m || i || p) renderChoices();
+  });
+
+  // อาการ
+  function renderSymptoms() { $('symptomChips').innerHTML = symptoms.map((s, i) => `<span class="chip">${UI.esc(s)} <button data-rs="${i}">&times;</button></span>`).join(''); }
+  $('symptomAdd').onclick = () => { const v = $('symptomSel').value; if (v && !symptoms.includes(v)) { symptoms.push(v); renderSymptoms(); } };
+  $('symptomChips').addEventListener('click', (e) => { const b = e.target.closest('[data-rs]'); if (b) { symptoms.splice(Number(b.dataset.rs), 1); renderSymptoms(); } });
+
+  // รูป
+  async function addFiles(files, list, max, previewEl) {
+    for (const f of files) {
+      if (list.length >= max) { UI.showToast('แนบได้สูงสุด ' + max + ' ไฟล์', 'warning'); break; }
+      list.push(await API.compressImage(f, 1024, 1024, 0.7));
+    }
+    renderPreview(list, previewEl);
+  }
+  function renderPreview(list, el) {
+    el.innerHTML = list.map((p, i) => `<div class="photo-thumb">${/^data:image/.test(p.dataUrl) ? `<img src="${p.dataUrl}">` : UI.esc(p.name)}<button data-rp="${i}">&times;</button></div>`).join('');
+  }
+  document.querySelectorAll('[data-photo]').forEach((inp) => inp.addEventListener('change', async () => { await addFiles(inp.files, photos, 5, $('photoPreview')); inp.value = ''; }));
+  $('photoPreview').addEventListener('click', (e) => { const b = e.target.closest('[data-rp]'); if (b) { photos.splice(Number(b.dataset.rp), 1); renderPreview(photos, $('photoPreview')); } });
+  $('rPhotoInput').addEventListener('change', async () => { await addFiles($('rPhotoInput').files, rPhotos, 5, $('rPreview')); $('rPhotoInput').value = ''; });
+  $('rPreview').addEventListener('click', (e) => { const b = e.target.closest('[data-rp]'); if (b) { rPhotos.splice(Number(b.dataset.rp), 1); renderPreview(rPhotos, $('rPreview')); } });
+
+  // ส่งแจ้งซ่อม
+  $('submitBtn').onclick = () => UI.withButton($('submitBtn'), async () => {
+    const description = symptoms.concat($('desc').value.trim() ? [$('desc').value.trim()] : []).join(' | ');
+    if (!sel.machineId) return UI.showToast('กรุณาเลือกเครื่องจักร', 'warning');
+    if (!sel.issueType) return UI.showToast('กรุณาเลือกประเภทปัญหา', 'warning');
+    if (!description) return UI.showToast('กรุณากรอกรายละเอียด', 'warning');
+    reqId = reqId || API.newRequestId();
+    const res = await API.postLarge('submitMaintenanceTicket', { data: {
+      machineId: sel.machineId, issueType: sel.issueType, priority: sel.priority, reportTime: $('reportTime').value,
+      description, photos, clientRequestId: reqId } });
+    if (!res.success) return UI.showToast(res.message, 'error');
+    reqId = null; symptoms = []; photos = []; $('desc').value = ''; sel = { machineId: '', issueType: '', priority: 'medium' };
+    renderSymptoms(); renderPreview(photos, $('photoPreview')); $('reportTime').value = UI.nowLocalInput();
+    UI.showToast('แจ้งซ่อมแล้ว ' + (res.ticketId || ''), 'success');
+    await loadMachines(); loadTickets();
+  });
+
+  // ใบที่เปิดอยู่
+  async function loadTickets() {
+    const r = await API.get('getOpenTickets');
+    if (!r.success) return UI.showToast(r.message, 'error');
+    tickets = r.data;
+    const today = UI.getToday();
+    $('tickets').innerHTML = tickets.length ? tickets.map((t) => {
+      const canEdit = t.status === 'open' && (t.reportedBy === user.employeeId || isSup) && (user.role === 'admin' || t.date === today);
+      return `<div class="entry-card priority-${t.priority}">
+        <div class="entry-head"><span>${UI.esc(t.machineId)} · ${UI.esc(issueLabel(t.issueType))}</span><span class="badge badge-${t.status}">${t.status === 'open' ? 'รอรับงาน' : 'กำลังซ่อม'}</span></div>
+        <div class="small mt-1">${UI.esc(t.description)}</div>
+        <div class="entry-meta">${UI.esc(t.ticketId)} · ${UI.esc(t.reporterName)} · ผ่านไป ${UI.timeAgo(t.timestamp)} ${t.assignedTo ? '· ช่าง ' + UI.esc(t.assignedTo) : ''}</div>
+        <div class="entry-actions">
+          <button class="btn btn-outline btn-sm" data-act="detail" data-id="${t.ticketId}">รายละเอียด</button>
+          ${isTech && t.status === 'open' ? `<button class="btn btn-primary btn-sm" data-act="take" data-id="${t.ticketId}">รับงาน</button>` : ''}
+          ${isTech && t.status === 'in-progress' ? `<button class="btn btn-outline btn-sm" data-act="return" data-id="${t.ticketId}">คืนงาน</button>
+             <button class="btn btn-success btn-sm" data-act="resolve" data-id="${t.ticketId}">ซ่อมเสร็จ</button>` : ''}
+          ${canEdit ? `<button class="btn btn-outline btn-sm" data-act="delete" data-id="${t.ticketId}"><i class="bi bi-trash"></i></button>` : ''}
+        </div></div>`;
+    }).join('') : UI.emptyState('bi-check2-circle', 'ไม่มีใบแจ้งซ่อมค้าง');
+  }
+  function issueLabel(k) { const i = cfg.issueTypes.find((x) => x.key === k); return i ? i.label : k; }
+  $('tickets').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const t = tickets.find((x) => x.ticketId === b.dataset.id);
+    if (b.dataset.act === 'detail') return showDetail(t);
+    if (b.dataset.act === 'resolve') { resolving = t; rPhotos = []; renderPreview(rPhotos, $('rPreview')); $('rText').value = ''; $('rTime').value = UI.nowLocalInput(); return UI.openModal('resolveModal'); }
+    let r;
+    if (b.dataset.act === 'take') r = await API.post('updateTicketStatus', { ticketId: t.ticketId, status: 'in-progress' });
+    if (b.dataset.act === 'return' && confirm('คืนงานนี้?')) r = await API.post('updateTicketStatus', { ticketId: t.ticketId, status: 'returned' });
+    if (b.dataset.act === 'delete' && confirm('ลบใบแจ้งซ่อมนี้?')) r = await API.post('deleteMaintenanceTicket', { ticketId: t.ticketId });
+    if (!r) return;
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.showToast('อัปเดตแล้ว', 'success'); loadMachines(); loadTickets();
+  });
+  $('rSave').onclick = () => UI.withButton($('rSave'), async () => {
+    if (!$('rText').value.trim()) return UI.showToast('กรุณากรอกผลการซ่อม', 'warning');
+    const r = await API.postLarge('updateTicketStatus', { ticketId: resolving.ticketId, status: 'resolved', resolution: $('rText').value.trim(), photos: rPhotos, resolveTime: $('rTime').value });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.closeModal('resolveModal'); UI.showToast('ปิดงานซ่อมแล้ว', 'success'); loadMachines(); loadTickets();
+  });
+  function showDetail(t) {
+    $('dTitle').textContent = t.ticketId;
+    const img = (u) => `<a href="${UI.esc(u)}" target="_blank" rel="noopener" class="photo-thumb">${u.includes('thumbnail') ? `<img src="${UI.esc(u)}">` : 'ไฟล์'}</a>`;
+    $('dBody').innerHTML = `<table class="data-table"><tbody>
+      <tr><th>เครื่อง</th><td>${UI.esc(t.machineId)}</td></tr><tr><th>ประเภท</th><td>${UI.esc(issueLabel(t.issueType))}</td></tr>
+      <tr><th>ความเร่งด่วน</th><td>${UI.esc(t.priority)}</td></tr><tr><th>แจ้งเมื่อ</th><td>${UI.esc(t.timestamp)} (${UI.esc(t.shiftDN)} ${UI.esc(t.shiftAB)})</td></tr>
+      <tr><th>ผู้แจ้ง</th><td>${UI.esc(t.reporterName)}</td></tr><tr><th>รายละเอียด</th><td style="white-space:normal">${UI.esc(t.description)}</td></tr>
+      <tr><th>ผลการซ่อม</th><td style="white-space:normal">${UI.esc(t.resolution || '-')}</td></tr></tbody></table>
+      ${t.photos.length ? '<div class="form-label mt-3">รูปตอนแจ้ง</div><div class="photo-previews">' + t.photos.map(img).join('') + '</div>' : ''}`;
+    UI.openModal('detailModal');
+  }
+
+  async function loadMachines() { const r = await API.get('getMachines'); if (r.success) { machines = r.data; renderChoices(); } }
+  async function loadSymptoms() {
+    const r = await API.get('getMaintenanceSymptoms');
+    $('symptomSel').innerHTML = '<option value="">— อาการที่เกิดซ้ำ —</option>' + (r.success ? r.data.map((s) => `<option>${UI.esc(s)}</option>`).join('') : '');
+  }
+  $('reload').onclick = loadTickets;
+
+  UI.showLoading();
+  try {
+    cfg = await UI.getLineConfig();
+    $('reportTime').value = UI.nowLocalInput();
+    await Promise.all([loadMachines(), loadTickets(), loadSymptoms()]);
+  } catch (err) { UI.showToast(err.message, 'error'); }
+  UI.hideLoading();
+})();
+</script>
+</body>
+</html>

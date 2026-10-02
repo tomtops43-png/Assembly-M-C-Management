@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>กรอกยอดผลิต</title>
+<link rel="icon" href="https://img.icons8.com/color/48/factory.png">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<main class="main"><div class="container">
+  <div class="card">
+    <div class="d-flex justify-between align-center flex-wrap gap-2">
+      <span class="badge badge-info" id="shiftBadge"></span>
+      <div class="d-flex align-center gap-2">
+        <label class="small fw-bold">วันที่งาน</label>
+        <input type="date" class="date-input" id="workDate">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><i class="bi bi-gear"></i> 1. เลือกเครื่องจักร</div>
+    <div class="machine-grid" id="machineGrid"></div>
+  </div>
+
+  <div class="card hidden" id="formCard">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">2. ผลิตภัณฑ์</label>
+        <div class="lock-field"><i class="bi bi-lock-fill"></i><span id="productText">-</span></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">3. Job Order</label>
+        <div class="lock-field"><i class="bi bi-lock-fill"></i><span id="joText">-</span></div>
+      </div>
+    </div>
+    <div id="joProgress" class="hidden mb-3"></div>
+
+    <div class="form-group">
+      <label class="form-label">4. ช่วงเวลา</label>
+      <div class="period-grid" id="periodGrid"></div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">5. ผลิตได้ (FG)</label>
+        <input type="number" inputmode="numeric" class="form-input form-input-lg" id="actualQty">
+      </div>
+      <div class="form-group">
+        <label class="form-label">NG รวม</label>
+        <input type="number" class="form-input form-input-lg" id="defectQty" readonly value="0">
+        <div class="form-hint" id="ngHint"></div>
+      </div>
+    </div>
+    <div id="componentInputs"></div>
+    <div class="form-group hidden" id="ngReasonGroup">
+      <label class="form-label">หมายเหตุ NG <span class="req">*</span></label>
+      <select class="form-input" id="ngReason"></select>
+      <input class="form-input mt-2 hidden" id="ngReasonOther" placeholder="ระบุอาการ">
+    </div>
+    <button class="btn btn-success btn-full btn-lg" id="submitBtn"><i class="bi bi-check2-circle"></i> บันทึกยอดผลิต</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><i class="bi bi-clock-history"></i> รายการย้อนหลัง 2 วัน <span class="spacer"></span>
+      <button class="btn btn-outline btn-sm" id="reloadEntries"><i class="bi bi-arrow-clockwise"></i></button></div>
+    <div id="adminFilter" class="hidden d-flex gap-2 flex-wrap mb-2">
+      <input type="date" class="date-input" id="fFrom"> <input type="date" class="date-input" id="fTo">
+      <button class="btn btn-outline btn-sm" id="fApply">ค้นหา</button>
+    </div>
+    <div id="entries"></div>
+  </div>
+</div></main>
+
+<div class="modal-overlay" id="editModal"><div class="modal-content">
+  <button class="modal-close" data-close-modal>&times;</button>
+  <h3 class="modal-title">แก้ไขยอดผลิต</h3>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">FG</label><input type="number" class="form-input" id="eActual"></div>
+    <div class="form-group"><label class="form-label">NG</label><input type="number" class="form-input" id="eDefect" readonly></div>
+  </div>
+  <div id="eComponents"></div>
+  <div class="form-group"><label class="form-label">หมายเหตุ NG</label><select class="form-input" id="eReason"></select>
+    <input class="form-input mt-2 hidden" id="eReasonOther" placeholder="ระบุอาการ"></div>
+  <div class="btn-group">
+    <button class="btn btn-primary flex-1" id="eSave">บันทึก</button>
+    <button class="btn btn-danger" id="eDelete"><i class="bi bi-trash"></i> ลบ</button>
+  </div>
+</div></div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async function () {
+  if (!UI.initPage('production', 'กรอกยอดผลิต', 'bi-clipboard-data')) return;
+  const C = window.APP_CONFIG, P = C.STORAGE_PREFIX;
+  const user = Auth.getUser();
+  const MASTER_KEY = P + 'production_master_v1';
+  const WD_KEY = P + 'production_workdate_' + user.employeeId;
+  const $ = (id) => document.getElementById(id);
+  const OTHER = 'อื่นๆ';
+
+  let cfg = { ngReasons: [OTHER], defaultQty: 0 };
+  let master = null;            // {machines, machineProducts, bom, version}
+  let selMachine = null, selPeriod = UI.currentPeriod();
+  let entries = [];
+  let pendingReqId = null, pendingSig = '';
+
+  // ---------- วันที่งาน (smart assist: กะ B เปิด 08:00-11:59 → เมื่อวาน) ----------
+  function defaultWorkDate() {
+    const h = UI.getBkkHour();
+    let d = UI.getToday();
+    if (user.shift === 'B' && h >= 8 && h < 12) d = UI.addDays(d, -1);
+    return d;
+  }
+  function initWorkDate() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(WD_KEY) || 'null'); } catch (e) {}
+    const today = UI.getToday();
+    $('workDate').max = today;
+    $('workDate').value = saved && saved.setOn === today ? saved.value : defaultWorkDate();
+  }
+  $('workDate').addEventListener('change', () => {
+    try { localStorage.setItem(WD_KEY, JSON.stringify({ value: $('workDate').value, setOn: UI.getToday() })); } catch (e) {}
+  });
+  let lastToday = UI.getToday();
+  function rollover() {
+    const t = UI.getToday();
+    if (t !== lastToday) { lastToday = t; $('workDate').max = t; $('workDate').value = defaultWorkDate(); }
+    const s = UI.getShiftInfo();
+    $('shiftBadge').textContent = `กะ ${s.shiftAB || '-'} · ${s.shiftDN} · ${s.timePeriod}`;
+  }
+  setInterval(rollover, 5 * 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { rollover(); checkVersion(); } });
+
+  // ---------- master cache + version ----------
+  function loadCachedMaster() {
+    try {
+      const c = JSON.parse(localStorage.getItem(MASTER_KEY) || 'null');
+      if (c && Date.now() - c.at < 86400000) return c.data;
+    } catch (e) {}
+    return null;
+  }
+  async function loadAll(forceMaster) {
+    const cached = forceMaster ? null : loadCachedMaster();
+    const res = await API.get('getProductionFormData', { include: cached ? '' : 'masters' });
+    if (!res.success) { UI.showToast(res.message, 'error'); return; }
+    if (cached && cached.version === res.data.version) master = cached;
+    else if (res.data.machines) master = res.data;
+    else return loadAll(true);
+    try { localStorage.setItem(MASTER_KEY, JSON.stringify({ at: Date.now(), data: master })); } catch (e) {}
+    entries = res.data.entries || [];
+    renderMachines(); renderEntries();
+    if (selMachine) selectMachine(selMachine.machineId);
+  }
+  async function checkVersion() {
+    if (document.hidden || !master) return;
+    const r = await API.get('getMasterDataVersion', {}, { retries: 0 });
+    if (r.success && r.version !== master.version) { await loadAll(true); UI.showToast('อัปเดตข้อมูลเครื่อง/สินค้าแล้ว', 'info'); }
+  }
+  setInterval(checkVersion, 60000);
+
+  // ---------- เครื่องจักร ----------
+  function renderMachines() {
+    const list = (master.machines || []).filter((m) => m.installed);
+    if (!list.length) { $('machineGrid').innerHTML = UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร — ให้ admin เพิ่มที่เมนู "จัดการ"'); return; }
+    $('machineGrid').innerHTML = list.map((m) => `
+      <button class="machine-btn status-${m.status} ${selMachine && selMachine.machineId === m.machineId ? 'active' : ''}" data-id="${UI.esc(m.machineId)}" ${m.status === 'down' ? 'disabled' : ''}>
+        ${UI.esc(m.machineId)}<small>${UI.esc(m.currentProduct || 'ยังไม่ตั้งสินค้า')}</small></button>`).join('');
+  }
+  $('machineGrid').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-id]');
+    if (b) selectMachine(b.dataset.id);
+  });
+
+  function selectMachine(id) {
+    selMachine = master.machines.find((m) => m.machineId === id);
+    renderMachines();
+    if (!selMachine) { $('formCard').classList.add('hidden'); return; }
+    $('formCard').classList.remove('hidden');
+    const prod = (master.machineProducts[id] || []).find((p) => p.productCode === selMachine.currentProduct);
+    $('productText').textContent = selMachine.currentProduct
+      ? selMachine.currentProduct + (prod ? ' — ' + prod.productName : '')
+      : 'ยังไม่ได้ตั้งสินค้า — แจ้งหัวหน้าให้ตั้งที่เมนูเครื่องจักร';
+    $('joText').textContent = selMachine.currentJobOrder || 'ไม่ระบุ';
+    $('actualQty').value = prod ? prod.defaultQty : cfg.defaultQty;
+    $('submitBtn').disabled = !selMachine.currentProduct;
+    renderComponents($('componentInputs'), selMachine.currentProduct, {}, recalcNg);
+    recalcNg();
+    loadJoProgress();
+  }
+
+  async function loadJoProgress() {
+    const box = $('joProgress');
+    if (!selMachine.currentJobOrder) { box.classList.add('hidden'); return; }
+    const r = await API.get('getJobOrderProgress', { jobOrderId: selMachine.currentJobOrder });
+    if (!r.success) { box.classList.add('hidden'); return; }
+    const j = r.data;
+    const pct = j.plannedQty ? Math.min(100, j.actualQty / j.plannedQty * 100) : 0;
+    const over = j.actualQty >= j.plannedQty;
+    const near = !over && j.remaining <= j.plannedQty * 0.1;
+    box.innerHTML = `<div class="d-flex justify-between small mb-1">
+        <span>แผน <b>${UI.formatNumber(j.plannedQty)}</b></span><span>ผลิตแล้ว <b>${UI.formatNumber(j.actualQty)}</b></span>
+        <span>${over ? 'เกินแผน' : 'คงเหลือ'} <b>${UI.formatNumber(over ? j.over : j.remaining)}</b></span></div>
+      <div class="progress-bar-container"><div class="progress-bar-fill ${over ? 'over' : near ? 'near' : ''}" style="width:${pct}%"></div></div>
+      ${over ? '<div class="notice danger mt-2">ครบตามแผนแล้ว — แจ้งหัวหน้าเปลี่ยน Job Order</div>' : near ? '<div class="small text-warning mt-1">ใกล้ครบ</div>' : ''}`;
+    box.classList.remove('hidden');
+  }
+
+  // ---------- ช่วงเวลา ----------
+  function renderPeriods() {
+    $('periodGrid').innerHTML = UI.getTimePeriods().map((p) => {
+      const h = Number(p.slice(0, 2));
+      const icon = UI.isDayHour(h) ? (h >= 11 && h < 16 ? 'bi-sun-fill' : 'bi-sun') : 'bi-moon';
+      return `<button class="period-btn ${p === selPeriod ? 'active' : ''}" data-p="${p}"><i class="bi ${icon}"></i> ${p.slice(0, 5)}</button>`;
+    }).join('');
+  }
+  $('periodGrid').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-p]');
+    if (b) { selPeriod = b.dataset.p; renderPeriods(); }
+  });
+
+  // ---------- NG ราย component ----------
+  function renderComponents(container, productCode, values, onChange) {
+    const bom = (master.bom || {})[productCode] || [];
+    container.innerHTML = bom.length ? `<div class="form-row">${bom.map((c) => `
+      <div class="form-group"><label class="form-label">NG ${UI.esc(c.componentName || c.componentCode)}</label>
+      <input type="number" min="0" inputmode="numeric" class="form-input" data-comp="${UI.esc(c.componentCode)}" data-name="${UI.esc(c.componentName)}" value="${(values[c.componentCode] || {}).qty || ''}"></div>`).join('')}</div>`
+      : `<div class="form-group"><label class="form-label">NG (ยังไม่มี BOM)</label><input type="number" min="0" class="form-input" data-comp="" value="${values.__total || ''}"></div>`;
+    container.querySelectorAll('input').forEach((i) => i.addEventListener('input', onChange));
+  }
+  function readComponents(container) {
+    const out = {}; let total = 0; const qtys = [];
+    container.querySelectorAll('input[data-comp]').forEach((i) => {
+      const q = Math.max(0, Number(i.value) || 0);
+      if (!i.dataset.comp) { total = q; return; }
+      if (q > 0) { out[i.dataset.comp] = { componentName: i.dataset.name, qty: q }; qtys.push(q); }
+    });
+    if (qtys.length) total = cfg.defectAggregate === 'sum' ? qtys.reduce((a, b) => a + b, 0) : Math.max(...qtys);
+    return { details: out, total };
+  }
+  function fillReasons(sel) {
+    sel.innerHTML = '<option value="">— เลือกอาการ —</option>' + cfg.ngReasons.map((r) => `<option>${UI.esc(r)}</option>`).join('');
+  }
+  function reasonValue(sel, other) {
+    if (sel.value === OTHER) return other.value.trim() ? OTHER + ': ' + other.value.trim() : '';
+    return sel.value;
+  }
+  function recalcNg() {
+    const ng = readComponents($('componentInputs'));
+    $('defectQty').value = ng.total;
+    $('ngReasonGroup').classList.toggle('hidden', ng.total <= 0);
+    $('ngHint').textContent = cfg.defectAggregate === 'sum' ? 'NG = ผลรวมของชิ้นส่วน' : 'NG = ค่าสูงสุดของชิ้นส่วน';
+  }
+  $('ngReason').addEventListener('change', () => $('ngReasonOther').classList.toggle('hidden', $('ngReason').value !== OTHER));
+
+  // ---------- บันทึก ----------
+  $('submitBtn').onclick = () => UI.withButton($('submitBtn'), async () => {
+    if (!selMachine || !selMachine.currentProduct) return UI.showToast('เครื่องนี้ยังไม่ได้ตั้งสินค้า', 'warning');
+    const ng = readComponents($('componentInputs'));
+    const remark = ng.total > 0 ? reasonValue($('ngReason'), $('ngReasonOther')) : '';
+    if (ng.total > 0 && !remark) return UI.showToast('กรุณาระบุอาการ NG', 'warning');
+    const data = {
+      machineId: selMachine.machineId, productCode: selMachine.currentProduct, jobOrderId: selMachine.currentJobOrder,
+      workDate: $('workDate').value, timePeriod: selPeriod, plannedQty: selMachine.capacity,
+      actualQty: Number($('actualQty').value) || 0, defectQty: ng.total, defectByComponent: ng.details, remark
+    };
+    const sig = JSON.stringify(data);
+    if (sig !== pendingSig) { pendingSig = sig; pendingReqId = API.newRequestId(); }
+    data.clientRequestId = pendingReqId;
+    if (!confirm(`ยืนยันบันทึก ${data.machineId} ช่วง ${data.timePeriod}\nFG ${data.actualQty}  NG ${data.defectQty}`)) return;
+    const res = await API.post('submitProduction', { data });
+    if (res.settingsChanged) { UI.showToast(res.message, 'warning'); await loadAll(true); return; }
+    if (!res.success) return UI.showToast(res.message, 'error');
+    pendingSig = ''; pendingReqId = null;
+    UI.showToast(res.duplicate ? 'รายการนี้บันทึกไว้แล้ว' : 'บันทึกสำเร็จ', 'success');
+    $('componentInputs').querySelectorAll('input').forEach((i) => { i.value = ''; });
+    $('ngReason').value = ''; $('ngReasonOther').value = ''; recalcNg();
+    loadEntries(); loadJoProgress();
+  });
+
+  // ---------- รายการย้อนหลัง ----------
+  async function loadEntries() {
+    const filters = user.role === 'admin' && $('fFrom').value ? { dateFrom: $('fFrom').value, dateTo: $('fTo').value || $('fFrom').value } : {};
+    const r = await API.get('getEditableProductionEntries', { filters });
+    if (r.success) { entries = r.data; renderEntries(); }
+  }
+  function renderEntries() {
+    if (!entries.length) { $('entries').innerHTML = UI.emptyState('bi-inbox', 'ยังไม่มีรายการ'); return; }
+    $('entries').innerHTML = entries.map((e) => `
+      <div class="entry-card ${e.status === 'cancelled' ? 'cancelled' : ''}">
+        <div class="entry-head"><span>${UI.esc(e.machineId)} ${e.shift ? '[' + UI.esc(e.shift) + ']' : ''}</span>
+          <span><span class="text-success">${UI.formatNumber(e.actualQty)}</span> / ${UI.formatNumber(e.plannedQty)} ${e.defectQty ? `<span class="badge badge-down">NG ${e.defectQty}</span>` : ''}</span></div>
+        <div class="entry-meta">${UI.formatDate(e.date)} (${UI.esc(e.timePeriod)}) · ${UI.esc(e.productCode)} ${e.jobOrderId ? '· JO ' + UI.esc(e.jobOrderId) : ''} ${e.remark ? '· ' + UI.esc(e.remark) : ''}
+          ${user.role === 'admin' ? '· ' + UI.esc(e.employeeName) : ''}</div>
+        ${e.canEdit ? `<div class="entry-actions"><button class="btn btn-outline btn-sm" data-edit="${e.logId}"><i class="bi bi-pencil"></i> แก้ไข/ลบ</button></div>` : ''}
+      </div>`).join('');
+  }
+  $('entries').addEventListener('click', (e) => { const b = e.target.closest('[data-edit]'); if (b) openEdit(b.dataset.edit); });
+  $('reloadEntries').onclick = loadEntries;
+  $('fApply').onclick = loadEntries;
+
+  let editing = null;
+  function openEdit(logId) {
+    editing = entries.find((x) => x.logId === logId);
+    if (!editing) return;
+    $('eActual').value = editing.actualQty;
+    const vals = Object.assign({}, editing.defectDetails);
+    if (!Object.keys(vals).length) vals.__total = editing.defectQty;
+    const recalc = () => { $('eDefect').value = readComponents($('eComponents')).total; };
+    renderComponents($('eComponents'), editing.productCode, vals, recalc);
+    recalc();
+    fillReasons($('eReason'));
+    const r = editing.remark || '';
+    if (r.startsWith(OTHER + ':')) { $('eReason').value = OTHER; $('eReasonOther').value = r.slice(OTHER.length + 1).trim(); }
+    else { $('eReason').value = cfg.ngReasons.includes(r) ? r : ''; $('eReasonOther').value = ''; }
+    $('eReasonOther').classList.toggle('hidden', $('eReason').value !== OTHER);
+    UI.openModal('editModal');
+  }
+  $('eReason').addEventListener('change', () => $('eReasonOther').classList.toggle('hidden', $('eReason').value !== OTHER));
+  $('eSave').onclick = () => UI.withButton($('eSave'), async () => {
+    const ng = readComponents($('eComponents'));
+    const remark = ng.total > 0 ? reasonValue($('eReason'), $('eReasonOther')) : '';
+    if (ng.total > 0 && !remark) return UI.showToast('กรุณาระบุอาการ NG', 'warning');
+    const res = await API.post('updateProductionEntry', { logId: editing.logId, updates: {
+      actualQty: Number($('eActual').value) || 0, defectQty: ng.total, defectByComponent: ng.details, remark } });
+    if (!res.success) return UI.showToast(res.message, 'error');
+    UI.closeModal('editModal'); UI.showToast('แก้ไขแล้ว', 'success'); loadEntries();
+  });
+  $('eDelete').onclick = async () => {
+    const reason = prompt('เหตุผลที่ลบรายการนี้');
+    if (!reason) return;
+    const res = await API.post('requestDeleteProduction', { logId: editing.logId, reason });
+    if (!res.success) return UI.showToast(res.message, 'error');
+    UI.closeModal('editModal'); UI.showToast('ลบรายการแล้ว', 'success'); loadEntries();
+  };
+
+  // ---------- start ----------
+  initWorkDate(); rollover(); renderPeriods();
+  if (user.role === 'admin') $('adminFilter').classList.remove('hidden');
+  UI.showLoading();
+  try {
+    cfg = await UI.getLineConfig();
+    fillReasons($('ngReason'));
+    await loadAll(false);
+  } catch (err) { UI.showToast(err.message, 'error'); }
+  UI.hideLoading();
+})();
+</script>
+</body>
+</html>

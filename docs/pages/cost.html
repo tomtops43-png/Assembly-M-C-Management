@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>บริหารต้นทุน</title>
+<link rel="icon" href="https://img.icons8.com/color/48/factory.png">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<main class="main"><div class="container">
+  <div class="card">
+    <div class="empty-state">
+      <i class="bi bi-cash-stack"></i>
+      <div class="fw-bold">โมดูลนี้อยู่ในเฟส 2</div>
+      <div class="small mt-2">ขอบเขต: P&amp;L รายเดือน (Sale / COGS / GP / Profit / EBIT / EAT), Dashboard ย้อนหลัง, ราคาต่อหน่วยสินค้า</div>
+      <div class="small mt-2">ข้อมูลที่ต้องใช้: ราคาขายต่อหน่วยของแต่ละรุ่น, รายการต้นทุน (RM, Sub con, OH VC/FC, SG&amp;A ฯลฯ) ที่ใช้จริงในไลน์นี้</div>
+    </div>
+  </div>
+</div></main>
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+  // เปิดใช้: ลบ 'cost' ออกจาก DISABLED_MODULES (config.js) + ตั้ง LINE_CONFIG.MODULES.cost = true (Config.gs)
+  UI.initPage('cost', 'บริหารต้นทุน', 'bi-cash-stack');
+</script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Daily Check</title>
+<link rel="icon" href="https://img.icons8.com/color/48/factory.png">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .sheet td, .sheet th { text-align: center; padding: 4px 6px; min-width: 26px; }
+  .sheet td.due { background: #ffe0b2; }
+  .item-row { border: 1px solid var(--gray-light); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 8px; }
+  .okng { display: flex; gap: 8px; margin-top: 8px; }
+  .okng button.active.ok { background: var(--success); color: #fff; } .okng button.active.ng { background: var(--danger); color: #fff; }
+</style>
+</head>
+<body>
+<main class="main"><div class="container">
+  <div id="notReady" class="notice hidden">ยังไม่ได้ตั้งหัวข้อ Daily Check ของไลน์นี้ (Config.gs → DAILY_CHECK.ITEMS) — รอข้อมูลจากผู้ใช้</div>
+  <div class="card">
+    <div class="d-flex justify-between align-center flex-wrap gap-2">
+      <div class="fw-bold" id="docTitle"></div>
+      <div class="d-flex gap-2 align-center"><label class="small fw-bold">วันที่งาน</label><input type="date" class="date-input" id="date"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title"><i class="bi bi-gear"></i> เลือกเครื่อง</div>
+    <div class="machine-grid" id="machineGrid"></div>
+  </div>
+  <div class="card hidden" id="periodCard">
+    <div class="card-title"><i class="bi bi-clock"></i> เลือกชั่วโมง <span class="small text-gray">(เขียว = Accept, แดง = Reject)</span></div>
+    <div class="period-grid" id="periodGrid"></div>
+  </div>
+  <div class="card">
+    <div class="card-title"><i class="bi bi-table"></i> ใบ Daily Check <span class="spacer"></span><button class="btn btn-outline btn-sm no-print" onclick="window.print()"><i class="bi bi-printer"></i> พิมพ์</button></div>
+    <div class="table-wrap"><table class="data-table sheet" id="sheet"></table></div>
+    <div class="small text-gray mt-2">/ = Accept · X = Reject · ช่องส้ม = ถึงเวลาแล้วยังไม่บันทึก</div>
+  </div>
+</div></main>
+
+<div class="modal-overlay" id="formModal"><div class="modal-content">
+  <button class="modal-close" data-close-modal>&times;</button>
+  <h3 class="modal-title" id="fTitle"></h3>
+  <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="fShift"><option value="">-</option><option>A</option><option>B</option></select></div>
+  <div id="fItems"></div>
+  <div class="form-group"><label class="form-label">หมายเหตุ <span id="remarkReq" class="req hidden">* (Reject)</span></label><textarea class="form-input" id="fRemark" rows="2"></textarea></div>
+  <div class="btn-group"><button class="btn btn-primary flex-1" id="fSave">บันทึก</button><button class="btn btn-danger hidden" id="fCancel">ลบ</button></div>
+</div></div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async function () {
+  if (!UI.initPage('dailycheck', 'Daily Check', 'bi-clipboard-check')) return;
+  const $ = (id) => document.getElementById(id);
+  const P = APP_CONFIG.STORAGE_PREFIX, user = Auth.getUser();
+  const SHIFT_KEY = P + 'dailycheck_shift_' + user.employeeId;
+  const isSup = Auth.hasRole('supervisor');
+  let data = null, selMachine = '', selPeriod = '', results = [], reqId = null, formOpenAt = 0;
+
+  async function load() {
+    const r = await API.get('getDailyChecks', { date: $('date').value });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    data = r.data;
+    $('docTitle').textContent = data.title + (data.sampleQty ? ` — สุ่ม ${data.sampleQty} ชิ้น/เครื่อง/ชั่วโมง` : '');
+    $('notReady').classList.toggle('hidden', data.items.length > 0);
+    render();
+  }
+  const checkOf = (m, p) => data.checks.find((c) => c.machineId === m && c.timePeriod === p);
+  function isFuture(p) {
+    if ($('date').value < UI.getToday()) return false;
+    const order = UI.getTimePeriods();
+    return order.indexOf(p) > order.indexOf(UI.currentPeriod());
+  }
+  function render() {
+    $('machineGrid').innerHTML = data.machines.map((m) => {
+      const n = data.checks.filter((c) => c.machineId === m.machineId).length;
+      return `<button class="machine-btn ${selMachine === m.machineId ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.machineId)}<small>${n}/24</small></button>`;
+    }).join('') || UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร');
+    $('periodCard').classList.toggle('hidden', !selMachine);
+    if (selMachine) {
+      $('periodGrid').innerHTML = data.timePeriods.map((p) => {
+        const c = checkOf(selMachine, p);
+        return `<button class="period-btn ${c ? (c.decision === 'Accept' ? 'accept' : 'reject') : ''}" data-p="${p}" ${isFuture(p) ? 'disabled' : ''}>${p.slice(0, 5)}</button>`;
+      }).join('');
+    }
+    // ใบแบบกระดาษ: คอลัมน์ = ชั่วโมงที่ 1..24 (คอลัมน์ "9" = 08:00-08:59)
+    const head = data.timePeriods.map((p) => `<th>${(Number(p.slice(0, 2)) + 1) % 24 || 24}</th>`).join('');
+    $('sheet').innerHTML = `<thead><tr><th>เครื่อง</th>${head}</tr></thead><tbody>` + data.machines.map((m) => `<tr><td class="fw-bold">${UI.esc(m.machineId)}</td>` +
+      data.timePeriods.map((p) => { const c = checkOf(m.machineId, p); return `<td class="${!c && !isFuture(p) ? 'due' : ''}">${c ? (c.decision === 'Accept' ? '/' : '<b class="text-danger">X</b>') : ''}</td>`; }).join('') + '</tr>').join('') + '</tbody>';
+  }
+  $('machineGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (b) { selMachine = b.dataset.m; try { localStorage.setItem(P + 'dailycheck_machines_v1', selMachine); } catch (er) {} render(); } });
+  $('periodGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-p]'); if (b && !b.disabled) openForm(b.dataset.p); });
+
+  function openForm(p) {
+    if (!data.items.length) return UI.showToast('ยังไม่ได้ตั้งหัวข้อ Daily Check', 'warning');
+    selPeriod = p; reqId = API.newRequestId(); formOpenAt = Date.now();
+    const c = checkOf(selMachine, p);
+    if (c && c.recordedBy !== user.employeeId && !isSup) return UI.showToast('ช่องนี้บันทึกโดย ' + c.recorderName + ' แล้ว', 'info');
+    results = c ? c.results.slice() : data.items.map(() => '');
+    $('fTitle').textContent = `${selMachine} · ${p}`;
+    $('fShift').value = c ? c.shift : (user.shift || localStorage.getItem(SHIFT_KEY) || '');
+    $('fShift').disabled = !!user.shift || !!c;
+    $('fRemark').value = c ? c.remark : '';
+    $('fCancel').classList.toggle('hidden', !(c && isSup));
+    renderItems();
+    UI.openModal('formModal');
+  }
+  function renderItems() {
+    $('fItems').innerHTML = data.items.map((it, i) => `<div class="item-row"><div class="fw-bold">${i + 1}. ${UI.esc(it.th)}</div>${it.en ? `<div class="small text-gray">${UI.esc(it.en)}</div>` : ''}
+      <div class="okng"><button class="btn btn-outline flex-1 ok ${results[i] === 'OK' ? 'active' : ''}" data-i="${i}" data-v="OK">ผ่าน</button>
+      <button class="btn btn-outline flex-1 ng ${results[i] === 'NG' ? 'active' : ''}" data-i="${i}" data-v="NG">ไม่ผ่าน</button></div></div>`).join('');
+    $('remarkReq').classList.toggle('hidden', !results.includes('NG'));
+  }
+  $('fItems').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) { results[Number(b.dataset.i)] = b.dataset.v; renderItems(); } });
+  $('fSave').onclick = () => UI.withButton($('fSave'), async () => {
+    if (results.includes('')) return UI.showToast('กรุณาตรวจให้ครบทุกหัวข้อ', 'warning');
+    if (results.includes('NG') && !$('fRemark').value.trim()) return UI.showToast('Reject ต้องระบุหมายเหตุ', 'warning');
+    if (!user.shift && $('fShift').value) { try { localStorage.setItem(SHIFT_KEY, $('fShift').value); } catch (e) {} }
+    const r = await API.post('submitDailyCheck', { data: { machineId: selMachine, timePeriod: selPeriod, results, remark: $('fRemark').value.trim(), date: $('date').value, shift: $('fShift').value, clientRequestId: reqId } });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.closeModal('formModal'); formOpenAt = 0; UI.showToast(r.updated ? 'แก้ไขแล้ว' : 'บันทึกแล้ว', 'success'); load();
+  });
+  $('fCancel').onclick = async () => {
+    const c = checkOf(selMachine, selPeriod);
+    if (!c || !confirm('ลบรายการนี้?')) return;
+    const r = await API.post('cancelDailyCheck', { checkId: c.checkId });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.closeModal('formModal'); formOpenAt = 0; load();
+  };
+  $('date').onchange = load;
+
+  // เปลี่ยนเป็นวันทำงานใหม่ตอน 08:00 (ถ้าฟอร์มค้างรอได้สูงสุด 30 นาที)
+  let lastToday = UI.getToday();
+  setInterval(() => {
+    const t = UI.getToday();
+    if (t === lastToday) return;
+    const formBusy = $('formModal').classList.contains('show') && Date.now() - formOpenAt < 30 * 60000;
+    if (formBusy) return;
+    lastToday = t; $('date').max = t; $('date').value = t; UI.closeModal('formModal'); load();
+  }, 60000);
+
+  $('date').max = UI.getToday(); $('date').value = UI.getToday();
+  try { selMachine = localStorage.getItem(P + 'dailycheck_machines_v1') || ''; } catch (e) {}
+  UI.showLoading(); await load(); UI.hideLoading();
+})();
+</script>
+</body>
+</html>
