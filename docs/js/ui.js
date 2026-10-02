@@ -61,21 +61,50 @@ const UI = (() => {
     return C.PAGES.filter((p) => Auth.hasPermission(p.key));
   }
 
+  // หมวดเมนูใน sidebar
+  const NAV_SECTIONS = [
+    { label: 'งานประจำวัน', keys: ['production', 'dailycheck', 'maintenance', 'sorting', 'rawmaterial', 'waste', 'alarm', 'inbox'] },
+    { label: 'วางแผน & วิเคราะห์', keys: ['joborders', 'machines', 'dashboard', 'cost', 'labor'] },
+    { label: 'ระบบ', keys: ['admin'] }
+  ];
+
+  function initials(name) {
+    const parts = String(name || '?').trim().split(/\s+/);
+    return (parts[0].charAt(0) + (parts[1] ? parts[1].charAt(0) : '')).toUpperCase();
+  }
+
+  function brandMark() {
+    const words = String(C.LINE_NAME).replace(/[^A-Za-z0-9 ]/g, ' ').trim().split(/\s+/);
+    return (words[0].charAt(0) + (words[1] ? words[1].charAt(0) : '')).toUpperCase();
+  }
+
   function renderTopNav(title, icon) {
     const u = Auth.getUser() || {};
     const header = document.createElement('header');
     header.className = 'top-nav';
     header.innerHTML = `
-      <div class="top-nav-title"><i class="bi ${esc(icon)}"></i> ${esc(title)}</div>
+      <div class="top-nav-title">
+        <div class="top-nav-icon"><i class="bi ${esc(icon)}"></i></div>
+        <div class="top-nav-text"><div class="top-nav-crumb">${esc(C.LINE_NAME)}</div><div class="top-nav-name-page">${esc(title)}</div></div>
+      </div>
       <div class="top-nav-user">
-        <span class="top-nav-name">${esc(u.name || '')}</span>
-        <span class="badge badge-role">${esc(Auth.ROLE_LABELS[u.role] || u.role || '')}${u.shift ? ' · กะ ' + esc(u.shift) : ''}</span>
+        <div class="top-clock" id="topClock"></div>
+        <span class="avatar mobile-only" title="${esc(u.name || '')}">${esc(initials(u.name))}</span>
         <button class="btn-icon mobile-only" id="topLogout" title="ออกจากระบบ"><i class="bi bi-box-arrow-right"></i></button>
       </div>`;
     const main = document.querySelector('.main') || document.body;
     main.prepend(header);
     const b = header.querySelector('#topLogout');
     if (b) b.onclick = confirmLogout;
+    const tick = () => {
+      const s = getShiftInfo();
+      const d = bkkNow();
+      const hhmm = pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
+      const el = document.getElementById('topClock');
+      if (el) el.innerHTML = `<span class="shift-dot ${s.shiftDN === 'Night' ? 'night' : ''}"></span>${s.shiftDN}${s.shiftAB ? ' · กะ ' + esc(s.shiftAB) : ''}<span class="mono">${hhmm}</span>`;
+    };
+    tick();
+    setInterval(tick, 30000);
     document.title = title + ' · ' + C.LINE_NAME;
   }
 
@@ -84,14 +113,29 @@ const UI = (() => {
   function renderNav(activeKey) {
     const pages = visiblePages();
     if (isDesktop()) {
+      const u = Auth.getUser() || {};
+      const byKey = {};
+      pages.forEach((p) => { byKey[p.key] = p; });
+      const used = {};
+      const item = (p) => { used[p.key] = 1; return `
+          <a href="${p.file}" class="sidebar-item ${p.key === activeKey ? 'active' : ''}"><i class="bi ${p.icon}"></i><span>${esc(p.label)}</span></a>`; };
+      let menu = NAV_SECTIONS.map((sec) => {
+        const items = sec.keys.filter((k) => byKey[k]).map((k) => item(byKey[k])).join('');
+        return items ? `<div class="sidebar-section">${esc(sec.label)}</div>${items}` : '';
+      }).join('');
+      const rest = pages.filter((p) => !used[p.key]);
+      if (rest.length) menu += `<div class="sidebar-section">อื่นๆ</div>` + rest.map(item).join('');
       const side = document.createElement('aside');
       side.className = 'sidebar';
       side.innerHTML = `
-        <div class="sidebar-logo"><i class="bi bi-cpu"></i><div><div class="sidebar-logo-title">${esc(C.LINE_NAME)}</div><div class="sidebar-logo-sub">Production System</div></div></div>
-        <nav class="sidebar-menu">${pages.map((p) => `
-          <a href="${p.file}" class="sidebar-item ${p.key === activeKey ? 'active' : ''}"><i class="bi ${p.icon}"></i><span>${esc(p.label)}</span></a>`).join('')}
-        </nav>
-        <button class="sidebar-logout" id="sideLogout"><i class="bi bi-box-arrow-left"></i> ออกจากระบบ</button>`;
+        <div class="sidebar-logo"><div class="brand-mark">${esc(brandMark())}</div><div><div class="sidebar-logo-title">${esc(C.LINE_NAME)}</div><div class="sidebar-logo-sub">Production System</div></div></div>
+        <nav class="sidebar-menu">${menu}</nav>
+        <div class="sidebar-user">
+          <span class="avatar">${esc(initials(u.name))}</span>
+          <div style="min-width:0"><div class="sidebar-user-name">${esc(u.name || '')}</div>
+            <div class="sidebar-user-role">${esc(Auth.ROLE_LABELS[u.role] || u.role || '')}${u.shift ? ' · กะ ' + esc(u.shift) : ''}</div></div>
+          <button class="sidebar-logout" id="sideLogout" title="ออกจากระบบ"><i class="bi bi-box-arrow-right"></i></button>
+        </div>`;
       document.body.prepend(side);
       side.querySelector('#sideLogout').onclick = confirmLogout;
       return;
