@@ -116,8 +116,8 @@ var LINE_CONFIG = {
       },
       // ---- Check Witness (เช็ค Master) — JRTL-AI-003_Form_Check_Witness.xlsx ----
       {
-        id: 'WITNESS-10', type: 'witness', tab: 'Witness', name: 'Form Check Witness Arc Chute (10 Fixture)', docNo: 'JRTL-AI-003',
-        okLabel: 'ยอมรับ', ngLabel: 'ไม่ยอมรับ', machines: ['AC-06', 'AC-07', 'AC-08'], items: fixtureItems(10)
+        id: 'WITNESS-10', type: 'witness', tab: 'Witness', name: 'Form Check Witness Arc Stack / Arc Chute (10 Fixture)', docNo: 'JRTL-AI-003',
+        okLabel: 'ยอมรับ', ngLabel: 'ไม่ยอมรับ', machines: ['AC-06', 'AC-07', 'AC-08', 'AS-MED', 'AS-HIGH'], items: fixtureItems(10)
       },
       {
         id: 'WITNESS-12', type: 'witness', tab: 'Witness', name: 'Form Check Witness Arc Chute Beta (12 Fixture)', docNo: 'JRTL-AI-003',
@@ -132,7 +132,7 @@ var LINE_CONFIG = {
         id: 'WITNESS-GV2-9P', type: 'witness', tab: 'Witness 9 Plate', name: 'Form Check Witness GV2 9 Plate (9 Fixture)', docNo: 'JRTL-AI-003',
         okLabel: 'ยอมรับ', ngLabel: 'ไม่ยอมรับ', machines: ['GV-2'], products: ['W813890890211-JR'], items: fixtureItems(9)
       }
-      // TODO(ข้อมูลไลน์) แบบฟอร์มของ Arc Stack
+      // TODO(ข้อมูลไลน์) แบบฟอร์ม Daily Check ของ Arc Stack
     ]
   },
 
