@@ -7,8 +7,7 @@ window.APP_CONFIG = {
   SYSTEM_TITLE: 'Assembly M/C Production Management System',
 
   // URL /exec ของ Apps Script Web App ของไลน์นี้ (ห้ามใช้ URL ของไลน์อื่น)
-  // TODO(ข้อมูลไลน์): ใส่หลัง Deploy ครั้งแรก
-  API_URL: '',
+  API_URL: 'https://script.google.com/macros/s/AKfycbwcMWZJQYistNQZBxsWsUCxW_ve6B9rA2BPJyXYVFAW3225doZ3s7xIjc1bBr63C9ru/exec',
 
   // prefix ของ localStorage — ห้ามซ้ำกับไลน์อื่น (GitHub Pages ของ user เดียวกันใช้ origin เดียวกัน)
   STORAGE_PREFIX: 'amc_',
