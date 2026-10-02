@@ -110,6 +110,7 @@ var WRITE_ACTIONS = {
   deleteAlarmType: function (b) { return deleteAlarmType(b.token, b.typeId); },
   submitDailyCheck: function (b) { return submitDailyCheck(b.token, b.data); },
   cancelDailyCheck: function (b) { return cancelDailyCheck(b.token, b.checkId); },
+  verifyDailyCheck: function (b) { return verifyDailyCheck(b.token, b.checkId); },
   saveCostPL: function (b) { return saveCostPL(b.token); }
 };
 

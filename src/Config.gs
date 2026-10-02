@@ -50,11 +50,29 @@ var LINE_CONFIG = {
   ],
   STOCKOUT_REGEX: 'วัตถุดิบหมด|รอวัตถุดิบ|ของหมด|out of stock|no material',
 
-  // ---- Daily Check ----
+  // ---- Daily Check: ใบตรวจเครื่องจักรประจำวัน (ตรวจกะละครั้ง: กะเช้า / กะดึก, √ / X) ----
+  // FORMS = แบบฟอร์มแยกตามเครื่อง ; เครื่องที่ไม่อยู่ในฟอร์มไหนจะขึ้นว่า "ยังไม่มีหัวข้อ"
   DAILY_CHECK: {
-    TITLE: 'Daily Check',  // TODO(ข้อมูลไลน์) ชื่อเอกสาร
-    SAMPLE_QTY: 0,         // TODO(ข้อมูลไลน์) จำนวนสุ่ม/เครื่อง/ชั่วโมง
-    ITEMS: []              // TODO(ข้อมูลไลน์) [{ th:'...', en:'...' }, ...]
+    TITLE: 'รายการตรวจสอบเครื่องจักรประจำวัน',
+    FORMS: [
+      {
+        id: 'ARC-CHUTE', name: 'เครื่อง Arc Chute', docNo: 'JRTLQR713/714-13-1',
+        machines: ['AC-06', 'AC-07', 'AC-08', 'AC-BETA'], // ไฟล์ Arc5678.xlsx (Arc Chute 5 6 7 8)
+        items: [
+          { th: 'ตรวจเช็คปุ่มกด หยุดฉุกเฉิน (Emergency Stop) อยู่ในสภาพสมบูรณ์ พร้อมใช้งาน ไม่แตกชำรุดและต้องคลายออก' },
+          { th: 'ตรวจเช็ค Die อยู่ในสภาพสมบูรณ์ เป่าทำความสะอาด DIE ก่อนเริ่มงานและหลังเลิกงาน' },
+          { th: 'ตรวจเช็คระบบลม 0.6-0.8 MPa อยู่ในค่าที่กำหนด' },
+          { th: 'ตรวจเช็คหน้าจอดิสเพลย์ ไม่โชว์ Alarm แสดงตัวอักษรปกติ' },
+          { th: 'ผลการทดสอบ Witness ผ่านครบ 10 Fixture' },
+          { th: 'ตรวจเช็คกระบอกลม V1-V14 อยู่ในสภาพสมบูรณ์ พร้อมใช้งาน' },
+          { th: 'ตรวจเช็ค Safety Door อยู่ในสภาพสมบูรณ์ พร้อมใช้งาน' },
+          { th: 'ตรวจเช็คจุกต่อสายลม ว่ามีจุดแตกหรือเสียงดัง' },
+          { th: 'ตรวจเช็คเสียงผิดปกติรอบเครื่องจักร' },
+          { th: 'ตรวจเช็ค 5ส ในพื้นที่การทำงาน' }
+        ]
+      }
+      // TODO(ข้อมูลไลน์) แบบฟอร์มของ GV.2 / Arc Stack
+    ]
   },
 
   INBOX_AM_CHECKSHEET: false, // TODO(ข้อมูลไลน์) ต้องการข้อความ AM Check Sheet ทุกวันไหม
@@ -128,7 +146,7 @@ var SHEET_SCHEMAS = {
   SortingLog: ['JobID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'MachineID', 'ProductCode', 'FoundProcess', 'TotalQty', 'GoodQty', 'DefectQty', 'DefectDetails', 'Status', 'RegisteredBy', 'RegisteredByName', 'SortedBy', 'SortedByName', 'PulledAt', 'CompletedAt', 'Remark', 'JobOrderID'],
   WasteLog: ['WasteID', 'Timestamp', 'Date', 'RecordedBy', 'RecorderName', 'WasteType', 'WeightKg', 'Remark'],
   AlarmLog: ['AlarmID', 'Timestamp', 'Date', 'Shift', 'MachineID', 'AlarmType', 'Count', 'DurationMinutes', 'RecordedBy', 'RecorderName', 'Remark'],
-  DailyCheckLog: ['CheckID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'TimePeriod', 'MachineID', 'Results', 'Decision', 'Remark', 'RecordedBy', 'RecorderName', 'Status', 'ClientRequestID', 'UpdatedAt', 'UpdatedBy'],
+  DailyCheckLog: ['CheckID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'TimePeriod', 'MachineID', 'Results', 'Decision', 'Remark', 'RecordedBy', 'RecorderName', 'Status', 'ClientRequestID', 'UpdatedAt', 'UpdatedBy', 'FormID', 'VerifiedBy', 'VerifiedAt'],
 
   // เดิมอยู่ไฟล์ลับ — ไลน์นี้เก็บในไฟล์เดียวตามที่กำหนด (ใช้ในเฟส 2)
   LaborEmployees: ['EmployeeID', 'EmployeeName', 'PositionID', 'PositionName', 'Category', 'Shift', 'DailyRate', 'OTHourlyRate', 'Active', 'CreatedAt', 'CreatedBy'],
