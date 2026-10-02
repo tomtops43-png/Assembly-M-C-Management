@@ -163,7 +163,7 @@ function submitProduction(token, data) {
   appendRow('ProductionLog', {
     LogID: logId, Timestamp: formatDate(now), Date: workDate, Shift: u.shift || '', TimePeriod: timePeriod,
     EmployeeID: u.employeeId, EmployeeName: u.name, MachineID: m.machineId, ProductCode: m.currentProduct,
-    PlannedQty: toNumber(data.plannedQty, m.capacity), ActualQty: actual, DefectQty: ng.defectQty,
+    PlannedQty: toNumber(data.plannedQty, machineCapacity(m, m.currentProduct)), ActualQty: actual, DefectQty: ng.defectQty,
     DefectDetails: Object.keys(ng.details).length ? JSON.stringify(ng.details) : '', Remark: data.remark || '',
     Status: 'completed', ClientRequestID: data.clientRequestId || '', JobOrderID: m.currentJobOrder
   });

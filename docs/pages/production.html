@@ -195,6 +195,12 @@
     loadJoProgress();
   }
 
+  /** แผนต่อชั่วโมง = capacity ของสินค้าที่ผลิต → ของเครื่อง */
+  function currentCapacity() {
+    const prod = (master.machineProducts[selMachine.machineId] || []).find((p) => p.productCode === selMachine.currentProduct);
+    return (prod && prod.capacity) || selMachine.effectiveCapacity || selMachine.capacity || 0;
+  }
+
   async function loadJoProgress() {
     const box = $('joProgress');
     if (!selMachine.currentJobOrder) { box.classList.add('hidden'); return; }
@@ -267,7 +273,7 @@
     if (ng.total > 0 && !remark) return UI.showToast('กรุณาระบุอาการ NG', 'warning');
     const data = {
       machineId: selMachine.machineId, productCode: selMachine.currentProduct, jobOrderId: selMachine.currentJobOrder,
-      workDate: $('workDate').value, timePeriod: selPeriod, plannedQty: selMachine.capacity,
+      workDate: $('workDate').value, timePeriod: selPeriod, plannedQty: currentCapacity(),
       actualQty: Number($('actualQty').value) || 0, defectQty: ng.total, defectByComponent: ng.details, remark
     };
     const sig = JSON.stringify(data);

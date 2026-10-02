@@ -166,13 +166,14 @@ function seedInitialData() {
   if (getAllRows('Machines').length === 0) {
     seed.machines.forEach(function (m) {
       appendRow('Machines', { MachineID: m.id, MachineName: m.name, MachineGroup: m.group || '', Line: LINE_CONFIG.LINE_CODE, Status: 'running',
-        AssignedProducts: seed.products.map(function (p) { return p.code; }).join(', '), CurrentProduct: '',
+        AssignedProducts: (m.products || seed.products.map(function (p) { return p.code; })).join(', '),
+        CurrentProduct: m.products && m.products.length === 1 ? m.products[0] : '',
         Capacity: m.capacity || 0, CurrentJobOrder: '', Installed: true });
     });
   }
   if (getAllRows('Products').length === 0) {
     seed.products.forEach(function (p) {
-      appendRow('Products', { ProductCode: p.code, ProductName: p.name, DefaultQty: p.defaultQty || LINE_CONFIG.DEFAULT_QTY, Active: true, UnitPrice: p.unitPrice || 0 });
+      appendRow('Products', { ProductCode: p.code, ProductName: p.name, DefaultQty: p.defaultQty || LINE_CONFIG.DEFAULT_QTY, Active: true, UnitPrice: p.unitPrice || 0, Capacity: p.capacity || 0 });
     });
   }
   if (getAllRows('BOM').length === 0) {

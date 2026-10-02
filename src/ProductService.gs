@@ -5,7 +5,7 @@ function productToObj(p) {
   return {
     productCode: String(p.ProductCode), productName: p.ProductName,
     defaultQty: toNumber(p.DefaultQty, LINE_CONFIG.DEFAULT_QTY), active: isActiveValue(p.Active),
-    unitPrice: toNumber(p.UnitPrice)
+    unitPrice: toNumber(p.UnitPrice), capacity: toNumber(p.Capacity)
   };
 }
 
@@ -39,7 +39,7 @@ function saveProduct(token, d) {
   var exists = findRow('Products', 'ProductCode', code);
   var row = {
     ProductName: d.productName, DefaultQty: toNumber(d.defaultQty, LINE_CONFIG.DEFAULT_QTY),
-    Active: d.active !== false
+    Capacity: toNumber(d.capacity), Active: d.active !== false
   };
   if (exists) updateRow('Products', 'ProductCode', code, row);
   else { row.ProductCode = code; row.UnitPrice = toNumber(d.unitPrice); appendRow('Products', row); }
