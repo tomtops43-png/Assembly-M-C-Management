@@ -1,19 +1,38 @@
 /**
- * DailyCheckService.gs — ใบตรวจเครื่องจักรประจำวัน (ตรวจกะละครั้ง: กะเช้า / กะดึก)
- * หัวข้อแยกตามเครื่อง: LINE_CONFIG.DAILY_CHECK.FORMS ; ผลแต่ละหัวข้อ OK (√) / NG (X)
+ * DailyCheckService.gs — ใบตรวจประจำกะ (Daily Check เครื่องจักร + Check Witness) ตรวจกะละครั้ง: กะเช้า / กะดึก
+ * แบบฟอร์ม: LINE_CONFIG.DAILY_CHECK.FORMS (1 เครื่องมีได้หลายใบ) ; ผลแต่ละหัวข้อ OK (√) / NG (X)
  */
 var DC_SHIFTS = ['Day', 'Night'];
 
+/** ทุกฟอร์มของเครื่อง (ตามลำดับใน Config) */
+function dailyCheckFormsFor(machineId) {
+  return (LINE_CONFIG.DAILY_CHECK.FORMS || []).filter(function (f) { return f.machines.indexOf(String(machineId)) >= 0; });
+}
+
+/** ฟอร์มแรกของเครื่อง (ใช้กับแถวเก่าที่ยังไม่มี FormID) */
 function dailyCheckFormFor(machineId) {
-  var forms = LINE_CONFIG.DAILY_CHECK.FORMS || [];
-  for (var i = 0; i < forms.length; i++) if (forms[i].machines.indexOf(String(machineId)) >= 0) return forms[i];
+  return dailyCheckFormsFor(machineId)[0] || null;
+}
+
+function dailyCheckFormById(machineId, formId) {
+  var forms = dailyCheckFormsFor(machineId);
+  if (!formId) return forms[0] || null;
+  for (var i = 0; i < forms.length; i++) if (forms[i].id === String(formId)) return forms[i];
   return null;
+}
+
+/** ฟอร์มที่ต้องตรวจเมื่อผลิตรุ่นนี้ (form.products ว่าง = ทุกรุ่น) */
+function dailyCheckFormsForProduct(machineId, productCode) {
+  return dailyCheckFormsFor(machineId).filter(function (f) {
+    return !f.products || !f.products.length || f.products.indexOf(String(productCode)) >= 0;
+  });
 }
 
 function dailyCheckToObj(r) {
   return {
     checkId: String(r.CheckID), timestamp: r.Timestamp, date: r.Date, shift: r.Shift,
-    shiftDN: r.ShiftDN || shiftFromPeriod(r.TimePeriod), machineId: String(r.MachineID), formId: String(r.FormID || ''),
+    shiftDN: r.ShiftDN || shiftFromPeriod(r.TimePeriod), machineId: String(r.MachineID),
+    formId: String(r.FormID || '') || ((dailyCheckFormFor(r.MachineID) || {}).id || ''),
     results: safeJson(r.Results, []), decision: r.Decision, remark: r.Remark || '',
     recordedBy: String(r.RecordedBy), recorderName: r.RecorderName, status: r.Status || 'active',
     updatedAt: r.UpdatedAt || '', updatedBy: r.UpdatedBy || '', verifiedBy: r.VerifiedBy || '', verifiedAt: r.VerifiedAt || ''
@@ -47,8 +66,8 @@ function submitDailyCheck(token, data) {
   var date = data.date || getWorkDate();
   if (!isValidDateStr(date) || date > getWorkDate()) throw new Error('วันที่ไม่ถูกต้อง');
   if (!getMachine(data.machineId)) throw new Error('ไม่พบเครื่องจักร');
-  var form = dailyCheckFormFor(data.machineId);
-  if (!form) throw new Error('เครื่องนี้ยังไม่มีหัวข้อ Daily Check');
+  var form = dailyCheckFormById(data.machineId, data.formId);
+  if (!form) throw new Error(data.formId ? 'ไม่พบแบบฟอร์มของเครื่องนี้' : 'เครื่องนี้ยังไม่มีหัวข้อ Daily Check');
   var shiftDN = data.shiftDN;
   if (DC_SHIFTS.indexOf(shiftDN) < 0) throw new Error('กรุณาเลือกกะ');
   if (date === getWorkDate() && shiftDN === 'Night' && detectShift() === 'Day') throw new Error('ยังไม่ถึงกะดึก');
@@ -58,7 +77,7 @@ function submitDailyCheck(token, data) {
   if (decision === 'Reject' && !String(data.remark || '').trim()) throw new Error('มีข้อที่ไม่ผ่าน ต้องระบุหมายเหตุ');
 
   var existing = readDailyChecks(date, date).filter(function (c) {
-    return c.machineId === String(data.machineId) && c.shiftDN === shiftDN;
+    return c.machineId === String(data.machineId) && c.shiftDN === shiftDN && c.formId === form.id;
   })[0];
   if (data.clientRequestId && existing && existing.checkId) {
     var raw = findRow('DailyCheckLog', 'CheckID', existing.checkId);
@@ -99,20 +118,21 @@ function cancelDailyCheck(token, checkId) {
   return { success: true };
 }
 
-/** compliance = กะที่ตรวจ / กะที่ควรตรวจ (เครื่องที่มีแบบฟอร์ม + มี ProductionLog ในกะนั้น) */
+/** compliance = ใบที่ตรวจ / ใบที่ควรตรวจ (มี ProductionLog ในกะนั้น × ฟอร์มที่ใช้กับเครื่อง/รุ่นนั้น) */
 function buildDailyCheckSummary(dateFrom, dateTo, productionRows) {
   var expected = {};
   (productionRows || readProductionRange(dateFrom, dateTo)).forEach(function (r) {
     if (r.status === 'cancelled' || r.status === 'sort-adjust') return;
-    if (!dailyCheckFormFor(r.machineId)) return;
-    expected[r.date + '|' + r.machineId + '|' + r.shiftDN] = r;
+    dailyCheckFormsForProduct(r.machineId, r.productCode).forEach(function (f) {
+      expected[r.date + '|' + r.machineId + '|' + r.shiftDN + '|' + f.id] = r;
+    });
   });
   var checks = readDailyChecks(dateFrom, dateTo);
   var checked = {};
   var byMachine = {}, byShift = {}, byDate = {};
   var accept = 0, reject = 0;
   checks.forEach(function (c) {
-    checked[c.date + '|' + c.machineId + '|' + c.shiftDN] = c;
+    checked[c.date + '|' + c.machineId + '|' + c.shiftDN + '|' + c.formId] = c;
     if (c.decision === 'Accept') accept++; else reject++;
     [[byMachine, c.machineId], [byShift, c.shiftDN || '-'], [byDate, c.date]].forEach(function (p) {
       var o = p[0][p[1]] = p[0][p[1]] || { accept: 0, reject: 0 };
@@ -122,7 +142,8 @@ function buildDailyCheckSummary(dateFrom, dateTo, productionRows) {
   var keys = Object.keys(expected);
   var done = keys.filter(function (k) { return checked[k]; }).length;
   var missing = keys.filter(function (k) { return !checked[k]; }).slice(0, 100).map(function (k) {
-    var p = k.split('|'); return { date: p[0], machineId: p[1], shiftDN: p[2] };
+    var p = k.split('|'), f = dailyCheckFormById(p[1], p[3]) || {};
+    return { date: p[0], machineId: p[1], shiftDN: p[2], formId: p[3], formTab: f.tab || '' };
   });
   return {
     expected: keys.length, checked: done, compliance: keys.length ? Math.round(done / keys.length * 1000) / 10 : null,

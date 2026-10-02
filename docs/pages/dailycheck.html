@@ -23,6 +23,10 @@
   .shift-grid .period-btn { padding: 14px 8px; font-family: inherit; font-size: 15px; font-weight: 700; }
   .shift-grid .period-btn small { display: block; font-weight: 500; font-size: 11.5px; margin-top: 2px; }
   .machine-btn.noform { opacity: .45; }
+  .form-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+  .form-tabs button { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--gray-light); background: #fff; cursor: pointer; font-weight: 600; font-family: inherit; }
+  .form-tabs button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .form-tabs button small { font-weight: 500; opacity: .75; margin-left: 4px; }
   @media print { .sheet td, .sheet th { font-size: 10px; } }
 </style>
 </head>
@@ -39,13 +43,14 @@
     <div id="machineGrid"></div>
   </div>
   <div class="card hidden" id="shiftCard">
+    <div class="form-tabs mb-2" id="formTabs"></div>
     <div class="card-title"><i class="bi bi-clock"></i> ตรวจกะ <span class="small text-gray" id="shiftDate"></span></div>
     <div class="shift-grid" id="shiftGrid"></div>
   </div>
   <div class="card hidden" id="sheetCard">
     <div class="card-title"><i class="bi bi-table"></i> <span id="sheetTitle"></span> <span class="spacer"></span><button class="btn btn-outline btn-sm no-print" onclick="window.print()"><i class="bi bi-printer"></i> พิมพ์</button></div>
     <div class="table-wrap"><table class="data-table sheet" id="sheet"></table></div>
-    <div class="small text-gray mt-2">√ = ปกติ · X = ผิดปกติ · ช่องส้ม = ถึงกะแล้วยังไม่ตรวจ · แตะวันที่เพื่อเปิดดู/แก้ไข</div>
+    <div class="small text-gray mt-2" id="sheetLegend"></div>
   </div>
 </div></main>
 
@@ -54,7 +59,7 @@
   <h3 class="modal-title" id="fTitle"></h3>
   <div class="small text-gray mb-2" id="fInfo"></div>
   <div class="form-group"><label class="form-label">กะ A/B</label><select class="form-input" id="fShift"><option value="">-</option><option>A</option><option>B</option></select></div>
-  <div class="btn-group mb-2"><button class="btn btn-outline btn-sm" id="fAllOk"><i class="bi bi-check2-all"></i> ปกติทุกข้อ</button></div>
+  <div class="btn-group mb-2"><button class="btn btn-outline btn-sm" id="fAllOk"><i class="bi bi-check2-all"></i> <span id="fAllOkLabel">ปกติทุกข้อ</span></button></div>
   <div id="fItems"></div>
   <div class="form-group"><label class="form-label">หมายเหตุ <span id="remarkReq" class="req hidden">* (มีข้อผิดปกติ)</span></label><textarea class="form-input" id="fRemark" rows="2"></textarea></div>
   <div class="btn-group">
@@ -76,18 +81,36 @@
   const SHIFT_KEY = P + 'dailycheck_shift_' + user.employeeId;
   const isSup = Auth.hasRole('supervisor');
   const SHIFT_LABEL = { Day: 'กะเช้า', Night: 'กะดึก' };
-  let data = null, selMachine = '', selDate = '', selShift = '', results = [], reqId = null, formOpenAt = 0;
+  let data = null, selMachine = '', selFormId = '', selDate = '', selShift = '', results = [], reqId = null, formOpenAt = 0;
 
   async function load() {
     const r = await API.get('getDailyChecks', { date: $('date').value });
     if (!r.success) return UI.showToast(r.message, 'error');
     data = r.data;
-    $('docTitle').textContent = data.title;
+    $('docTitle').textContent = data.title + ' / Check Witness';
     render();
   }
-  const formOf = (m) => data.forms.find((f) => f.machines.indexOf(m) >= 0);
+  const formsOf = (m) => data.forms.filter((f) => f.machines.indexOf(m) >= 0);
+  /** ฟอร์มที่ต้องตรวจตามรุ่นที่เครื่องกำลังผลิต (ฟอร์มที่ระบุ products อื่นไม่นับ) */
+  const requiredFormsOf = (m) => {
+    const cur = (data.machines.find((x) => x.machineId === m) || {}).currentProduct;
+    return formsOf(m).filter((f) => !f.products || !f.products.length || !cur || f.products.indexOf(cur) >= 0);
+  };
+  /** ฟอร์มที่เลือก — ถ้ายังไม่เลือก: ฟอร์มที่ตรงกับรุ่นที่เครื่องกำลังผลิต (ถ้ามี) ไม่งั้นใบแรก */
+  function selForm() {
+    const list = formsOf(selMachine);
+    let f = list.find((x) => x.id === selFormId);
+    if (!f) {
+      const cur = (data.machines.find((x) => x.machineId === selMachine) || {}).currentProduct;
+      f = list[0];
+      selFormId = f ? f.id : '';
+      if (cur && f && f.products && f.products.indexOf(cur) < 0) { const alt = list.find((x) => x.type === f.type && x.products && x.products.indexOf(cur) >= 0); if (alt) { f = alt; selFormId = alt.id; } }
+    }
+    return f;
+  }
+  const okLabel = (f) => f.okLabel || 'ปกติ', ngLabel = (f) => f.ngLabel || 'ผิดปกติ';
   const machineName = (m) => (data.machines.find((x) => x.machineId === m) || {}).machineName || m;
-  const checkOf = (m, d, s) => data.checks.find((c) => c.machineId === m && c.date === d && c.shiftDN === s);
+  const checkOf = (m, d, s, fid) => data.checks.find((c) => c.machineId === m && c.date === d && c.shiftDN === s && c.formId === fid);
   /** กะนี้ถึงเวลาแล้วหรือยัง (วันทำงานตัด 08:00, กะดึก 20:00–07:59) */
   function isDue(d, s) {
     const today = UI.getToday();
@@ -95,25 +118,34 @@
     if (d > today) return false;
     return s === 'Day' || !UI.isDayHour(UI.getBkkHour());
   }
-  function statusIcon(c) { return c ? (c.decision === 'Accept' ? '√' : 'X') : '–'; }
+  const hhmm = (ts) => String(ts || '').slice(11, 16);
 
   function render() {
     const d = $('date').value;
     $('machineGrid').innerHTML = UI.machineGridHtml(data.machines, (m) => {
-      const f = formOf(m.machineId);
-      const sub = f ? data.shifts.map((s) => `${SHIFT_LABEL[s]} ${statusIcon(checkOf(m.machineId, d, s))}`).join(' · ') : 'ยังไม่มีหัวข้อ';
-      return `<button class="machine-btn ${f ? '' : 'noform'} ${selMachine === m.machineId ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.machineName)}<small>${sub}</small></button>`;
+      const fs = requiredFormsOf(m.machineId);
+      const sub = fs.length ? data.shifts.map((s) => {
+        const done = fs.filter((f) => checkOf(m.machineId, d, s, f.id)).length;
+        const bad = fs.some((f) => { const c = checkOf(m.machineId, d, s, f.id); return c && c.decision !== 'Accept'; });
+        return `${SHIFT_LABEL[s]} ${bad ? 'X' : done + '/' + fs.length}`;
+      }).join(' · ') : 'ยังไม่มีหัวข้อ';
+      return `<button class="machine-btn ${fs.length ? '' : 'noform'} ${selMachine === m.machineId ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.machineName)}<small>${sub}</small></button>`;
     }) || UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร');
-    const f = selMachine && formOf(selMachine);
+    const f = selMachine && selForm();
     $('shiftCard').classList.toggle('hidden', !f);
     $('sheetCard').classList.toggle('hidden', !f);
     if (!f) return;
+    $('formTabs').innerHTML = formsOf(selMachine).map((x) => {
+      const done = data.shifts.filter((s) => checkOf(selMachine, d, s, x.id)).length;
+      return `<button class="${x.id === f.id ? 'active' : ''}" data-f="${UI.esc(x.id)}">${UI.esc(x.tab || x.name)}<small>${done}/${data.shifts.length}</small></button>`;
+    }).join('');
     $('shiftDate').textContent = '(' + UI.formatDate(d) + ')';
     $('shiftGrid').innerHTML = data.shifts.map((s) => {
-      const c = checkOf(selMachine, d, s);
-      const sub = c ? (c.decision === 'Accept' ? 'ปกติ' : 'ผิดปกติ') + (c.verifiedBy ? ' · ยืนยันแล้ว' : '') : (isDue(d, s) ? 'ยังไม่ตรวจ' : 'ยังไม่ถึงกะ');
+      const c = checkOf(selMachine, d, s, f.id);
+      const sub = c ? (c.decision === 'Accept' ? okLabel(f) : ngLabel(f)) + (c.verifiedBy ? ' · ยืนยันแล้ว' : '') : (isDue(d, s) ? 'ยังไม่ตรวจ' : 'ยังไม่ถึงกะ');
       return `<button class="period-btn ${c ? (c.decision === 'Accept' ? 'accept' : 'reject') : ''}" data-s="${s}" ${!c && !isDue(d, s) ? 'disabled' : ''}>${SHIFT_LABEL[s]}<small>${sub}</small></button>`;
     }).join('');
+    $('sheetLegend').textContent = `√ = ${okLabel(f)} · X = ${ngLabel(f)} · ช่องส้ม = ถึงกะแล้วยังไม่ตรวจ · แตะวันที่เพื่อเปิดดู/แก้ไข`;
     renderSheet(f);
   }
 
@@ -124,71 +156,76 @@
     const ym = data.monthFrom.slice(0, 7).split('-');
     $('sheetTitle').textContent = `${f.name} · ${machineName(selMachine)} · เดือน ${Number(ym[1])}/${ym[0]}` + (f.docNo ? ` · ${f.docNo}` : '');
     const head = `<tr><th>ลำดับ</th><th>รายละเอียดการตรวจสอบ</th>${days.map((x) => `<th>${Number(x.slice(8))}</th>`).join('')}</tr>`;
+    const sigRow = (label, fn) => `<tr><td></td><td class="item small">${label}</td>` + days.map((x) => `<td class="sig">${fn(x)}</td>`).join('') + '</tr>';
     let html = '<thead>' + head + '</thead><tbody>';
     data.shifts.forEach((s) => {
+      const cOf = (x) => checkOf(selMachine, x, s, f.id);
       html += `<tr><th class="sec" colspan="${days.length + 2}">${SHIFT_LABEL[s]}</th></tr>`;
       f.items.forEach((it, i) => {
         html += `<tr><td>${i + 1}</td><td class="item">${UI.esc(it.th)}</td>` + days.map((x) => {
-          const c = checkOf(selMachine, x, s);
+          const c = cOf(x);
           if (!c) return `<td class="${isDue(x, s) && x <= UI.getToday() ? 'due click' : ''}" data-d="${x}" data-s="${s}"></td>`;
           return `<td class="click ${c.results[i] === 'NG' ? 'ng' : ''}" data-d="${x}" data-s="${s}">${c.results[i] === 'NG' ? 'X' : '√'}</td>`;
         }).join('') + '</tr>';
       });
-      html += `<tr><td></td><td class="item small">ผู้ตรวจสอบ (เจ้าหน้าที่ประจำเครื่อง)</td>` + days.map((x) => { const c = checkOf(selMachine, x, s); return `<td class="sig">${c ? UI.esc(c.recorderName || '') : ''}</td>`; }).join('') + '</tr>';
-      html += `<tr><td></td><td class="item small">ยืนยันการตรวจสอบ</td>` + days.map((x) => { const c = checkOf(selMachine, x, s); return `<td class="sig">${c && c.verifiedBy ? UI.esc(c.verifiedBy) : ''}</td>`; }).join('') + '</tr>';
+      html += sigRow('เวลา', (x) => { const c = cOf(x); return c ? hhmm(c.timestamp) : ''; });
+      html += sigRow('ผู้ตรวจสอบ (เจ้าหน้าที่ประจำเครื่อง)', (x) => { const c = cOf(x); return c ? UI.esc(c.recorderName || '') : ''; });
+      html += sigRow('หัวหน้ายืนยันการตรวจสอบ', (x) => { const c = cOf(x); return c && c.verifiedBy ? UI.esc(c.verifiedBy) : ''; });
     });
     $('sheet').innerHTML = html + '</tbody>';
   }
 
-  $('machineGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (b) { selMachine = b.dataset.m; try { localStorage.setItem(P + 'dailycheck_machine_v2', selMachine); } catch (er) {} render(); } });
+  $('machineGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (b) { if (selMachine !== b.dataset.m) selFormId = ''; selMachine = b.dataset.m; try { localStorage.setItem(P + 'dailycheck_machine_v2', selMachine); } catch (er) {} render(); } });
+  $('formTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { selFormId = b.dataset.f; render(); } });
   $('shiftGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-s]'); if (b && !b.disabled) openForm($('date').value, b.dataset.s); });
   $('sheet').addEventListener('click', (e) => {
     const td = e.target.closest('td[data-d]'); if (!td) return;
-    const c = checkOf(selMachine, td.dataset.d, td.dataset.s);
+    const c = checkOf(selMachine, td.dataset.d, td.dataset.s, selFormId);
     if (c || (isDue(td.dataset.d, td.dataset.s) && td.dataset.d <= UI.getToday())) openForm(td.dataset.d, td.dataset.s);
   });
 
   function openForm(d, s) {
-    const f = formOf(selMachine); if (!f) return;
-    const c = checkOf(selMachine, d, s);
+    const f = selForm(); if (!f) return;
+    const c = checkOf(selMachine, d, s, f.id);
     if (c && c.recordedBy !== user.employeeId && !isSup) return UI.showToast('กะนี้บันทึกโดย ' + c.recorderName + ' แล้ว', 'info');
     selDate = d; selShift = s; reqId = API.newRequestId(); formOpenAt = Date.now();
     results = c ? c.results.slice() : f.items.map(() => '');
-    $('fTitle').textContent = `${machineName(selMachine)} · ${SHIFT_LABEL[s]}`;
-    $('fInfo').textContent = UI.formatDate(d) + (c ? ` · บันทึกโดย ${c.recorderName}` + (c.verifiedBy ? ` · ยืนยันโดย ${c.verifiedBy}` : '') : '');
+    $('fTitle').textContent = `${machineName(selMachine)} · ${f.tab || f.name} · ${SHIFT_LABEL[s]}`;
+    $('fInfo').textContent = UI.formatDate(d) + (c ? ` · บันทึกโดย ${c.recorderName} ${hhmm(c.timestamp)}` + (c.verifiedBy ? ` · ยืนยันโดย ${c.verifiedBy}` : '') : '');
     $('fShift').value = c ? c.shift : (user.shift || localStorage.getItem(SHIFT_KEY) || '');
     $('fShift').disabled = !!user.shift || !!c;
     $('fRemark').value = c ? c.remark : '';
+    $('fAllOkLabel').textContent = okLabel(f) + 'ทุกข้อ';
     $('fCancel').classList.toggle('hidden', !(c && isSup));
     $('fVerify').classList.toggle('hidden', !(c && isSup && !c.verifiedBy));
     renderItems();
     UI.openModal('formModal');
   }
   function renderItems() {
-    const f = formOf(selMachine);
+    const f = selForm();
     $('fItems').innerHTML = f.items.map((it, i) => `<div class="item-row"><div class="fw-bold">${i + 1}. ${UI.esc(it.th)}</div>${it.en ? `<div class="small text-gray">${UI.esc(it.en)}</div>` : ''}
-      <div class="okng"><button class="btn btn-outline flex-1 ok ${results[i] === 'OK' ? 'active' : ''}" data-i="${i}" data-v="OK">√ ปกติ</button>
-      <button class="btn btn-outline flex-1 ng ${results[i] === 'NG' ? 'active' : ''}" data-i="${i}" data-v="NG">X ผิดปกติ</button></div></div>`).join('');
+      <div class="okng"><button class="btn btn-outline flex-1 ok ${results[i] === 'OK' ? 'active' : ''}" data-i="${i}" data-v="OK">√ ${okLabel(f)}</button>
+      <button class="btn btn-outline flex-1 ng ${results[i] === 'NG' ? 'active' : ''}" data-i="${i}" data-v="NG">X ${ngLabel(f)}</button></div></div>`).join('');
     $('remarkReq').classList.toggle('hidden', !results.includes('NG'));
   }
   $('fItems').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) { results[Number(b.dataset.i)] = b.dataset.v; renderItems(); } });
   $('fAllOk').onclick = () => { results = results.map(() => 'OK'); renderItems(); };
   $('fSave').onclick = () => UI.withButton($('fSave'), async () => {
     if (results.includes('')) return UI.showToast('กรุณาตรวจให้ครบทุกหัวข้อ', 'warning');
-    if (results.includes('NG') && !$('fRemark').value.trim()) return UI.showToast('มีข้อผิดปกติ ต้องระบุหมายเหตุ', 'warning');
+    if (results.includes('NG') && !$('fRemark').value.trim()) return UI.showToast('มีข้อที่ไม่ผ่าน ต้องระบุหมายเหตุ', 'warning');
     if (!user.shift && $('fShift').value) { try { localStorage.setItem(SHIFT_KEY, $('fShift').value); } catch (e) {} }
-    const r = await API.post('submitDailyCheck', { data: { machineId: selMachine, shiftDN: selShift, results, remark: $('fRemark').value.trim(), date: selDate, shift: $('fShift').value, clientRequestId: reqId } });
+    const r = await API.post('submitDailyCheck', { data: { machineId: selMachine, formId: selFormId, shiftDN: selShift, results, remark: $('fRemark').value.trim(), date: selDate, shift: $('fShift').value, clientRequestId: reqId } });
     if (!r.success) return UI.showToast(r.message, 'error');
     UI.closeModal('formModal'); formOpenAt = 0; UI.showToast(r.updated ? 'แก้ไขแล้ว' : 'บันทึกแล้ว', 'success'); load();
   });
   $('fVerify').onclick = () => UI.withButton($('fVerify'), async () => {
-    const c = checkOf(selMachine, selDate, selShift); if (!c) return;
+    const c = checkOf(selMachine, selDate, selShift, selFormId); if (!c) return;
     const r = await API.post('verifyDailyCheck', { checkId: c.checkId });
     if (!r.success) return UI.showToast(r.message, 'error');
     UI.closeModal('formModal'); formOpenAt = 0; UI.showToast('ยืนยันแล้ว', 'success'); load();
   });
   $('fCancel').onclick = async () => {
-    const c = checkOf(selMachine, selDate, selShift);
+    const c = checkOf(selMachine, selDate, selShift, selFormId);
     if (!c || !confirm('ลบรายการนี้?')) return;
     const r = await API.post('cancelDailyCheck', { checkId: c.checkId });
     if (!r.success) return UI.showToast(r.message, 'error');
@@ -210,7 +247,7 @@
   $('date').max = UI.getToday(); $('date').value = UI.getToday();
   try { selMachine = localStorage.getItem(P + 'dailycheck_machine_v2') || ''; } catch (e) {}
   UI.showLoading(); await load(); UI.hideLoading();
-  if (!selMachine && data) { const first = data.machines.find((m) => formOf(m.machineId)); if (first) { selMachine = first.machineId; render(); } }
+  if (data && !formsOf(selMachine).length) { const first = data.machines.find((m) => formsOf(m.machineId).length); if (first) { selMachine = first.machineId; render(); } }
 })();
 </script>
 </body>
