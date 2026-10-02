@@ -3,6 +3,13 @@
  *
  * ช่องที่มี  // TODO(ข้อมูลไลน์)  = รอข้อมูลจริงจากผู้ใช้ ดูรายการทั้งหมดใน LINE_DATA_REQUEST.md
  */
+/** หัวข้อ Fixture 1..n (ใบ Check Witness) */
+function fixtureItems(n) {
+  var out = [];
+  for (var i = 1; i <= n; i++) out.push({ th: 'Fixture ' + i });
+  return out;
+}
+
 var LINE_CONFIG = {
   LINE_NAME: 'Assembly M/C',
   LINE_CODE: 'AMC',
@@ -53,13 +60,14 @@ var LINE_CONFIG = {
   ],
   STOCKOUT_REGEX: 'วัตถุดิบหมด|รอวัตถุดิบ|ของหมด|out of stock|no material',
 
-  // ---- Daily Check: ใบตรวจเครื่องจักรประจำวัน (ตรวจกะละครั้ง: กะเช้า / กะดึก, √ / X) ----
-  // FORMS = แบบฟอร์มแยกตามเครื่อง ; เครื่องที่ไม่อยู่ในฟอร์มไหนจะขึ้นว่า "ยังไม่มีหัวข้อ"
+  // ---- Daily Check + Check Witness (ตรวจกะละครั้ง: กะเช้า / กะดึก, √ / X) ----
+  // FORMS = แบบฟอร์มแยกตามเครื่อง (1 เครื่องมีได้หลายใบ เช่น Daily + Witness) ; เครื่องที่ไม่มีฟอร์มจะขึ้นว่า "ยังไม่มีหัวข้อ"
+  //   type: 'daily' | 'witness' ; tab = ชื่อแท็บในหน้าเว็บ ; products = ใช้เฉพาะตอนผลิตรุ่นนี้ (ไม่ใส่ = ทุกรุ่น)
   DAILY_CHECK: {
     TITLE: 'รายการตรวจสอบเครื่องจักรประจำวัน',
     FORMS: [
       {
-        id: 'ARC-CHUTE', name: 'เครื่อง Arc Chute', docNo: 'JRTLQR713/714-13-1',
+        id: 'ARC-CHUTE', type: 'daily', tab: 'Daily Check', name: 'เครื่อง Arc Chute', docNo: 'JRTLQR713/714-13-1',
         machines: ['AC-06', 'AC-07', 'AC-08'], // ไฟล์ Arc5678.xlsx
         items: [
           { th: 'ตรวจเช็คปุ่มกด หยุดฉุกเฉิน (Emergency Stop) อยู่ในสภาพสมบูรณ์ พร้อมใช้งาน ไม่แตกชำรุดและต้องคลายออก' },
@@ -75,7 +83,7 @@ var LINE_CONFIG = {
         ]
       },
       {
-        id: 'ARC-CHUTE-BETA', name: 'เครื่อง Arc Chute Beta (เครื่อง 3)', docNo: 'JRTLQR713/714-13-1',
+        id: 'ARC-CHUTE-BETA', type: 'daily', tab: 'Daily Check', name: 'เครื่อง Arc Chute Beta (เครื่อง 3)', docNo: 'JRTLQR713/714-13-1',
         machines: ['AC-BETA'], // ไฟล์ Arc3.xlsx (กะดึกใช้หัวข้อเดียวกับกะเช้า — ยืนยันแล้ว)
         items: [
           { th: 'ตรวจเช็คปุ่มกด หยุดฉุกเฉิน (Emergency Stop) อยู่ในสภาพสมบูรณ์ พร้อมใช้งาน ไม่แตกชำรุดและต้องคลายออก' },
@@ -91,7 +99,7 @@ var LINE_CONFIG = {
         ]
       },
       {
-        id: 'GV2', name: 'เครื่อง GV.2 (เครื่อง 4)', docNo: 'JRTLQR713/714-13-1',
+        id: 'GV2', type: 'daily', tab: 'Daily Check', name: 'เครื่อง GV.2 (เครื่อง 4)', docNo: 'JRTLQR713/714-13-1',
         machines: ['GV-2'], // ไฟล์ GV.2.xlsx
         items: [
           { th: 'ตรวจเช็คปุ่มกด หยุดฉุกเฉิน (Emergency Stop) อยู่ในสภาพสมบูรณ์ พร้อมใช้งาน ไม่แตกชำรุดและต้องคลายออก' },
@@ -105,6 +113,24 @@ var LINE_CONFIG = {
           { th: 'ตรวจเช็คเสียงผิดปกติรอบเครื่องจักร' },
           { th: 'ตรวจเช็ค 5ส ในพื้นที่การทำงาน และสถานะตู้อบ Fiber' }
         ]
+      },
+      // ---- Check Witness (เช็ค Master) — JRTL-AI-003_Form_Check_Witness.xlsx ----
+      {
+        id: 'WITNESS-10', type: 'witness', tab: 'Witness', name: 'Form Check Witness Arc Chute (10 Fixture)', docNo: 'JRTL-AI-003',
+        okLabel: 'ยอมรับ', ngLabel: 'ไม่ยอมรับ', machines: ['AC-06', 'AC-07', 'AC-08'], items: fixtureItems(10)
+      },
+      {
+        id: 'WITNESS-12', type: 'witness', tab: 'Witness', name: 'Form Check Witness Arc Chute Beta (12 Fixture)', docNo: 'JRTL-AI-003',
+        okLabel: 'ยอมรับ', ngLabel: 'ไม่ยอมรับ', machines: ['AC-BETA'], items: fixtureItems(12)
+      },
+      // GV.2: ในไฟล์รวม 6/9 Plate ไว้ชีทเดียว → แยกตามรุ่นที่ผลิต
+      {
+        id: 'WITNESS-GV2-6P', type: 'witness', tab: 'Witness 6 Plate', name: 'Form Check Witness GV2 6 Plate (6 Fixture)', docNo: 'JRTL-AI-003',
+        okLabel: 'ยอมรับ', ngLabel: 'ไม่ยอมรับ', machines: ['GV-2'], products: ['W813890060190-JR'], items: fixtureItems(6)
+      },
+      {
+        id: 'WITNESS-GV2-9P', type: 'witness', tab: 'Witness 9 Plate', name: 'Form Check Witness GV2 9 Plate (9 Fixture)', docNo: 'JRTL-AI-003',
+        okLabel: 'ยอมรับ', ngLabel: 'ไม่ยอมรับ', machines: ['GV-2'], products: ['W813890890211-JR'], items: fixtureItems(9)
       }
       // TODO(ข้อมูลไลน์) แบบฟอร์มของ Arc Stack
     ]

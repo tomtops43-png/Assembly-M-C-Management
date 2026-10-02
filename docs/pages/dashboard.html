@@ -163,7 +163,7 @@
     const dc = data.dailyCheck;
     $('tDc').innerHTML = dc ? `<div class="kpi-grid"><div class="kpi-card"><div class="kpi-value">${dc.compliance === null ? '-' : dc.compliance + '%'}</div><div class="kpi-label">Compliance (${dc.checked}/${dc.expected})</div></div>
       <div class="kpi-card success"><div class="kpi-value">${dc.accept}</div><div class="kpi-label">Accept</div></div><div class="kpi-card danger"><div class="kpi-value">${dc.reject}</div><div class="kpi-label">Reject</div></div></div>
-      ${dc.missing.length ? '<div class="small text-gray">ช่องที่ขาด: ' + dc.missing.slice(0, 20).map((m) => `${m.machineId} ${m.shiftDN === 'Night' ? 'กะดึก' : 'กะเช้า'}`).join(', ') + (dc.missing.length > 20 ? ' …' : '') + '</div>' : ''}` : '<div class="small text-gray">เลือกช่วงวันที่เพื่อดู</div>';
+      ${dc.missing.length ? '<div class="small text-gray">ช่องที่ขาด: ' + dc.missing.slice(0, 20).map((m) => `${m.machineId} ${m.shiftDN === 'Night' ? 'กะดึก' : 'กะเช้า'}${m.formTab ? ' (' + m.formTab + ')' : ''}`).join(', ') + (dc.missing.length > 20 ? ' …' : '') + '</div>' : ''}` : '<div class="small text-gray">เลือกช่วงวันที่เพื่อดู</div>';
     $('tShift').innerHTML = '<thead><tr><th>กะ</th><th class="num">FG</th><th class="num">NG</th></tr></thead><tbody>' +
       Object.keys(data.byShift).map((s) => `<tr><td>${UI.esc(s)}</td><td class="num">${n(data.byShift[s].actual)}</td><td class="num">${n(data.byShift[s].defect)}</td></tr>`).join('') + '</tbody>';
     renderTable();
