@@ -62,6 +62,14 @@ var LINE_CONFIG = {
   // กลุ่มเครื่องจักร (ไลน์ย่อย) — ใช้จัดลำดับการแสดงผล ; กลุ่มที่ไม่อยู่ในรายการจะต่อท้าย
   MACHINE_GROUPS: ['Arc chute', 'GV.2', 'Arc Stack'],
 
+  // รหัสสินค้าชั่วคราว → รหัส FG จริง (migrateProductCodes ใน ProductService.gs เปลี่ยนให้ทุกชีทอัตโนมัติครั้งเดียว)
+  // Cut chamber #5–#8 ใช้รหัส FG เดียวกัน → รวมเป็นสินค้าเดียว
+  PRODUCT_CODE_MIGRATION: {
+    'AS-MEDIUM': 'S1A23976-D', 'AS-HIGH': 'S1A23969-D',
+    'GV2-6P': 'W813890060190-JR', 'GV2-9P': 'W813890890211-JR',
+    'CC-5': '51207116JR', 'CC-6': '51207116JR', 'CC-7': '51207116JR', 'CC-8': '51207116JR'
+  },
+
   // โมดูลที่เปิดใช้ (ปิดได้)  — cost/labor เปิดในเฟส 2
   MODULES: {
     production: true, dailycheck: true, inbox: true, maintenance: true, joborders: true,
@@ -75,25 +83,23 @@ var LINE_CONFIG = {
     // capacity เครื่อง = 0 → ใช้ capacity ของสินค้าที่กำลังผลิต
     // Arc chute 06/07/08/Beta = Cut chamber #6/#7/#8/#5 (ยืนยันแล้ว)
     machines: [
-      { id: 'AC-06', name: 'Arc chute 06', group: 'Arc chute', capacity: 0, products: ['CC-6'] },
-      { id: 'AC-07', name: 'Arc chute 07', group: 'Arc chute', capacity: 0, products: ['CC-7'] },
-      { id: 'AC-08', name: 'Arc chute 08', group: 'Arc chute', capacity: 0, products: ['CC-8'] },
-      { id: 'AC-BETA', name: 'Arc chute Beta', group: 'Arc chute', capacity: 0, products: ['CC-5'] },
-      { id: 'GV-2', name: 'GV.2', group: 'GV.2', capacity: 0, products: ['GV2-6P', 'GV2-9P'] },
-      { id: 'AS-MED', name: 'Arc Stack medium', group: 'Arc Stack', capacity: 0, products: ['AS-MEDIUM'] },
-      { id: 'AS-HIGH', name: 'Arc Stack High', group: 'Arc Stack', capacity: 0, products: ['AS-HIGH'] }
+      // Arc chute 4 เครื่องผลิตรหัส FG เดียวกัน (51207116JR) → capacity ตั้งที่เครื่อง (สินค้า capacity = 0)
+      { id: 'AC-06', name: 'Arc chute 06', group: 'Arc chute', capacity: 2000, products: ['51207116JR'] },
+      { id: 'AC-07', name: 'Arc chute 07', group: 'Arc chute', capacity: 2375, products: ['51207116JR'] },
+      { id: 'AC-08', name: 'Arc chute 08', group: 'Arc chute', capacity: 2375, products: ['51207116JR'] },
+      { id: 'AC-BETA', name: 'Arc chute Beta', group: 'Arc chute', capacity: 2375, products: ['51207116JR'] },
+      { id: 'GV-2', name: 'GV.2', group: 'GV.2', capacity: 0, products: ['W813890060190-JR', 'W813890890211-JR'] },
+      { id: 'AS-MED', name: 'Arc Stack medium', group: 'Arc Stack', capacity: 0, products: ['S1A23976-D'] },
+      { id: 'AS-HIGH', name: 'Arc Stack High', group: 'Arc Stack', capacity: 0, products: ['S1A23969-D'] }
     ],
     // เป้าหมายประจำวัน (JRTL-EI-030 A/0, 26.08.2024): capacity = ชิ้น / คน / ชม. (คิด 1 เครื่อง = 1 คน) ; defaultQty = ยอดเริ่มต้นต่อชั่วโมง
-    // TODO(ข้อมูลไลน์) รหัสสินค้าเป็นรหัสชั่วคราว — เปลี่ยนเป็น Part No. จริงได้ที่หน้า "จัดการ"
+    // รหัส FG + ราคาต่อหน่วย ยืนยันจากไลน์แล้ว (Assembly_MC_FG_Code.xlsx)
     products: [
-      { code: 'AS-MEDIUM', name: 'Arc stack Medium', capacity: 750, defaultQty: 750 },
-      { code: 'AS-HIGH', name: 'Arc stack High', capacity: 875, defaultQty: 875 },
-      { code: 'GV2-6P', name: 'GV2 6 Plate', capacity: 2285, defaultQty: 2285 },
-      { code: 'GV2-9P', name: 'GV2 9 Plate', capacity: 1875, defaultQty: 1875 },
-      { code: 'CC-5', name: 'Cut chamber #5', capacity: 2375, defaultQty: 2375 },
-      { code: 'CC-6', name: 'Cut chamber #6', capacity: 2000, defaultQty: 2000 },
-      { code: 'CC-7', name: 'Cut chamber #7', capacity: 2375, defaultQty: 2375 },
-      { code: 'CC-8', name: 'Cut chamber #8', capacity: 2375, defaultQty: 2375 }
+      { code: 'S1A23976-D', name: 'Arc stack Medium', capacity: 750, defaultQty: 750, unitPrice: 9.48094852941176 },
+      { code: 'S1A23969-D', name: 'Arc stack High', capacity: 875, defaultQty: 875, unitPrice: 13.3794933712121 },
+      { code: 'W813890060190-JR', name: 'GV2 6 Plate', capacity: 2285, defaultQty: 2285, unitPrice: 1.54497305194805 },
+      { code: 'W813890890211-JR', name: 'GV2 9 Plate', capacity: 1875, defaultQty: 1875, unitPrice: 1.54497305194805 },
+      { code: '51207116JR', name: 'Cut chamber', capacity: 0, defaultQty: 2375, unitPrice: 1.15955914285714 }
     ],
     bom: [],             // TODO(ข้อมูลไลน์) [{ productCode:'', componentCode:'', componentName:'', qtyPerUnit:1, supplier:'' }]
     materialAliases: [], // TODO(ข้อมูลไลน์) [{ alias:'', canonical:'' }]
