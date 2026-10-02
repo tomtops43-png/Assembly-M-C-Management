@@ -73,10 +73,8 @@ const UI = (() => {
     return (parts[0].charAt(0) + (parts[1] ? parts[1].charAt(0) : '')).toUpperCase();
   }
 
-  function brandMark() {
-    const words = String(C.LINE_NAME).replace(/[^A-Za-z0-9 ]/g, ' ').trim().split(/\s+/);
-    return (words[0].charAt(0) + (words[1] ? words[1].charAt(0) : '')).toUpperCase();
-  }
+  // ไอคอน Arc chute (แผ่น splitter เหล็กระหว่างผนังฉนวนสีแดง)
+  const BRAND_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#fff"/><rect x="9" y="11" width="7" height="42" rx="2" fill="#C8102E"/><rect x="48" y="11" width="7" height="42" rx="2" fill="#C8102E"/><rect x="17.5" y="15" width="3.2" height="35" rx="1" fill="#7C818B"/><rect x="22" y="15" width="3.2" height="35" rx="1" fill="#7C818B"/><rect x="26.5" y="15" width="3.2" height="35" rx="1" fill="#7C818B"/><rect x="31" y="15" width="3.2" height="35" rx="1" fill="#7C818B"/><rect x="35.5" y="15" width="3.2" height="35" rx="1" fill="#7C818B"/><rect x="40" y="15" width="3.2" height="35" rx="1" fill="#7C818B"/><rect x="44.5" y="15" width="3.2" height="35" rx="1" fill="#7C818B"/><rect x="18.4" y="15" width="1" height="35" fill="#C9CDD4"/><rect x="22.9" y="15" width="1" height="35" fill="#C9CDD4"/><rect x="27.4" y="15" width="1" height="35" fill="#C9CDD4"/><rect x="31.9" y="15" width="1" height="35" fill="#C9CDD4"/><rect x="36.4" y="15" width="1" height="35" fill="#C9CDD4"/><rect x="40.9" y="15" width="1" height="35" fill="#C9CDD4"/><rect x="45.4" y="15" width="1" height="35" fill="#C9CDD4"/><rect x="15" y="21.5" width="34" height="4" rx="1" fill="#C8102E"/><circle cx="19.1" cy="23.5" r="1.1" fill="#7A0A1C"/><circle cx="23.6" cy="23.5" r="1.1" fill="#7A0A1C"/><circle cx="28.1" cy="23.5" r="1.1" fill="#7A0A1C"/><circle cx="32.6" cy="23.5" r="1.1" fill="#7A0A1C"/><circle cx="37.1" cy="23.5" r="1.1" fill="#7A0A1C"/><circle cx="41.6" cy="23.5" r="1.1" fill="#7A0A1C"/><circle cx="46.1" cy="23.5" r="1.1" fill="#7A0A1C"/><path d="M21 51 L32 31 L43 51 Z" fill="#fff"/></svg>';
 
   function renderTopNav(title, icon) {
     const u = Auth.getUser() || {};
@@ -117,27 +115,49 @@ const UI = (() => {
       const byKey = {};
       pages.forEach((p) => { byKey[p.key] = p; });
       const used = {};
-      const item = (p) => { used[p.key] = 1; return `
-          <a href="${p.file}" class="sidebar-item ${p.key === activeKey ? 'active' : ''}"><i class="bi ${p.icon}"></i><span>${esc(p.label)}</span></a>`; };
-      let menu = NAV_SECTIONS.map((sec) => {
-        const items = sec.keys.filter((k) => byKey[k]).map((k) => item(byKey[k])).join('');
-        return items ? `<div class="sidebar-section">${esc(sec.label)}</div>${items}` : '';
-      }).join('');
+      const groups = NAV_SECTIONS.map((sec) => ({ label: sec.label, items: sec.keys.filter((k) => byKey[k]).map((k) => { used[k] = 1; return byKey[k]; }) }))
+        .filter((g) => g.items.length);
       const rest = pages.filter((p) => !used[p.key]);
-      if (rest.length) menu += `<div class="sidebar-section">อื่นๆ</div>` + rest.map(item).join('');
-      const side = document.createElement('aside');
-      side.className = 'sidebar';
-      side.innerHTML = `
-        <div class="sidebar-logo"><div class="brand-mark">${esc(brandMark())}</div><div><div class="sidebar-logo-title">${esc(C.LINE_NAME)}</div><div class="sidebar-logo-sub">Production System</div></div></div>
-        <nav class="sidebar-menu">${menu}</nav>
-        <div class="sidebar-user">
-          <span class="avatar">${esc(initials(u.name))}</span>
-          <div style="min-width:0"><div class="sidebar-user-name">${esc(u.name || '')}</div>
-            <div class="sidebar-user-role">${esc(Auth.ROLE_LABELS[u.role] || u.role || '')}${u.shift ? ' · กะ ' + esc(u.shift) : ''}</div></div>
-          <button class="sidebar-logout" id="sideLogout" title="ออกจากระบบ"><i class="bi bi-box-arrow-right"></i></button>
+      if (rest.length) groups.push({ label: 'อื่นๆ', items: rest });
+      const link = (p) => `<a href="${p.file}" class="tm-item ${p.key === activeKey ? 'active' : ''}"><i class="bi ${p.icon}"></i><span>${esc(p.label)}</span></a>`;
+      const groupHtml = (g) => {
+        const isActive = g.items.some((p) => p.key === activeKey);
+        if (g.items.length === 1) {
+          const p = g.items[0];
+          return `<a href="${p.file}" class="tm-btn ${isActive ? 'active' : ''}"><i class="bi ${p.icon}"></i>${esc(p.label)}</a>`;
+        }
+        return `<div class="tm-group">
+          <button class="tm-btn ${isActive ? 'active' : ''}" type="button">${esc(g.label)}<i class="bi bi-chevron-down tm-caret"></i></button>
+          <div class="tm-panel">${g.items.map(link).join('')}</div></div>`;
+      };
+      const bar = document.createElement('nav');
+      bar.className = 'topmenu';
+      bar.innerHTML = `
+        <a class="tm-brand" href="${(byKey.dashboard || byKey.production || pages[0] || { file: '#' }).file}">
+          <span class="brand-mark">${BRAND_SVG}</span>
+          <span><span class="tm-brand-title">${esc(C.LINE_NAME)}</span><span class="tm-brand-sub">Production System</span></span>
+        </a>
+        <div class="tm-groups">${groups.map(groupHtml).join('')}</div>
+        <div class="tm-group tm-user">
+          <button class="tm-btn" type="button"><span class="avatar">${esc(initials(u.name))}</span><span class="tm-user-name">${esc(u.name || '')}</span><i class="bi bi-chevron-down tm-caret"></i></button>
+          <div class="tm-panel tm-panel-right">
+            <div class="tm-user-info"><div class="fw-bold">${esc(u.name || '')}</div><div class="small text-gray">${esc(u.employeeId || '')} · ${esc(Auth.ROLE_LABELS[u.role] || u.role || '')}${u.shift ? ' · กะ ' + esc(u.shift) : ''}</div></div>
+            <button class="tm-item tm-logout" id="sideLogout" type="button"><i class="bi bi-box-arrow-right"></i><span>ออกจากระบบ</span></button>
+          </div>
         </div>`;
-      document.body.prepend(side);
-      side.querySelector('#sideLogout').onclick = confirmLogout;
+      document.body.prepend(bar);
+      bar.querySelector('#sideLogout').onclick = confirmLogout;
+      // คลิกเปิด/ปิด dropdown (รองรับจอสัมผัส) — hover ก็เปิดได้
+      bar.querySelectorAll('.tm-group > .tm-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const g = btn.parentElement;
+          const open = g.classList.contains('open');
+          bar.querySelectorAll('.tm-group.open').forEach((x) => x.classList.remove('open'));
+          if (!open) g.classList.add('open');
+        });
+      });
+      document.addEventListener('click', () => bar.querySelectorAll('.tm-group.open').forEach((x) => x.classList.remove('open')));
       return;
     }
     const first = pages.slice(0, 4);
