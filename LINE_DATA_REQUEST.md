@@ -8,9 +8,9 @@
 ## A. Master data (กรอกผ่านหน้า "จัดการ" ได้)
 | # | ข้อมูล | รูปแบบที่ต้องการ |
 |---|---|---|
-| A1 | ✅ เครื่องจักร (Arc chute 06/07/08/Beta, GV.2, Arc Stack medium/High) + Capacity ตามป้าย JRTL-EI-030 | **ยืนยัน:** Arc chute 06/07/08 = Cut chamber #6/#7/#8 และ Arc chute Beta = Cut chamber #5 ใช่ไหม |
-| A2 | ✅ สินค้า 8 รุ่น (Arc stack Medium/High, GV2 6/9 Plate, Cut chamber #5–#8) | ยังขาด **Part No. จริง** (ตอนนี้ใช้รหัสชั่วคราว เช่น `CC-6`, `GV2-6P`) และราคาต่อหน่วย (ถ้าจะใช้ต้นทุน) |
-| A3 | BOM ของแต่ละสินค้า | รหัสชิ้นส่วน / ชื่อ / จำนวนต่อชิ้น / Supplier |
+| A1 | ✅ เครื่องจักร (Arc chute 06/07/08/Beta, GV.2, Arc Stack medium/High) + Capacity ตามป้าย JRTL-EI-030 | ✅ Arc chute 06/07/08/Beta = Cut chamber #6/#7/#8/#5 · Capacity คิด 1 เครื่อง = 1 คน |
+| A2 | ✅ สินค้า 8 รุ่น (Arc stack Medium/High, GV2 6/9 Plate, Cut chamber #5–#8) | รอ **รหัส FG จริง** (ตอนนี้ใช้รหัสชั่วคราว เช่น `CC-6`, `GV2-6P`) และราคาต่อหน่วย (ถ้าจะใช้ต้นทุน) |
+| A3 | BOM ของแต่ละสินค้า (รอ **รหัส RM**) | รหัสชิ้นส่วน / ชื่อ / จำนวนต่อชิ้น / Supplier |
 | A4 | เครื่องไหนผลิตสินค้าอะไรได้บ้าง | เครื่อง → รายการรหัสสินค้า |
 | A5 | Material Alias (รหัสบนฉลาก → รหัส BOM) | ถ้ารหัสบนฉลากผู้ขายไม่ตรงกับ BOM |
 | A6 | รายชื่อพนักงาน | รหัส / ชื่อ / บทบาท (operator, maintenance, supervisor, admin, viewer) / กะ A/B |

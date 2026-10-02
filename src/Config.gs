@@ -73,7 +73,7 @@ var LINE_CONFIG = {
   SEED: {
     // กลุ่ม (ไลน์ย่อย) → เครื่อง → สินค้าที่ผลิตได้
     // capacity เครื่อง = 0 → ใช้ capacity ของสินค้าที่กำลังผลิต
-    // TODO(ข้อมูลไลน์) ยืนยันการจับคู่ Arc chute ↔ Cut chamber (Beta = #5 ?)
+    // Arc chute 06/07/08/Beta = Cut chamber #6/#7/#8/#5 (ยืนยันแล้ว)
     machines: [
       { id: 'AC-06', name: 'Arc chute 06', group: 'Arc chute', capacity: 0, products: ['CC-6'] },
       { id: 'AC-07', name: 'Arc chute 07', group: 'Arc chute', capacity: 0, products: ['CC-7'] },
@@ -83,7 +83,7 @@ var LINE_CONFIG = {
       { id: 'AS-MED', name: 'Arc Stack medium', group: 'Arc Stack', capacity: 0, products: ['AS-MEDIUM'] },
       { id: 'AS-HIGH', name: 'Arc Stack High', group: 'Arc Stack', capacity: 0, products: ['AS-HIGH'] }
     ],
-    // เป้าหมายประจำวัน (JRTL-EI-030 A/0, 26.08.2024): capacity = ชิ้น / คน / ชม. ; defaultQty = ยอดเริ่มต้นต่อชั่วโมง
+    // เป้าหมายประจำวัน (JRTL-EI-030 A/0, 26.08.2024): capacity = ชิ้น / คน / ชม. (คิด 1 เครื่อง = 1 คน) ; defaultQty = ยอดเริ่มต้นต่อชั่วโมง
     // TODO(ข้อมูลไลน์) รหัสสินค้าเป็นรหัสชั่วคราว — เปลี่ยนเป็น Part No. จริงได้ที่หน้า "จัดการ"
     products: [
       { code: 'AS-MEDIUM', name: 'Arc stack Medium', capacity: 750, defaultQty: 750 },
