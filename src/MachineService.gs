@@ -29,11 +29,31 @@ function seedRank(id) {
 
 /** เรียงตามลำดับกลุ่มใน Config → ลำดับใน SEED → รหัสเครื่อง */
 function getMachines() {
-  return getMasterData().machines.map(machineToObj).sort(function (a, b) {
+  var caps = productCapacityMap();
+  return getMasterData().machines.map(function (r) {
+    var m = machineToObj(r);
+    m.effectiveCapacity = machineCapacity(m, m.currentProduct, caps);
+    return m;
+  }).sort(function (a, b) {
     return (groupRank(a.group) - groupRank(b.group)) || a.group.localeCompare(b.group) ||
       (seedRank(a.machineId) - seedRank(b.machineId)) ||
       a.machineId.localeCompare(b.machineId, undefined, { numeric: true });
   });
+}
+
+/** productCode → capacity (ชิ้น/ชม.) */
+function productCapacityMap() {
+  var out = {};
+  getMasterData().products.forEach(function (p) { out[String(p.ProductCode)] = toNumber(p.Capacity); });
+  return out;
+}
+
+/** capacity ที่ใช้คิดแผน/OEE: ของสินค้าที่ผลิต → ของเครื่อง → สูงสุดของสินค้าที่ assign */
+function machineCapacity(m, productCode, caps) {
+  caps = caps || productCapacityMap();
+  if (productCode && caps[productCode]) return caps[productCode];
+  if (m.capacity) return m.capacity;
+  return m.assignedProducts.reduce(function (mx, p) { return Math.max(mx, caps[p] || 0); }, 0);
 }
 
 function getMachine(machineId) {

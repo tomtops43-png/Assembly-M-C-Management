@@ -60,6 +60,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
   var machines = getMachines();
   var mMap = {};
   machines.forEach(function (m) { mMap[m.machineId] = m; });
+  var caps = productCapacityMap();
   var netHours = shiftDN ? LINE_CONFIG.NET_HOURS_PER_SHIFT : LINE_CONFIG.NET_HOURS_PER_SHIFT * 2;
   var stockout = getStockoutKeys(range.from, range.to);
 
@@ -68,8 +69,9 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
   var oeeAgg = {}; // machine → {days:{}, hours:{}, actual}
 
   rows.forEach(function (r) {
-    var m = mMap[r.machineId] || {};
-    var plan = r.status === 'sort-adjust' ? 0 : (m.capacity || r.plannedQty);
+    var m = mMap[r.machineId] || { capacity: 0, assignedProducts: [] };
+    var rowCap = machineCapacity(m, r.productCode, caps); // ชิ้น/ชม. ของสินค้าที่ผลิตในแถวนี้
+    var plan = r.status === 'sort-adjust' ? 0 : (rowCap || r.plannedQty);
     totals.actual += r.actualQty; totals.defect += r.defectQty; totals.plan += plan;
 
     var bm = byMachine[r.machineId] = byMachine[r.machineId] || { machineId: r.machineId, machineName: m.machineName || r.machineId, actual: 0, defect: 0, plan: 0 };
@@ -99,7 +101,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     if (!stockout[r.machineId + '|' + r.date]) {
       var o = oeeAgg[r.machineId] = oeeAgg[r.machineId] || { days: {}, hours: {}, actual: 0 };
       o.actual += r.actualQty;
-      if (r.status !== 'sort-adjust') o.hours[r.date + '|' + r.timePeriod] = true;
+      if (r.status !== 'sort-adjust' && rowCap > 0) o.hours[r.date + '|' + r.timePeriod] = rowCap;
       o.days[r.date] = (o.days[r.date] || 0) + r.actualQty;
     }
   });
@@ -109,7 +111,10 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     var bm = byMachine[id];
     bm.defectRate = pct(bm.defect, bm.actual + bm.defect);
     var o = oeeAgg[id];
-    var cap = (mMap[id] || {}).capacity || 0;
+    // capacity เฉลี่ยของชั่วโมงที่บันทึก (เครื่องที่ผลิตหลายรุ่น เช่น GV.2)
+    var hourCaps = o ? Object.keys(o.hours).map(function (k) { return o.hours[k]; }) : [];
+    var cap = hourCaps.length ? hourCaps.reduce(function (a, b) { return a + b; }, 0) / hourCaps.length
+      : machineCapacity(mMap[id] || { capacity: 0, assignedProducts: [] }, '', caps);
     bm.oee = null;
     if (o && cap > 0) {
       var countedDays = Object.keys(o.days).filter(function (d) { return o.days[d] > 0; }).length;
@@ -125,7 +130,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
   });
 
   var installedPlanPerDay = machines.filter(function (m) { return m.installed; })
-    .reduce(function (s, m) { return s + m.capacity * netHours; }, 0);
+    .reduce(function (s, m) { return s + m.effectiveCapacity * netHours; }, 0);
   var trend = Object.keys(daily).sort().map(function (d) {
     var x = daily[d];
     x.plan = installedPlanPerDay; x.defectRate = pct(x.defect, x.actual + x.defect);

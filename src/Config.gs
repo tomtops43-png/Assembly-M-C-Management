@@ -17,7 +17,7 @@ var LINE_CONFIG = {
   WORKDAY_START_HOUR: 8,   // วันทำงานตัดรอบ 08:00
   DAY_SHIFT_START: 8,      // Day = 08:00-19:59
   NIGHT_SHIFT_START: 20,   // Night = 20:00-07:59
-  NET_HOURS_PER_SHIFT: 10.5,            // TODO(ข้อมูลไลน์) ชั่วโมงสุทธิ/กะ (ใช้คิด OEE)
+  NET_HOURS_PER_SHIFT: 10.5,            // ยืนยันจากป้ายเป้าหมาย JRTL-EI-030 (1 คน/10.5 ชม.)
   OT_HOURS: { Day: [18, 19], Night: [6, 7] }, // TODO(ข้อมูลไลน์) ชั่วโมงที่นับเป็น OT
   OT_HOURS_PER_DAY: 2.5,
 
@@ -71,17 +71,30 @@ var LINE_CONFIG = {
 
   // ---- Seed (initializeSystem) — ว่างไว้ก่อน กรอกผ่านหน้า "จัดการ" ได้ ----
   SEED: {
-    // กลุ่ม (ไลน์ย่อย) → เครื่อง ; Capacity รอข้อมูล  TODO(ข้อมูลไลน์)
+    // กลุ่ม (ไลน์ย่อย) → เครื่อง → สินค้าที่ผลิตได้
+    // capacity เครื่อง = 0 → ใช้ capacity ของสินค้าที่กำลังผลิต
+    // TODO(ข้อมูลไลน์) ยืนยันการจับคู่ Arc chute ↔ Cut chamber (Beta = #5 ?)
     machines: [
-      { id: 'AC-06', name: 'Arc chute 06', group: 'Arc chute', capacity: 0 },
-      { id: 'AC-07', name: 'Arc chute 07', group: 'Arc chute', capacity: 0 },
-      { id: 'AC-08', name: 'Arc chute 08', group: 'Arc chute', capacity: 0 },
-      { id: 'AC-BETA', name: 'Arc chute Beta', group: 'Arc chute', capacity: 0 },
-      { id: 'GV-2', name: 'GV.2', group: 'GV.2', capacity: 0 },
-      { id: 'AS-MED', name: 'Arc Stack medium', group: 'Arc Stack', capacity: 0 },
-      { id: 'AS-HIGH', name: 'Arc Stack High', group: 'Arc Stack', capacity: 0 }
+      { id: 'AC-06', name: 'Arc chute 06', group: 'Arc chute', capacity: 0, products: ['CC-6'] },
+      { id: 'AC-07', name: 'Arc chute 07', group: 'Arc chute', capacity: 0, products: ['CC-7'] },
+      { id: 'AC-08', name: 'Arc chute 08', group: 'Arc chute', capacity: 0, products: ['CC-8'] },
+      { id: 'AC-BETA', name: 'Arc chute Beta', group: 'Arc chute', capacity: 0, products: ['CC-5'] },
+      { id: 'GV-2', name: 'GV.2', group: 'GV.2', capacity: 0, products: ['GV2-6P', 'GV2-9P'] },
+      { id: 'AS-MED', name: 'Arc Stack medium', group: 'Arc Stack', capacity: 0, products: ['AS-MEDIUM'] },
+      { id: 'AS-HIGH', name: 'Arc Stack High', group: 'Arc Stack', capacity: 0, products: ['AS-HIGH'] }
     ],
-    products: [],        // TODO(ข้อมูลไลน์) [{ code:'', name:'', defaultQty:0, unitPrice:0 }]
+    // เป้าหมายประจำวัน (JRTL-EI-030 A/0, 26.08.2024): capacity = ชิ้น / คน / ชม. ; defaultQty = ยอดเริ่มต้นต่อชั่วโมง
+    // TODO(ข้อมูลไลน์) รหัสสินค้าเป็นรหัสชั่วคราว — เปลี่ยนเป็น Part No. จริงได้ที่หน้า "จัดการ"
+    products: [
+      { code: 'AS-MEDIUM', name: 'Arc stack Medium', capacity: 750, defaultQty: 750 },
+      { code: 'AS-HIGH', name: 'Arc stack High', capacity: 875, defaultQty: 875 },
+      { code: 'GV2-6P', name: 'GV2 6 Plate', capacity: 2285, defaultQty: 2285 },
+      { code: 'GV2-9P', name: 'GV2 9 Plate', capacity: 1875, defaultQty: 1875 },
+      { code: 'CC-5', name: 'Cut chamber #5', capacity: 2375, defaultQty: 2375 },
+      { code: 'CC-6', name: 'Cut chamber #6', capacity: 2000, defaultQty: 2000 },
+      { code: 'CC-7', name: 'Cut chamber #7', capacity: 2375, defaultQty: 2375 },
+      { code: 'CC-8', name: 'Cut chamber #8', capacity: 2375, defaultQty: 2375 }
+    ],
     bom: [],             // TODO(ข้อมูลไลน์) [{ productCode:'', componentCode:'', componentName:'', qtyPerUnit:1, supplier:'' }]
     materialAliases: [], // TODO(ข้อมูลไลน์) [{ alias:'', canonical:'' }]
     wasteTypes: [],      // TODO(ข้อมูลไลน์)
@@ -92,7 +105,7 @@ var LINE_CONFIG = {
 /** โครงสร้างทุกชีท (แถว 1 = header) */
 var SHEET_SCHEMAS = {
   Users: ['EmployeeID', 'Name', 'PIN', 'Role', 'Shift', 'Active', 'CreatedAt', 'Permissions'],
-  Products: ['ProductCode', 'ProductName', 'DefaultQty', 'Active', 'UnitPrice'],
+  Products: ['ProductCode', 'ProductName', 'DefaultQty', 'Active', 'UnitPrice', 'Capacity'],
   BOM: ['ProductCode', 'ComponentCode', 'ComponentName', 'QtyPerUnit', 'Supplier'],
   MaterialAlias: ['AliasCode', 'CanonicalCode', 'Note', 'Active'],
   Machines: ['MachineID', 'MachineName', 'Line', 'Status', 'AssignedProducts', 'CurrentProduct', 'Capacity', 'CurrentJobOrder', 'Installed', 'MachineGroup'],

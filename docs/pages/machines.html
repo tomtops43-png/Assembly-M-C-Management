@@ -87,7 +87,7 @@
       return `<div class="mc-card ${m.status} ${m.installed ? '' : 'not-installed'}" data-id="${UI.esc(m.machineId)}">
         <div class="d-flex justify-between align-center"><span class="mc-name"><i class="bi ${icons[m.status] || ''}"></i> ${UI.esc(m.machineName)}</span>
           <span class="badge badge-${m.status}">${UI.statusLabel(m.status)}</span></div>
-        <div class="small text-gray">${UI.esc(m.machineId)} ${m.capacity ? '· ' + m.capacity + ' ชิ้น/ชม.' : ''} ${m.installed ? '' : '· ไม่ได้ติดตั้ง'}</div>
+        <div class="small text-gray">${UI.esc(m.machineId)} ${m.effectiveCapacity ? '· ' + UI.formatNumber(m.effectiveCapacity) + ' ชิ้น/ชม.' : ''} ${m.installed ? '' : '· ไม่ได้ติดตั้ง'}</div>
         <span class="tag"><i class="bi bi-box"></i> ${UI.esc(m.currentProduct || 'ยังไม่ตั้งสินค้า')}</span>
         ${m.currentJobOrder ? `<span class="tag"><i class="bi bi-calendar2-week"></i> ${UI.esc(m.currentJobOrder)}</span>` : ''}
         ${jo ? `<div class="progress-bar-container mt-2"><div class="progress-bar-fill ${pct >= 100 ? 'over' : pct >= 90 ? 'near' : ''}" style="width:${pct}%"></div></div>
