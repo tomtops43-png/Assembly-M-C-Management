@@ -73,8 +73,8 @@
   async function loadMasters() {
     const [m, t] = await Promise.all([API.get('getMachines'), API.get('getAlarmTypes')]);
     const ms = m.success ? m.data.filter((x) => x.installed) : [];
-    $('machine').innerHTML = ms.map((x) => `<option value="${UI.esc(x.machineId)}">${UI.esc(x.machineId)}</option>`).join('') || '<option value="">ยังไม่มีเครื่อง</option>';
-    $('hMachine').innerHTML = '<option value="">ทุกเครื่อง</option>' + ms.map((x) => `<option>${UI.esc(x.machineId)}</option>`).join('');
+    $('machine').innerHTML = UI.machineOptions(ms) || '<option value="">ยังไม่มีเครื่อง</option>';
+    $('hMachine').innerHTML = '<option value="">ทุกเครื่อง</option>' + UI.machineOptions(ms);
     const ts = t.success ? t.data : [];
     $('type').innerHTML = ts.map((x) => `<option>${UI.esc(x.typeName)}</option>`).join('') || '<option value="">ยังไม่มีชนิด — กดปุ่มเฟือง</option>';
     $('typeList').innerHTML = ts.map((x) => `<div class="entry-card d-flex justify-between align-center">${UI.esc(x.typeName)}<button class="btn btn-outline btn-sm" data-del="${UI.esc(x.typeId)}"><i class="bi bi-trash"></i></button></div>`).join('');

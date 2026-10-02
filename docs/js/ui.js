@@ -210,6 +210,30 @@ const UI = (() => {
     throw new Error(res.message || 'โหลดค่าตั้งต้นไม่ได้');
   }
 
+  // ---------- กลุ่มเครื่องจักร (ไลน์ย่อย) — server เรียงตามกลุ่มให้แล้ว ----------
+  function groupMachines(list) {
+    const out = [];
+    (list || []).forEach((m) => {
+      const g = m.group || 'อื่นๆ';
+      let e = out.find((x) => x.group === g);
+      if (!e) { e = { group: g, machines: [] }; out.push(e); }
+      e.machines.push(m);
+    });
+    return out;
+  }
+
+  /** ปุ่มเครื่องแยกตามกลุ่ม: btnFn(machine) → html ของปุ่ม */
+  function machineGridHtml(list, btnFn) {
+    return groupMachines(list).map((g) => `<div class="machine-group"><div class="machine-group-title">${esc(g.group)}</div>
+      <div class="machine-grid">${g.machines.map(btnFn).join('')}</div></div>`).join('');
+  }
+
+  /** <option> แยกตามกลุ่ม (optgroup) */
+  function machineOptions(list) {
+    return groupMachines(list).map((g) => `<optgroup label="${esc(g.group)}">${g.machines.map((m) =>
+      `<option value="${esc(m.machineId)}">${esc(m.machineName)}</option>`).join('')}</optgroup>`).join('');
+  }
+
   /** placeholder ตอนยังไม่มีข้อมูล master */
   function emptyState(icon, text) {
     return `<div class="empty-state"><i class="bi ${icon}"></i><div>${text}</div></div>`;
@@ -245,6 +269,6 @@ const UI = (() => {
   return {
     isDesktop, applyDeviceClass, esc, showToast, showLoading, hideLoading, renderTopNav, renderNav, initPage,
     openModal, closeModal, getBkkHour, getToday, addDays, nowLocalInput, hourToPeriod, getTimePeriods, currentPeriod,
-    isDayHour, getShiftInfo, formatNumber, formatDate, timeAgo, getLineConfig, emptyState, statusLabel, downloadText, withButton
+    isDayHour, getShiftInfo, formatNumber, formatDate, timeAgo, getLineConfig, groupMachines, machineGridHtml, machineOptions, emptyState, statusLabel, downloadText, withButton
   };
 })();

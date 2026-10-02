@@ -103,6 +103,9 @@ body.is-mobile .desktop-only { display: none !important; }
 .machine-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 .machine-btn.active small { color: #e3ecff; }
 
+.machine-group + .machine-group { margin-top: 12px; }
+.machine-group-title { font-size: 13px; font-weight: 700; color: var(--gray); margin-bottom: 6px; }
+
 /* ----- choice grids ----- */
 .choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
 .choice-btn { padding: 12px 8px; border-radius: var(--radius-sm); border: 2px solid var(--gray-light); background: #fff; cursor: pointer; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 4px; }

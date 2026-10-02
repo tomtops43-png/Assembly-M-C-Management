@@ -14,7 +14,7 @@
   <div class="grid-2">
     <div class="card">
       <div class="card-title"><i class="bi bi-box-seam"></i> รับวัตถุดิบ</div>
-      <div class="form-group"><label class="form-label">เครื่องจักร</label><div class="machine-grid" id="machineGrid"></div></div>
+      <div class="form-group"><label class="form-label">เครื่องจักร</label><div id="machineGrid"></div></div>
       <div id="bomBox" class="hidden">
         <div class="form-group"><label class="form-label">เลือกจาก BOM</label><select class="form-input" id="bomSel"></select></div>
         <div class="form-row">
@@ -63,7 +63,7 @@
   let machines = [], bom = [], selMachine = '', photos = [], rawFiles = [];
 
   function renderMachines() {
-    $('machineGrid').innerHTML = machines.map((m) => `<button class="machine-btn ${selMachine === m.machineId ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.machineId)}<small>${UI.esc(m.assignedProducts.join(', ') || '-')}</small></button>`).join('') || UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร');
+    $('machineGrid').innerHTML = UI.machineGridHtml(machines, (m) => `<button class="machine-btn ${selMachine === m.machineId ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.machineName)}<small>${UI.esc(m.assignedProducts.join(', ') || '-')}</small></button>`) || UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร');
   }
   $('machineGrid').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-m]'); if (!b) return;

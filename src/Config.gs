@@ -59,6 +59,9 @@ var LINE_CONFIG = {
 
   INBOX_AM_CHECKSHEET: false, // TODO(ข้อมูลไลน์) ต้องการข้อความ AM Check Sheet ทุกวันไหม
 
+  // กลุ่มเครื่องจักร (ไลน์ย่อย) — ใช้จัดลำดับการแสดงผล ; กลุ่มที่ไม่อยู่ในรายการจะต่อท้าย
+  MACHINE_GROUPS: ['Arc chute', 'GV.2', 'Arc Stack'],
+
   // โมดูลที่เปิดใช้ (ปิดได้)  — cost/labor เปิดในเฟส 2
   MODULES: {
     production: true, dailycheck: true, inbox: true, maintenance: true, joborders: true,
@@ -68,7 +71,16 @@ var LINE_CONFIG = {
 
   // ---- Seed (initializeSystem) — ว่างไว้ก่อน กรอกผ่านหน้า "จัดการ" ได้ ----
   SEED: {
-    machines: [],        // TODO(ข้อมูลไลน์) [{ id:'AM-01', name:'Assembly 1', capacity:0 }]
+    // กลุ่ม (ไลน์ย่อย) → เครื่อง ; Capacity รอข้อมูล  TODO(ข้อมูลไลน์)
+    machines: [
+      { id: 'AC-06', name: 'Arc chute 06', group: 'Arc chute', capacity: 0 },
+      { id: 'AC-07', name: 'Arc chute 07', group: 'Arc chute', capacity: 0 },
+      { id: 'AC-08', name: 'Arc chute 08', group: 'Arc chute', capacity: 0 },
+      { id: 'AC-BETA', name: 'Arc chute Beta', group: 'Arc chute', capacity: 0 },
+      { id: 'GV-2', name: 'GV.2', group: 'GV.2', capacity: 0 },
+      { id: 'AS-MED', name: 'Arc Stack medium', group: 'Arc Stack', capacity: 0 },
+      { id: 'AS-HIGH', name: 'Arc Stack High', group: 'Arc Stack', capacity: 0 }
+    ],
     products: [],        // TODO(ข้อมูลไลน์) [{ code:'', name:'', defaultQty:0, unitPrice:0 }]
     bom: [],             // TODO(ข้อมูลไลน์) [{ productCode:'', componentCode:'', componentName:'', qtyPerUnit:1, supplier:'' }]
     materialAliases: [], // TODO(ข้อมูลไลน์) [{ alias:'', canonical:'' }]
@@ -83,7 +95,7 @@ var SHEET_SCHEMAS = {
   Products: ['ProductCode', 'ProductName', 'DefaultQty', 'Active', 'UnitPrice'],
   BOM: ['ProductCode', 'ComponentCode', 'ComponentName', 'QtyPerUnit', 'Supplier'],
   MaterialAlias: ['AliasCode', 'CanonicalCode', 'Note', 'Active'],
-  Machines: ['MachineID', 'MachineName', 'Line', 'Status', 'AssignedProducts', 'CurrentProduct', 'Capacity', 'CurrentJobOrder', 'Installed'],
+  Machines: ['MachineID', 'MachineName', 'Line', 'Status', 'AssignedProducts', 'CurrentProduct', 'Capacity', 'CurrentJobOrder', 'Installed', 'MachineGroup'],
   JobOrders: ['JobOrderID', 'CreatedAt', 'CreatedBy', 'CreatedByName', 'WorkDate', 'DueDate', 'MachineID', 'ProductCode', 'Shift', 'PlannedQty', 'Priority', 'Status', 'Remark'],
   WasteTypes: ['TypeID', 'TypeName', 'Active', 'CreatedAt', 'CreatedBy'],
   AlarmTypes: ['TypeID', 'TypeName', 'Active', 'CreatedAt', 'CreatedBy'],
@@ -112,7 +124,7 @@ function getPublicLineConfig() {
     defaultQty: c.DEFAULT_QTY, defectAggregate: c.DEFECT_AGGREGATE, ngRowSeparate: c.NG_ROW_SEPARATE,
     ngReasons: c.NG_REASONS, defectPartGroups: c.DEFECT_PART_GROUPS,
     sortingProcesses: c.SORTING_PROCESSES, sortingFgProcesses: c.SORTING_FG_PROCESSES,
-    issueTypes: c.ISSUE_TYPES, dailyCheck: c.DAILY_CHECK, modules: c.MODULES,
+    issueTypes: c.ISSUE_TYPES, machineGroups: c.MACHINE_GROUPS, dailyCheck: c.DAILY_CHECK, modules: c.MODULES,
     netHoursPerShift: c.NET_HOURS_PER_SHIFT
   };
 }

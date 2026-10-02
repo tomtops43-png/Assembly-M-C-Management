@@ -14,7 +14,7 @@
   <div class="grid-2">
     <div class="card">
       <div class="card-title"><i class="bi bi-wrench"></i> แจ้งซ่อมใหม่</div>
-      <div class="form-group"><label class="form-label">1. เครื่องจักร</label><div class="machine-grid" id="machineGrid"></div></div>
+      <div class="form-group"><label class="form-label">1. เครื่องจักร</label><div id="machineGrid"></div></div>
       <div class="form-group"><label class="form-label">2. ประเภทปัญหา</label><div class="choice-grid" id="issueGrid"></div></div>
       <div class="form-group"><label class="form-label">3. ความเร่งด่วน</label><div class="choice-grid" id="prioGrid"></div></div>
       <div class="form-group"><label class="form-label">4. เวลาที่พบปัญหา</label><input type="datetime-local" class="form-input" id="reportTime"></div>
@@ -75,7 +75,7 @@
   let sel = { machineId: '', issueType: '', priority: 'medium' }, symptoms = [], photos = [], rPhotos = [], reqId = null, resolving = null;
 
   function renderChoices() {
-    $('machineGrid').innerHTML = machines.filter((m) => m.installed).map((m) => `<button class="machine-btn status-${m.status} ${sel.machineId === m.machineId ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.machineId)}<small>${UI.statusLabel(m.status)}</small></button>`).join('') || UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร');
+    $('machineGrid').innerHTML = UI.machineGridHtml(machines.filter((m) => m.installed), (m) => `<button class="machine-btn status-${m.status} ${sel.machineId === m.machineId ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.machineName)}<small>${UI.statusLabel(m.status)}</small></button>`) || UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร');
     $('issueGrid').innerHTML = cfg.issueTypes.map((i) => `<button class="choice-btn ${sel.issueType === i.key ? 'active' : ''}" data-i="${i.key}"><i class="bi ${i.icon}"></i>${UI.esc(i.label)}</button>`).join('');
     $('prioGrid').innerHTML = PRIOS.map((p) => `<button class="choice-btn ${sel.priority === p.k ? 'active' : ''}" data-p="${p.k}">${p.l}</button>`).join('');
   }
@@ -132,7 +132,7 @@
     $('tickets').innerHTML = tickets.length ? tickets.map((t) => {
       const canEdit = t.status === 'open' && (t.reportedBy === user.employeeId || isSup) && (user.role === 'admin' || t.date === today);
       return `<div class="entry-card priority-${t.priority}">
-        <div class="entry-head"><span>${UI.esc(t.machineId)} · ${UI.esc(issueLabel(t.issueType))}</span><span class="badge badge-${t.status}">${t.status === 'open' ? 'รอรับงาน' : 'กำลังซ่อม'}</span></div>
+        <div class="entry-head"><span>${UI.esc(mName(t.machineId))} · ${UI.esc(issueLabel(t.issueType))}</span><span class="badge badge-${t.status}">${t.status === 'open' ? 'รอรับงาน' : 'กำลังซ่อม'}</span></div>
         <div class="small mt-1">${UI.esc(t.description)}</div>
         <div class="entry-meta">${UI.esc(t.ticketId)} · ${UI.esc(t.reporterName)} · ผ่านไป ${UI.timeAgo(t.timestamp)} ${t.assignedTo ? '· ช่าง ' + UI.esc(t.assignedTo) : ''}</div>
         <div class="entry-actions">
@@ -144,6 +144,7 @@
         </div></div>`;
     }).join('') : UI.emptyState('bi-check2-circle', 'ไม่มีใบแจ้งซ่อมค้าง');
   }
+  function mName(id) { const m = machines.find((x) => x.machineId === id); return m ? m.machineName : id; }
   function issueLabel(k) { const i = cfg.issueTypes.find((x) => x.key === k); return i ? i.label : k; }
   $('tickets').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-act]');
@@ -169,7 +170,7 @@
     $('dTitle').textContent = t.ticketId;
     const img = (u) => `<a href="${UI.esc(u)}" target="_blank" rel="noopener" class="photo-thumb">${u.includes('thumbnail') ? `<img src="${UI.esc(u)}">` : 'ไฟล์'}</a>`;
     $('dBody').innerHTML = `<table class="data-table"><tbody>
-      <tr><th>เครื่อง</th><td>${UI.esc(t.machineId)}</td></tr><tr><th>ประเภท</th><td>${UI.esc(issueLabel(t.issueType))}</td></tr>
+      <tr><th>เครื่อง</th><td>${UI.esc(mName(t.machineId))}</td></tr><tr><th>ประเภท</th><td>${UI.esc(issueLabel(t.issueType))}</td></tr>
       <tr><th>ความเร่งด่วน</th><td>${UI.esc(t.priority)}</td></tr><tr><th>แจ้งเมื่อ</th><td>${UI.esc(t.timestamp)} (${UI.esc(t.shiftDN)} ${UI.esc(t.shiftAB)})</td></tr>
       <tr><th>ผู้แจ้ง</th><td>${UI.esc(t.reporterName)}</td></tr><tr><th>รายละเอียด</th><td style="white-space:normal">${UI.esc(t.description)}</td></tr>
       <tr><th>ผลการซ่อม</th><td style="white-space:normal">${UI.esc(t.resolution || '-')}</td></tr></tbody></table>

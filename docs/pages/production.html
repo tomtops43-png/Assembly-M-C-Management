@@ -23,7 +23,7 @@
 
   <div class="card">
     <div class="card-title"><i class="bi bi-gear"></i> 1. เลือกเครื่องจักร</div>
-    <div class="machine-grid" id="machineGrid"></div>
+    <div id="machineGrid"></div>
   </div>
 
   <div class="card hidden" id="formCard">
@@ -169,9 +169,9 @@
   function renderMachines() {
     const list = (master.machines || []).filter((m) => m.installed);
     if (!list.length) { $('machineGrid').innerHTML = UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร — ให้ admin เพิ่มที่เมนู "จัดการ"'); return; }
-    $('machineGrid').innerHTML = list.map((m) => `
+    $('machineGrid').innerHTML = UI.machineGridHtml(list, (m) => `
       <button class="machine-btn status-${m.status} ${selMachine && selMachine.machineId === m.machineId ? 'active' : ''}" data-id="${UI.esc(m.machineId)}" ${m.status === 'down' ? 'disabled' : ''}>
-        ${UI.esc(m.machineId)}<small>${UI.esc(m.currentProduct || 'ยังไม่ตั้งสินค้า')}</small></button>`).join('');
+        ${UI.esc(m.machineName)}<small>${UI.esc(m.currentProduct || 'ยังไม่ตั้งสินค้า')}</small></button>`);
   }
   $('machineGrid').addEventListener('click', (e) => {
     const b = e.target.closest('[data-id]');
@@ -273,7 +273,7 @@
     const sig = JSON.stringify(data);
     if (sig !== pendingSig) { pendingSig = sig; pendingReqId = API.newRequestId(); }
     data.clientRequestId = pendingReqId;
-    if (!confirm(`ยืนยันบันทึก ${data.machineId} ช่วง ${data.timePeriod}\nFG ${data.actualQty}  NG ${data.defectQty}`)) return;
+    if (!confirm(`ยืนยันบันทึก ${selMachine.machineName} ช่วง ${data.timePeriod}\nFG ${data.actualQty}  NG ${data.defectQty}`)) return;
     const res = await API.post('submitProduction', { data });
     if (res.settingsChanged) { UI.showToast(res.message, 'warning'); await loadAll(true); return; }
     if (!res.success) return UI.showToast(res.message, 'error');
@@ -283,6 +283,8 @@
     $('ngReason').value = ''; $('ngReasonOther').value = ''; recalcNg();
     loadEntries(); loadJoProgress();
   });
+
+  function machineName(id) { const m = master && master.machines.find((x) => x.machineId === id); return m ? m.machineName : id; }
 
   // ---------- รายการย้อนหลัง ----------
   async function loadEntries() {
@@ -294,7 +296,7 @@
     if (!entries.length) { $('entries').innerHTML = UI.emptyState('bi-inbox', 'ยังไม่มีรายการ'); return; }
     $('entries').innerHTML = entries.map((e) => `
       <div class="entry-card ${e.status === 'cancelled' ? 'cancelled' : ''}">
-        <div class="entry-head"><span>${UI.esc(e.machineId)} ${e.shift ? '[' + UI.esc(e.shift) + ']' : ''}</span>
+        <div class="entry-head"><span>${UI.esc(machineName(e.machineId))} ${e.shift ? '[' + UI.esc(e.shift) + ']' : ''}</span>
           <span><span class="text-success">${UI.formatNumber(e.actualQty)}</span> / ${UI.formatNumber(e.plannedQty)} ${e.defectQty ? `<span class="badge badge-down">NG ${e.defectQty}</span>` : ''}</span></div>
         <div class="entry-meta">${UI.formatDate(e.date)} (${UI.esc(e.timePeriod)}) · ${UI.esc(e.productCode)} ${e.jobOrderId ? '· JO ' + UI.esc(e.jobOrderId) : ''} ${e.remark ? '· ' + UI.esc(e.remark) : ''}
           ${user.role === 'admin' ? '· ' + UI.esc(e.employeeName) : ''}</div>

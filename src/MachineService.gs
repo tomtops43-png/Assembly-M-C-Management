@@ -9,16 +9,31 @@ function splitList(s) {
 
 function machineToObj(m) {
   return {
-    machineId: String(m.MachineID), machineName: m.MachineName, line: m.Line, status: m.Status || 'running',
+    machineId: String(m.MachineID), machineName: m.MachineName || String(m.MachineID), group: String(m.MachineGroup || ''), line: m.Line, status: m.Status || 'running',
     assignedProducts: splitList(m.AssignedProducts), currentProduct: String(m.CurrentProduct || ''),
     currentJobOrder: String(m.CurrentJobOrder || ''), capacity: toNumber(m.Capacity),
     installed: m.Installed === '' || m.Installed === undefined ? true : isActiveValue(m.Installed)
   };
 }
 
+function groupRank(g) {
+  var i = LINE_CONFIG.MACHINE_GROUPS.indexOf(g);
+  return i < 0 ? LINE_CONFIG.MACHINE_GROUPS.length : i;
+}
+
+function seedRank(id) {
+  var ids = LINE_CONFIG.SEED.machines.map(function (m) { return m.id; });
+  var i = ids.indexOf(id);
+  return i < 0 ? ids.length : i;
+}
+
+/** เรียงตามลำดับกลุ่มใน Config → ลำดับใน SEED → รหัสเครื่อง */
 function getMachines() {
-  return getMasterData().machines.map(machineToObj)
-    .sort(function (a, b) { return a.machineId.localeCompare(b.machineId, undefined, { numeric: true }); });
+  return getMasterData().machines.map(machineToObj).sort(function (a, b) {
+    return (groupRank(a.group) - groupRank(b.group)) || a.group.localeCompare(b.group) ||
+      (seedRank(a.machineId) - seedRank(b.machineId)) ||
+      a.machineId.localeCompare(b.machineId, undefined, { numeric: true });
+  });
 }
 
 function getMachine(machineId) {
@@ -79,13 +94,13 @@ function saveMachine(token, d) {
   var exists = findRow('Machines', 'MachineID', id);
   if (exists) {
     updateRow('Machines', 'MachineID', id, {
-      MachineName: d.machineName, Capacity: toNumber(d.capacity), Installed: d.installed !== false
+      MachineName: d.machineName, MachineGroup: d.group || '', Capacity: toNumber(d.capacity), Installed: d.installed !== false
     });
   } else {
     appendRow('Machines', {
       MachineID: id, MachineName: d.machineName, Line: LINE_CONFIG.LINE_CODE, Status: 'running',
       AssignedProducts: '', CurrentProduct: '', Capacity: toNumber(d.capacity), CurrentJobOrder: '',
-      Installed: d.installed !== false
+      Installed: d.installed !== false, MachineGroup: d.group || ''
     });
   }
   logAction(u, exists ? 'updateMachine' : 'addMachine', { machineId: id });

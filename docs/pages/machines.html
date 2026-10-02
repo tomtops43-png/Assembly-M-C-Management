@@ -27,7 +27,7 @@
   <div class="card">
     <div class="card-title"><i class="bi bi-cpu"></i> <span id="lineTitle"></span><span class="spacer"></span>
       <button class="btn btn-outline btn-sm" id="refresh"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button></div>
-    <div class="mc-grid" id="grid"></div>
+    <div id="grid"></div>
   </div>
 </div></main>
 
@@ -81,19 +81,21 @@
     $('kDown').textContent = machines.filter((m) => m.installed && m.status === 'down').length;
     if (!machines.length) { $('grid').innerHTML = UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร — admin เพิ่มได้ที่เมนู "จัดการ"'); return; }
     const icons = { running: 'bi-play-circle-fill text-success', maintenance: 'bi-tools text-warning', down: 'bi-stop-circle-fill text-danger' };
-    $('grid').innerHTML = machines.map((m) => {
+    const card = (m) => {
       const jo = joProgress[m.currentJobOrder];
       const pct = jo && jo.plannedQty ? Math.min(100, jo.actualQty / jo.plannedQty * 100) : 0;
       return `<div class="mc-card ${m.status} ${m.installed ? '' : 'not-installed'}" data-id="${UI.esc(m.machineId)}">
-        <div class="d-flex justify-between align-center"><span class="mc-name"><i class="bi ${icons[m.status] || ''}"></i> ${UI.esc(m.machineId)}</span>
+        <div class="d-flex justify-between align-center"><span class="mc-name"><i class="bi ${icons[m.status] || ''}"></i> ${UI.esc(m.machineName)}</span>
           <span class="badge badge-${m.status}">${UI.statusLabel(m.status)}</span></div>
-        <div class="small text-gray">${UI.esc(m.machineName)} ${m.capacity ? '· ' + m.capacity + ' ชิ้น/ชม.' : ''} ${m.installed ? '' : '· ไม่ได้ติดตั้ง'}</div>
+        <div class="small text-gray">${UI.esc(m.machineId)} ${m.capacity ? '· ' + m.capacity + ' ชิ้น/ชม.' : ''} ${m.installed ? '' : '· ไม่ได้ติดตั้ง'}</div>
         <span class="tag"><i class="bi bi-box"></i> ${UI.esc(m.currentProduct || 'ยังไม่ตั้งสินค้า')}</span>
         ${m.currentJobOrder ? `<span class="tag"><i class="bi bi-calendar2-week"></i> ${UI.esc(m.currentJobOrder)}</span>` : ''}
         ${jo ? `<div class="progress-bar-container mt-2"><div class="progress-bar-fill ${pct >= 100 ? 'over' : pct >= 90 ? 'near' : ''}" style="width:${pct}%"></div></div>
           <div class="small text-gray mt-1">${UI.formatNumber(jo.actualQty)} / ${UI.formatNumber(jo.plannedQty)} (${jo.completionRate}%)</div>` : ''}
       </div>`;
-    }).join('');
+    };
+    $('grid').innerHTML = UI.groupMachines(machines).map((g) => `<div class="machine-group-title mt-2">${UI.esc(g.group)} · ${g.machines.length} เครื่อง</div>
+      <div class="mc-grid mb-3">${g.machines.map(card).join('')}</div>`).join('');
   }
 
   $('grid').addEventListener('click', (e) => { const c = e.target.closest('[data-id]'); if (c) openMachine(c.dataset.id); });
@@ -101,7 +103,7 @@
 
   async function openMachine(id) {
     current = machines.find((m) => m.machineId === id);
-    $('mTitle').textContent = `${current.machineId} — ${current.machineName}`;
+    $('mTitle').textContent = `${current.machineName} (${current.machineId})${current.group ? ' · ' + current.group : ''}`;
     $('mStats').innerHTML = '<div class="small text-gray">กำลังโหลด...</div>';
     renderProducts(current.currentProduct);
     $('mAssign').classList.toggle('hidden', !isSup);

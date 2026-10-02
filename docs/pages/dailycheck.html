@@ -27,7 +27,7 @@
   </div>
   <div class="card">
     <div class="card-title"><i class="bi bi-gear"></i> เลือกเครื่อง</div>
-    <div class="machine-grid" id="machineGrid"></div>
+    <div id="machineGrid"></div>
   </div>
   <div class="card hidden" id="periodCard">
     <div class="card-title"><i class="bi bi-clock"></i> เลือกชั่วโมง <span class="small text-gray">(เขียว = Accept, แดง = Reject)</span></div>
@@ -77,10 +77,10 @@
     return order.indexOf(p) > order.indexOf(UI.currentPeriod());
   }
   function render() {
-    $('machineGrid').innerHTML = data.machines.map((m) => {
+    $('machineGrid').innerHTML = UI.machineGridHtml(data.machines, (m) => {
       const n = data.checks.filter((c) => c.machineId === m.machineId).length;
-      return `<button class="machine-btn ${selMachine === m.machineId ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.machineId)}<small>${n}/24</small></button>`;
-    }).join('') || UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร');
+      return `<button class="machine-btn ${selMachine === m.machineId ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.machineName)}<small>${n}/24</small></button>`;
+    }) || UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร');
     $('periodCard').classList.toggle('hidden', !selMachine);
     if (selMachine) {
       $('periodGrid').innerHTML = data.timePeriods.map((p) => {
@@ -90,7 +90,7 @@
     }
     // ใบแบบกระดาษ: คอลัมน์ = ชั่วโมงที่ 1..24 (คอลัมน์ "9" = 08:00-08:59)
     const head = data.timePeriods.map((p) => `<th>${(Number(p.slice(0, 2)) + 1) % 24 || 24}</th>`).join('');
-    $('sheet').innerHTML = `<thead><tr><th>เครื่อง</th>${head}</tr></thead><tbody>` + data.machines.map((m) => `<tr><td class="fw-bold">${UI.esc(m.machineId)}</td>` +
+    $('sheet').innerHTML = `<thead><tr><th>เครื่อง</th>${head}</tr></thead><tbody>` + data.machines.map((m) => `<tr><td class="fw-bold">${UI.esc(m.machineName)}</td>` +
       data.timePeriods.map((p) => { const c = checkOf(m.machineId, p); return `<td class="${!c && !isFuture(p) ? 'due' : ''}">${c ? (c.decision === 'Accept' ? '/' : '<b class="text-danger">X</b>') : ''}</td>`; }).join('') + '</tr>').join('') + '</tbody>';
   }
   $('machineGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (b) { selMachine = b.dataset.m; try { localStorage.setItem(P + 'dailycheck_machines_v1', selMachine); } catch (er) {} render(); } });
@@ -102,7 +102,7 @@
     const c = checkOf(selMachine, p);
     if (c && c.recordedBy !== user.employeeId && !isSup) return UI.showToast('ช่องนี้บันทึกโดย ' + c.recorderName + ' แล้ว', 'info');
     results = c ? c.results.slice() : data.items.map(() => '');
-    $('fTitle').textContent = `${selMachine} · ${p}`;
+    $('fTitle').textContent = `${(data.machines.find((m) => m.machineId === selMachine) || {}).machineName || selMachine} · ${p}`;
     $('fShift').value = c ? c.shift : (user.shift || localStorage.getItem(SHIFT_KEY) || '');
     $('fShift').disabled = !!user.shift || !!c;
     $('fRemark').value = c ? c.remark : '';

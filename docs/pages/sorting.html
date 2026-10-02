@@ -175,7 +175,7 @@
     cfg = await UI.getLineConfig();
     const [m, p] = await Promise.all([API.get('getMachines'), API.get('getProducts')]);
     machines = m.success ? m.data.filter((x) => x.installed) : []; products = p.success ? p.data : [];
-    $('machine').innerHTML = machines.map((x) => `<option value="${UI.esc(x.machineId)}">${UI.esc(x.machineId)}</option>`).join('') || '<option value="">ยังไม่มีเครื่อง</option>';
+    $('machine').innerHTML = UI.machineOptions(machines) || '<option value="">ยังไม่มีเครื่อง</option>';
     $('product').innerHTML = products.map((x) => `<option value="${UI.esc(x.productCode)}">${UI.esc(x.productCode)}</option>`).join('') || '<option value="">ยังไม่มีสินค้า</option>';
     $('reason').innerHTML = '<option value="">— เลือก —</option>' + cfg.ngReasons.map((r) => `<option>${UI.esc(r)}</option>`).join('');
     $('date').max = UI.getToday(); $('date').value = UI.getToday();

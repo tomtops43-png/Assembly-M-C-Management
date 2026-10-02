@@ -165,7 +165,7 @@ function seedInitialData() {
   var now = formatDate();
   if (getAllRows('Machines').length === 0) {
     seed.machines.forEach(function (m) {
-      appendRow('Machines', { MachineID: m.id, MachineName: m.name, Line: LINE_CONFIG.LINE_CODE, Status: 'running',
+      appendRow('Machines', { MachineID: m.id, MachineName: m.name, MachineGroup: m.group || '', Line: LINE_CONFIG.LINE_CODE, Status: 'running',
         AssignedProducts: seed.products.map(function (p) { return p.code; }).join(', '), CurrentProduct: '',
         Capacity: m.capacity || 0, CurrentJobOrder: '', Installed: true });
     });

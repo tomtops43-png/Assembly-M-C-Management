@@ -133,7 +133,7 @@
       ${topReason ? `อาการ NG อันดับ 1: <b>${UI.esc(topReason)}</b> (${n(data.ngByReason[topReason])} ชิ้น).` : ''}
       แจ้งซ่อม ${data.maintenance.total} ใบ (ค้าง ${data.maintenance.open}) downtime ${n(data.maintenance.downtime)} นาที.`;
 
-    chart('cMachine', { type: 'bar', data: { labels: data.byMachine.map((m) => m.machineId), datasets: [
+    chart('cMachine', { type: 'bar', data: { labels: data.byMachine.map((m) => m.machineName), datasets: [
       { label: 'FG', data: data.byMachine.map((m) => m.actual), backgroundColor: '#34a853', yAxisID: 'y' },
       { label: 'NG', data: data.byMachine.map((m) => m.defect), backgroundColor: '#ea4335', yAxisID: 'y' },
       { label: '% OEE', type: 'line', data: data.byMachine.map((m) => m.oee), borderColor: '#1a73e8', yAxisID: 'y1' }] },
