@@ -65,7 +65,7 @@ function submitMaintenanceTicket(token, data) {
 
   var reportTime = parseDate(data.reportTime) || new Date();
   var ticketId = makeId('MT');
-  var photos = savePhotos(data.photos, ticketId + '_report', ticketId);
+  var photos = savePhotos(data.photos, ticketId + '_แจ้ง', { category: 'maintenance', date: getWorkDate(reportTime), sub: ticketId + '_' + data.machineId });
   appendRow('MaintenanceLog', {
     TicketID: ticketId, Timestamp: formatDate(reportTime), Date: getWorkDate(reportTime), ShiftAB: u.shift || '',
     ShiftDN: detectShift(reportTime), ReportedBy: u.employeeId, ReporterName: u.name, MachineID: data.machineId,
@@ -129,7 +129,7 @@ function updateTicketStatus(token, ticketId, status, resolution, photos, resolve
     upd.Status = status; upd.Resolution = resolution; upd.ResolvedAt = formatDate(resolvedAt);
     upd.DowntimeMinutes = minutesBetween(t.timestamp, resolvedAt);
     if (!t.assignedTo) upd.AssignedTo = u.name;
-    var saved = savePhotos(photos, ticketId + '_resolved', ticketId);
+    var saved = savePhotos(photos, ticketId + '_ซ่อมเสร็จ', { category: 'maintenance', date: t.date, sub: ticketId + '_' + t.machineId });
     if (saved.length) upd.ResolutionPhotos = saved.join(', ');
   } else {
     throw new Error('สถานะไม่ถูกต้อง');
