@@ -125,6 +125,7 @@ function runAction(table, name, arg) {
 }
 
 function doGet(e) {
+  ensureDataMigrations();
   var p = (e && e.parameter) || {};
   if (p.payload) {
     var body;
@@ -136,6 +137,7 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  ensureDataMigrations();
   var body;
   try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); }
   catch (err) { return jsonOut({ success: false, message: 'body ไม่ถูกต้อง' }); }
@@ -151,6 +153,7 @@ function handlePostAction(body) {
 function initializeSystem() {
   Object.keys(SHEET_SCHEMAS).forEach(function (name) { ensureSheetExists(name, SHEET_SCHEMAS[name]); });
   seedInitialData();
+  migrateProductCodes(); // ชีทที่ seed ไว้ด้วยรหัสชั่วคราว → รหัส FG จริง
   // ลบชีทว่างตั้งต้น (ชีต1 / Sheet1) ถ้าไม่มีข้อมูล
   ['ชีต1', 'Sheet1'].forEach(function (n) {
     var sh = getSheet(n);
