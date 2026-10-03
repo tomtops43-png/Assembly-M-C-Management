@@ -270,8 +270,11 @@
     const ng = readComponents($('componentInputs'));
     $('defectQty').value = ng.total;
     $('ngReasonGroup').classList.toggle('hidden', ng.total <= 0);
-    $('ngHint').textContent = cfg.defectAggregate === 'sum' ? 'NG = ผลรวมของชิ้นส่วน' : 'NG = ค่าสูงสุดของชิ้นส่วน';
+    const both = cfg.ngRowSeparate && ng.total > 0 && (Number($('actualQty').value) || 0) > 0;
+    $('ngHint').textContent = both ? 'มีทั้ง FG และ NG → ระบบบันทึกแยกเป็น 2 รายการให้อัตโนมัติ'
+      : (cfg.defectAggregate === 'sum' ? 'NG = ผลรวมของชิ้นส่วน' : 'NG = ค่าสูงสุดของชิ้นส่วน');
   }
+  $('actualQty').addEventListener('input', recalcNg);
   $('ngReason').addEventListener('change', () => $('ngReasonOther').classList.toggle('hidden', $('ngReason').value !== OTHER));
 
   // ---------- บันทึก ----------
@@ -293,7 +296,7 @@
     if (res.settingsChanged) { UI.showToast(res.message, 'warning'); await loadAll(true); return; }
     if (!res.success) return UI.showToast(res.message, 'error');
     pendingSig = ''; pendingReqId = null;
-    UI.showToast(res.duplicate ? 'รายการนี้บันทึกไว้แล้ว' : 'บันทึกสำเร็จ', 'success');
+    UI.showToast(res.duplicate ? 'รายการนี้บันทึกไว้แล้ว' : res.split ? 'บันทึกสำเร็จ (แยกเป็น FG 1 รายการ + NG 1 รายการ)' : 'บันทึกสำเร็จ', 'success');
     $('componentInputs').querySelectorAll('input').forEach((i) => { i.value = ''; });
     $('ngReason').value = ''; $('ngReasonOther').value = ''; recalcNg();
     loadEntries(); loadJoProgress();
@@ -345,6 +348,9 @@
     const ng = readComponents($('eComponents'));
     const remark = ng.total > 0 ? reasonValue($('eReason'), $('eReasonOther')) : '';
     if (ng.total > 0 && !remark) return UI.showToast('กรุณาระบุอาการ NG', 'warning');
+    if (cfg.ngRowSeparate && ng.total > 0 && (Number($('eActual').value) || 0) > 0) {
+      return UI.showToast('รายการเดียวใส่ได้อย่างใดอย่างหนึ่ง: FG หรือ NG — ถ้าต้องการเพิ่ม NG ให้บันทึกรายการใหม่', 'warning');
+    }
     const res = await API.post('updateProductionEntry', { logId: editing.logId, updates: {
       actualQty: Number($('eActual').value) || 0, defectQty: ng.total, defectByComponent: ng.details, remark } });
     if (!res.success) return UI.showToast(res.message, 'error');
