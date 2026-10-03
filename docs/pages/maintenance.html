@@ -90,7 +90,18 @@
 
   // อาการ
   function renderSymptoms() { $('symptomChips').innerHTML = symptoms.map((s, i) => `<span class="chip">${UI.esc(s)} <button data-rs="${i}">&times;</button></span>`).join(''); }
-  $('symptomAdd').onclick = () => { const v = $('symptomSel').value; if (v && !symptoms.includes(v)) { symptoms.push(v); renderSymptoms(); } };
+  // เพิ่มอาการ: เลือกจาก dropdown หรือพิมพ์ในช่องด้านล่างแล้วกด "เพิ่ม"
+  $('symptomAdd').onclick = () => {
+    let v = $('symptomSel').value;
+    if (!v) {
+      v = $('desc').value.trim();
+      if (!v) return UI.showToast('เลือกอาการจากรายการ หรือพิมพ์อาการในช่องด้านล่างแล้วกด "เพิ่ม"', 'warning');
+      $('desc').value = '';
+      if (![...$('symptomSel').options].some((o) => o.value === v)) $('symptomSel').insertAdjacentHTML('beforeend', `<option>${UI.esc(v)}</option>`);
+    }
+    if (!symptoms.includes(v)) { symptoms.push(v); renderSymptoms(); }
+    $('symptomSel').value = '';
+  };
   $('symptomChips').addEventListener('click', (e) => { const b = e.target.closest('[data-rs]'); if (b) { symptoms.splice(Number(b.dataset.rs), 1); renderSymptoms(); } });
 
   // รูป
