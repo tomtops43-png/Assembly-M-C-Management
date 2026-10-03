@@ -208,6 +208,7 @@ var SHEET_SCHEMAS = {
   MaterialAlias: ['AliasCode', 'CanonicalCode', 'Note', 'Active'],
   Machines: ['MachineID', 'MachineName', 'Line', 'Status', 'AssignedProducts', 'CurrentProduct', 'Capacity', 'CurrentJobOrder', 'Installed', 'MachineGroup'],
   JobOrders: ['JobOrderID', 'CreatedAt', 'CreatedBy', 'CreatedByName', 'WorkDate', 'DueDate', 'MachineID', 'ProductCode', 'Shift', 'PlannedQty', 'Priority', 'Status', 'Remark'],
+  NgReasons: ['ReasonID', 'ReasonName', 'MachineGroup', 'Active', 'CreatedAt', 'CreatedBy'],
   WasteTypes: ['TypeID', 'TypeName', 'Active', 'CreatedAt', 'CreatedBy'],
   AlarmTypes: ['TypeID', 'TypeName', 'Active', 'CreatedAt', 'CreatedBy'],
   Positions: ['PositionID', 'PositionName', 'Category', 'Active', 'CreatedAt', 'CreatedBy'],

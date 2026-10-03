@@ -27,7 +27,10 @@
         <div class="form-group"><label class="form-label">จำนวนที่ต้อง Sort</label><input type="number" class="form-input" id="qty"></div>
       </div>
       <div class="form-group"><label class="form-label">กระบวนการที่พบ</label><div class="choice-grid" id="procGrid"></div></div>
-      <div class="form-group"><label class="form-label">หมายเหตุ <span class="req">*</span></label><select class="form-input" id="reason"></select>
+      <div class="form-group"><label class="form-label">หมายเหตุ / อาการ NG <span class="req">*</span></label>
+        <div class="d-flex gap-2"><select class="form-input" id="reason"></select>
+          <button class="btn btn-outline" type="button" id="reasonAdd"><i class="bi bi-plus-lg"></i> เพิ่มอาการ</button>
+          <button class="btn btn-outline" type="button" id="reasonDel" title="ลบอาการที่เลือกออกจากรายการ"><i class="bi bi-trash"></i></button></div>
         <input class="form-input mt-2 hidden" id="reasonOther" placeholder="ระบุ"></div>
       <button class="btn btn-primary btn-full btn-lg" id="register">ลงทะเบียน</button>
     </div>
@@ -79,6 +82,10 @@
   function renderProc() { $('procGrid').innerHTML = cfg.sortingProcesses.map((p) => `<button class="choice-btn ${proc === p ? 'active' : ''}" data-proc="${UI.esc(p)}">${UI.esc(p)}</button>`).join(''); }
   $('procGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-proc]'); if (b) { proc = b.dataset.proc; renderProc(); } });
   $('reason').onchange = () => $('reasonOther').classList.toggle('hidden', $('reason').value !== OTHER);
+  const machineGroup = () => { const m = machines.find((x) => x.machineId === $('machine').value); return m ? m.group : ''; };
+  const fillReasons = () => { UI.fillNgSelect($('reason'), cfg, machineGroup(), '— เลือก —'); $('reason').onchange(); };
+  UI.bindNgControls({ sel: $('reason'), other: $('reasonOther'), addBtn: $('reasonAdd'), delBtn: $('reasonDel'),
+    getCfg: () => cfg, getGroup: machineGroup });
 
   async function loadJoOptions() {
     $('jo').innerHTML = '<option value="">ไม่ระบุ</option>';
@@ -89,6 +96,7 @@
   $('machine').onchange = () => {
     const m = machines.find((x) => x.machineId === $('machine').value);
     if (m && m.currentProduct) $('product').value = m.currentProduct;
+    fillReasons();
     loadJoOptions().then(() => { if (m && m.currentJobOrder) $('jo').value = m.currentJobOrder; });
   };
   $('product').onchange = loadJoOptions;
@@ -177,7 +185,7 @@
     machines = m.success ? m.data.filter((x) => x.installed) : []; products = p.success ? p.data : [];
     $('machine').innerHTML = UI.machineOptions(machines) || '<option value="">ยังไม่มีเครื่อง</option>';
     $('product').innerHTML = products.map((x) => `<option value="${UI.esc(x.productCode)}">${UI.esc(x.productCode)}</option>`).join('') || '<option value="">ยังไม่มีสินค้า</option>';
-    $('reason').innerHTML = '<option value="">— เลือก —</option>' + cfg.ngReasons.map((r) => `<option>${UI.esc(r)}</option>`).join('');
+    await UI.loadNgReasons().catch(() => []);
     $('date').max = UI.getToday(); $('date').value = UI.getToday();
     $('dTo').value = UI.getToday(); $('dFrom').value = UI.addDays(UI.getToday(), -6);
     if (user.shift) { $('shift').value = user.shift; }

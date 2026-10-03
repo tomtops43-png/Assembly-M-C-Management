@@ -58,7 +58,9 @@
     <div id="componentInputs"></div>
     <div class="form-group hidden" id="ngReasonGroup">
       <label class="form-label">หมายเหตุ NG <span class="req">*</span></label>
-      <select class="form-input" id="ngReason"></select>
+      <div class="d-flex gap-2"><select class="form-input" id="ngReason"></select>
+        <button class="btn btn-outline" type="button" id="ngAdd"><i class="bi bi-plus-lg"></i> เพิ่มอาการ</button>
+        <button class="btn btn-outline" type="button" id="ngDel" title="ลบอาการที่เลือกออกจากรายการ"><i class="bi bi-trash"></i></button></div>
       <input class="form-input mt-2 hidden" id="ngReasonOther" placeholder="ระบุอาการ">
     </div>
     <button class="btn btn-success btn-full btn-lg" id="submitBtn"><i class="bi bi-check2-circle"></i> บันทึกยอดผลิต</button>
@@ -83,7 +85,9 @@
     <div class="form-group"><label class="form-label">NG</label><input type="number" class="form-input" id="eDefect" readonly></div>
   </div>
   <div id="eComponents"></div>
-  <div class="form-group"><label class="form-label">หมายเหตุ NG</label><select class="form-input" id="eReason"></select>
+  <div class="form-group"><label class="form-label">หมายเหตุ NG</label>
+    <div class="d-flex gap-2"><select class="form-input" id="eReason"></select>
+      <button class="btn btn-outline" type="button" id="eNgAdd"><i class="bi bi-plus-lg"></i> เพิ่มอาการ</button></div>
     <input class="form-input mt-2 hidden" id="eReasonOther" placeholder="ระบุอาการ"></div>
   <div class="btn-group">
     <button class="btn btn-primary flex-1" id="eSave">บันทึก</button>
@@ -191,6 +195,8 @@
     $('actualQty').value = prod ? prod.defaultQty : cfg.defaultQty;
     $('submitBtn').disabled = !selMachine.currentProduct;
     renderComponents($('componentInputs'), selMachine.currentProduct, {}, recalcNg);
+    fillReasons($('ngReason'), selMachine.group);
+    $('ngReasonOther').classList.toggle('hidden', $('ngReason').value !== OTHER);
     recalcNg();
     loadJoProgress();
   }
@@ -250,9 +256,12 @@
     if (qtys.length) total = cfg.defectAggregate === 'sum' ? qtys.reduce((a, b) => a + b, 0) : Math.max(...qtys);
     return { details: out, total };
   }
-  function fillReasons(sel) {
-    sel.innerHTML = '<option value="">— เลือกอาการ —</option>' + cfg.ngReasons.map((r) => `<option>${UI.esc(r)}</option>`).join('');
-  }
+  function groupOf(machineId) { const m = master && master.machines.find((x) => x.machineId === machineId); return m ? m.group : ''; }
+  function fillReasons(sel, group) { UI.fillNgSelect(sel, cfg, group); }
+  UI.bindNgControls({ sel: $('ngReason'), other: $('ngReasonOther'), addBtn: $('ngAdd'), delBtn: $('ngDel'),
+    getCfg: () => cfg, getGroup: () => (selMachine ? selMachine.group : '') });
+  UI.bindNgControls({ sel: $('eReason'), other: $('eReasonOther'), addBtn: $('eNgAdd'),
+    getCfg: () => cfg, getGroup: () => (editing ? groupOf(editing.machineId) : '') });
   function reasonValue(sel, other) {
     if (sel.value === OTHER) return other.value.trim() ? OTHER + ': ' + other.value.trim() : '';
     return sel.value;
@@ -323,10 +332,11 @@
     const recalc = () => { $('eDefect').value = readComponents($('eComponents')).total; };
     renderComponents($('eComponents'), editing.productCode, vals, recalc);
     recalc();
-    fillReasons($('eReason'));
+    const eGroup = groupOf(editing.machineId);
+    fillReasons($('eReason'), eGroup);
     const r = editing.remark || '';
     if (r.startsWith(OTHER + ':')) { $('eReason').value = OTHER; $('eReasonOther').value = r.slice(OTHER.length + 1).trim(); }
-    else { $('eReason').value = cfg.ngReasons.includes(r) ? r : ''; $('eReasonOther').value = ''; }
+    else { $('eReason').value = UI.ngReasonList(cfg, eGroup).includes(r) ? r : ''; $('eReasonOther').value = ''; }
     $('eReasonOther').classList.toggle('hidden', $('eReason').value !== OTHER);
     UI.openModal('editModal');
   }
@@ -354,7 +364,8 @@
   UI.showLoading();
   try {
     cfg = await UI.getLineConfig();
-    fillReasons($('ngReason'));
+    await UI.loadNgReasons().catch(() => []);
+    fillReasons($('ngReason'), '');
     await loadAll(false);
   } catch (err) { UI.showToast(err.message, 'error'); }
   UI.hideLoading();

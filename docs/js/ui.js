@@ -320,6 +320,76 @@ const UI = (() => {
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
 
+  // ---------- อาการ NG: ค่าตั้งต้น (config) + ที่ผู้ใช้เพิ่มเอง (ชีต NgReasons, แยกตามกลุ่มเครื่อง) ----------
+  const NG_OTHER = 'อื่นๆ';
+  let ngCache = null;
+  async function loadNgReasons(force) {
+    if (!ngCache || force) {
+      const r = await API.get('getNgReasons');
+      ngCache = r.success ? r.data : (ngCache || []);
+    }
+    return ngCache;
+  }
+  /** รายชื่ออาการของกลุ่มเครื่อง (group ว่าง = ทุกกลุ่ม) — "อื่นๆ" อยู่ท้ายเสมอ */
+  function ngReasonList(cfg, group) {
+    const names = [];
+    const push = (n) => { if (n && n !== NG_OTHER && !names.includes(n)) names.push(n); };
+    ((cfg && cfg.ngReasons) || []).forEach(push);
+    (ngCache || []).filter((r) => !group || !r.machineGroup || r.machineGroup === group).forEach((r) => push(r.reasonName));
+    return names.concat([NG_OTHER]);
+  }
+  /** เติม <select> อาการ NG — คงค่าเดิมไว้ถ้ายังอยู่ในรายการ */
+  function fillNgSelect(sel, cfg, group, placeholder = '— เลือกอาการ —') {
+    const cur = sel.value;
+    const list = ngReasonList(cfg, group);
+    sel.innerHTML = `<option value="">${esc(placeholder)}</option>` + list.map((r) => `<option>${esc(r)}</option>`).join('');
+    if (list.includes(cur)) sel.value = cur;
+  }
+  /** ปุ่ม "+ เพิ่มอาการ": ถามชื่อ → บันทึกลงชีต → คืนชื่อที่เพิ่ม (null = ยกเลิก/ผิดพลาด) */
+  async function addNgReasonPrompt(group) {
+    const name = (prompt('เพิ่มอาการ NG ใหม่' + (group ? ' (เครื่องกลุ่ม ' + group + ')' : '')) || '').trim();
+    if (!name) return null;
+    if (name === NG_OTHER) { showToast('มี "' + NG_OTHER + '" อยู่แล้ว', 'warning'); return null; }
+    const r = await API.post('addNgReason', { reasonName: name, machineGroup: group || '' });
+    if (!r.success) { showToast(r.message, 'error'); return null; }
+    await loadNgReasons(true);
+    showToast(r.duplicate ? 'มีอาการนี้อยู่แล้ว — เลือกให้แล้ว' : 'เพิ่มอาการ NG แล้ว', 'success');
+    return name;
+  }
+  /** ลบอาการที่ผู้ใช้เพิ่ม (หัวหน้าขึ้นไป) — ค่าตั้งต้นใน config ลบจากหน้าเว็บไม่ได้ */
+  async function deleteNgReasonByName(name, group) {
+    const hit = (ngCache || []).find((r) => r.reasonName === name && (!group || !r.machineGroup || r.machineGroup === group));
+    if (!hit) { showToast('อาการนี้เป็นค่าตั้งต้นของระบบ ลบจากหน้าเว็บไม่ได้', 'warning'); return false; }
+    if (!confirm('ลบอาการ NG "' + name + '" ออกจากรายการ?\n(รายการที่บันทึกไปแล้วไม่เปลี่ยน)')) return false;
+    const r = await API.post('deleteNgReason', { reasonId: hit.reasonId });
+    if (!r.success) { showToast(r.message, 'error'); return false; }
+    await loadNgReasons(true);
+    showToast('ลบอาการ NG แล้ว', 'success');
+    return true;
+  }
+
+  /** ผูกปุ่ม เพิ่ม/ลบ อาการ NG กับ select — getGroup() คืนกลุ่มเครื่องที่เลือกอยู่; ปุ่มลบแสดงเฉพาะหัวหน้าขึ้นไป */
+  function bindNgControls({ sel, other, addBtn, delBtn, getCfg, getGroup }) {
+    const sync = () => { if (other) other.classList.toggle('hidden', sel.value !== NG_OTHER); };
+    if (delBtn && !(typeof Auth !== 'undefined' && Auth.hasRole('supervisor'))) delBtn.remove();
+    addBtn.onclick = async () => {
+      if (addBtn.disabled) return;
+      const g = getGroup();
+      addBtn.disabled = true;
+      try {
+        const name = await addNgReasonPrompt(g);
+        if (!name) return;
+        fillNgSelect(sel, getCfg(), g);
+        sel.value = name; sync();
+      } finally { addBtn.disabled = false; }
+    };
+    if (delBtn && delBtn.isConnected) delBtn.onclick = async () => {
+      const v = sel.value;
+      if (!v || v === NG_OTHER) return showToast('เลือกอาการที่จะลบก่อน', 'warning');
+      if (await deleteNgReasonByName(v, getGroup())) { sel.value = ''; fillNgSelect(sel, getCfg(), getGroup()); sync(); }
+    };
+  }
+
   /** ป้องกันกดซ้ำ: ปุ่ม disabled + spinner ระหว่างรอ */
   async function withButton(btn, fn) {
     if (!btn || btn.dataset.busy === '1') return;
@@ -333,6 +403,7 @@ const UI = (() => {
   return {
     isDesktop, applyDeviceClass, esc, showToast, showLoading, hideLoading, renderTopNav, renderNav, initPage,
     openModal, closeModal, getBkkHour, getToday, addDays, nowLocalInput, hourToPeriod, getTimePeriods, currentPeriod,
-    isDayHour, getShiftInfo, formatNumber, formatDate, timeAgo, getLineConfig, groupMachines, machineGridHtml, machineOptions, emptyState, statusLabel, downloadText, withButton
+    isDayHour, getShiftInfo, formatNumber, formatDate, timeAgo, getLineConfig, groupMachines, machineGridHtml, machineOptions, emptyState, statusLabel, downloadText, withButton,
+    NG_OTHER, loadNgReasons, ngReasonList, fillNgSelect, addNgReasonPrompt, deleteNgReasonByName, bindNgControls
   };
 })();
