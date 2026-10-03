@@ -38,7 +38,10 @@
 
     <div class="card">
       <div class="card-title"><i class="bi bi-list-task"></i> ใบแจ้งซ่อมที่เปิดอยู่ <span class="spacer"></span>
+        <a class="btn btn-outline btn-sm hidden" id="mmsLink" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> ระบบซ่อมกลาง</a>
+        <button class="btn btn-outline btn-sm hidden" id="mmsSync" title="ดึงสถานะจากระบบซ่อมกลาง"><i class="bi bi-cloud-download"></i></button>
         <button class="btn btn-outline btn-sm" id="reload"><i class="bi bi-arrow-clockwise"></i></button></div>
+      <div class="small text-gray mb-2 hidden" id="mmsNote">ใบแจ้งซ่อมจะถูกส่งเข้าระบบซ่อมกลางให้อัตโนมัติ — ช่างรับงาน/ปิดงานที่ระบบซ่อมกลางได้ สถานะจะอัปเดตกลับมาที่นี่</div>
       <div id="tickets"></div>
     </div>
   </div>
@@ -119,7 +122,9 @@
     if (!res.success) return UI.showToast(res.message, 'error');
     reqId = null; symptoms = []; photos = []; $('desc').value = ''; sel = { machineId: '', issueType: '', priority: 'medium' };
     renderSymptoms(); renderPreview(photos, $('photoPreview')); $('reportTime').value = UI.nowLocalInput();
-    UI.showToast('แจ้งซ่อมแล้ว ' + (res.ticketId || ''), 'success');
+    if (res.mmsJobNo) UI.showToast(`แจ้งซ่อมแล้ว ${res.ticketId} · ส่งเข้าระบบซ่อมกลางแล้ว (${res.mmsJobNo})`, 'success');
+    else if (res.mmsEnabled) UI.showToast(`แจ้งซ่อมแล้ว ${res.ticketId} · ส่งเข้าระบบซ่อมกลางไม่สำเร็จ จะลองใหม่อัตโนมัติ`, 'warning');
+    else UI.showToast('แจ้งซ่อมแล้ว ' + (res.ticketId || ''), 'success');
     await loadMachines(); loadTickets();
   });
 
@@ -135,6 +140,7 @@
         <div class="entry-head"><span>${UI.esc(mName(t.machineId))} · ${UI.esc(issueLabel(t.issueType))}</span><span class="badge badge-${t.status}">${t.status === 'open' ? 'รอรับงาน' : 'กำลังซ่อม'}</span></div>
         <div class="small mt-1">${UI.esc(t.description)}</div>
         <div class="entry-meta">${UI.esc(t.ticketId)} · ${UI.esc(t.reporterName)} · ผ่านไป ${UI.timeAgo(t.timestamp)} ${t.assignedTo ? '· ช่าง ' + UI.esc(t.assignedTo) : ''}</div>
+        ${mmsBadge(t)}
         <div class="entry-actions">
           <button class="btn btn-outline btn-sm" data-act="detail" data-id="${t.ticketId}">รายละเอียด</button>
           ${isTech && t.status === 'open' ? `<button class="btn btn-primary btn-sm" data-act="take" data-id="${t.ticketId}">รับงาน</button>` : ''}
@@ -143,6 +149,12 @@
           ${canEdit ? `<button class="btn btn-outline btn-sm" data-act="delete" data-id="${t.ticketId}"><i class="bi bi-trash"></i></button>` : ''}
         </div></div>`;
     }).join('') : UI.emptyState('bi-check2-circle', 'ไม่มีใบแจ้งซ่อมค้าง');
+  }
+  /** เลขงานในระบบซ่อมกลาง (MMS) */
+  function mmsBadge(t) {
+    if (t.mmsJobNo) return `<div class="small mt-1"><span class="badge badge-in-progress"><i class="bi bi-link-45deg"></i> ซ่อมกลาง ${UI.esc(t.mmsJobNo)}${t.mmsStatus ? ' · ' + UI.esc(t.mmsStatus) : ''}</span></div>`;
+    if (t.mmsError) return `<div class="small mt-1 text-danger"><i class="bi bi-exclamation-triangle"></i> ยังส่งเข้าระบบซ่อมกลางไม่สำเร็จ (จะลองใหม่อัตโนมัติ)</div>`;
+    return '';
   }
   function mName(id) { const m = machines.find((x) => x.machineId === id); return m ? m.machineName : id; }
   function issueLabel(k) { const i = cfg.issueTypes.find((x) => x.key === k); return i ? i.label : k; }
@@ -173,7 +185,8 @@
       <tr><th>เครื่อง</th><td>${UI.esc(mName(t.machineId))}</td></tr><tr><th>ประเภท</th><td>${UI.esc(issueLabel(t.issueType))}</td></tr>
       <tr><th>ความเร่งด่วน</th><td>${UI.esc(t.priority)}</td></tr><tr><th>แจ้งเมื่อ</th><td>${UI.esc(t.timestamp)} (${UI.esc(t.shiftDN)} ${UI.esc(t.shiftAB)})</td></tr>
       <tr><th>ผู้แจ้ง</th><td>${UI.esc(t.reporterName)}</td></tr><tr><th>รายละเอียด</th><td style="white-space:normal">${UI.esc(t.description)}</td></tr>
-      <tr><th>ผลการซ่อม</th><td style="white-space:normal">${UI.esc(t.resolution || '-')}</td></tr></tbody></table>
+      <tr><th>ผลการซ่อม</th><td style="white-space:normal">${UI.esc(t.resolution || '-')}</td></tr>
+      ${t.mmsJobNo ? `<tr><th>ระบบซ่อมกลาง</th><td>${UI.esc(t.mmsJobNo)} · ${UI.esc(t.mmsStatus || '-')}</td></tr>` : ''}</tbody></table>
       ${t.photos.length ? '<div class="form-label mt-3">รูปตอนแจ้ง</div><div class="photo-previews">' + t.photos.map(img).join('') + '</div>' : ''}`;
     UI.openModal('detailModal');
   }
@@ -184,10 +197,21 @@
     $('symptomSel').innerHTML = '<option value="">— อาการที่เกิดซ้ำ —</option>' + (r.success ? r.data.map((s) => `<option>${UI.esc(s)}</option>`).join('') : '');
   }
   $('reload').onclick = loadTickets;
+  $('mmsSync').onclick = () => UI.withButton($('mmsSync'), async () => {
+    const r = await API.post('syncMmsNow', {});
+    if (!r.success) return UI.showToast(r.message, 'error');
+    const d = r.data || {};
+    UI.showToast(d.error ? 'ดึงสถานะไม่สำเร็จ: ' + d.error : `อัปเดตจากระบบซ่อมกลาง ${d.updated || 0} ใบ (ปิดงาน ${d.closed || 0})`, d.error ? 'error' : 'success');
+    loadMachines(); loadTickets();
+  });
 
   UI.showLoading();
   try {
     cfg = await UI.getLineConfig();
+    if (cfg.mms) {
+      $('mmsLink').href = cfg.mms.webUrl; $('mmsLink').classList.remove('hidden'); $('mmsNote').classList.remove('hidden');
+      if (isSup) $('mmsSync').classList.remove('hidden');
+    }
     $('reportTime').value = UI.nowLocalInput();
     await Promise.all([loadMachines(), loadTickets(), loadSymptoms()]);
   } catch (err) { UI.showToast(err.message, 'error'); }

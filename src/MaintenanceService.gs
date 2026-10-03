@@ -9,11 +9,13 @@ function ticketToObj(t) {
     reportedBy: String(t.ReportedBy), reporterName: t.ReporterName, machineId: String(t.MachineID),
     issueType: t.IssueType, description: t.Description, priority: t.Priority, status: t.Status,
     assignedTo: t.AssignedTo || '', resolvedAt: t.ResolvedAt || '', downtimeMinutes: toNumber(t.DowntimeMinutes),
-    resolution: t.Resolution || '', photos: splitList(t.Photos), resolutionPhotos: splitList(t.ResolutionPhotos)
+    resolution: t.Resolution || '', photos: splitList(t.Photos), resolutionPhotos: splitList(t.ResolutionPhotos),
+    mmsJobNo: String(t.MmsJobNo || ''), mmsStatus: String(t.MmsStatus || ''), mmsError: String(t.MmsError || '')
   };
 }
 
 function getOpenTickets(token) {
+  syncMmsStatuses(false);
   var list = getAllRows('MaintenanceLog').map(ticketToObj)
     .filter(function (t) { return t.status === 'open' || t.status === 'in-progress'; });
   list.sort(function (a, b) {
@@ -74,7 +76,8 @@ function submitMaintenanceTicket(token, data) {
     ClientRequestID: data.clientRequestId || ''
   });
   updateRow('Machines', 'MachineID', data.machineId, { Status: (priority === 'high' || priority === 'critical') ? 'down' : 'maintenance' });
-  return { success: true, ticketId: ticketId };
+  var mmsJobNo = forwardTicketToMms(ticketId, (data.photos || [])[0]);
+  return { success: true, ticketId: ticketId, mmsJobNo: mmsJobNo, mmsEnabled: mmsEnabled() };
 }
 
 function getEditableTicket(u, ticketId) {
