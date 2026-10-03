@@ -76,6 +76,7 @@ var WRITE_ACTIONS = {
   deleteMaintenanceTicket: function (b) { return deleteMaintenanceTicket(b.token, b.ticketId); },
   updateTicketStatus: function (b) { return updateTicketStatus(b.token, b.ticketId, b.status, b.resolution, b.photos, b.resolveTime); },
   backfillMaintenanceShiftAB: function (b) { return backfillMaintenanceShiftAB(b.token); },
+  syncMmsNow: function (b) { return syncMmsNow(b.token); },
   updateMachineStatus: function (b) { return updateMachineStatus(b.token, b.machineId, b.status); },
   updateMachineCapacity: function (b) { return updateMachineCapacity(b.token, b.machineId, b.capacity); },
   updateMachineInstalled: function (b) { return updateMachineInstalled(b.token, b.machineId, b.installed); },

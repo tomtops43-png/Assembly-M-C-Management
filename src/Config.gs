@@ -23,6 +23,19 @@ var LINE_CONFIG = {
   DRIVE_FOLDER: 'Assembly_MC_Photos', // ใช้เมื่อเปิดโฟลเดอร์ตาม ID ไม่ได้ (สร้างใหม่ตามชื่อ)
   PHOTO_CATEGORIES: { maintenance: 'แจ้งซ่อม', rawmaterial: 'รับวัตถุดิบ' },
 
+  // ---- ระบบซ่อมส่วนกลาง (Maintenance-Management-System) ----
+  // แจ้งซ่อมที่นี่ → ส่งต่อเป็นใบ BM ใน MMS (พื้นที่ "Assembly M/C") และดึงสถานะกลับมา (ปิดงานที่ MMS = ปิดงานที่นี่)
+  MMS: {
+    ENABLED: true,
+    URL: 'https://script.google.com/macros/s/AKfycbwvqSh_1_VU_YLMI0fBWPa-B6IFXDDId1KIr6VYJAtsh0wUn6Jtln5ryJYR0luxqLc-Ew/exec',
+    WEB_URL: 'https://tomtops43-png.github.io/Maintenance-Management-System/jobs.html',
+    AREA: 'Assembly M/C',                                   // ไลน์หลักใน MMS
+    LINE_BY_GROUP: { 'Arc chute': 'Arc chute', 'GV.2': 'GV.2', 'Arc Stack': 'Arc Stack' }, // กลุ่มเครื่อง → ไลน์/เครื่องหลักใน MMS
+    MC_BY_MACHINE: {},                                      // MachineID → M/C No. ใน MMS (ไม่ใส่ = ใช้ชื่อเครื่อง)
+    PRIORITY_MAP: { critical: 'ด่วนมาก (เครื่องหยุด)', high: 'ด่วน', medium: 'ปกติ', low: 'ปกติ' },
+    SYNC_SECONDS: 120                                        // ดึงสถานะจาก MMS ได้ไม่ถี่กว่านี้
+  },
+
   // ---- เวลา / กะ ----
   WORKDAY_START_HOUR: 8,   // วันทำงานตัดรอบ 08:00
   DAY_SHIFT_START: 8,      // Day = 08:00-19:59
@@ -202,7 +215,7 @@ var SHEET_SCHEMAS = {
   ProductionLog: ['LogID', 'Timestamp', 'Date', 'Shift', 'TimePeriod', 'EmployeeID', 'EmployeeName', 'MachineID', 'ProductCode', 'PlannedQty', 'ActualQty', 'DefectQty', 'DefectDetails', 'Remark', 'Status', 'ClientRequestID', 'JobOrderID'],
   Inbox: ['InboxID', 'EmployeeID', 'Type', 'Title', 'Message', 'RefID', 'Status', 'CreatedAt', 'CreatedBy'],
   ActionLog: ['ActionID', 'Timestamp', 'EmployeeID', 'EmployeeName', 'Action', 'Payload'],
-  MaintenanceLog: ['TicketID', 'Timestamp', 'Date', 'ShiftAB', 'ShiftDN', 'ReportedBy', 'ReporterName', 'MachineID', 'IssueType', 'Description', 'Priority', 'Status', 'AssignedTo', 'ResolvedAt', 'DowntimeMinutes', 'Resolution', 'Photos', 'ResolutionPhotos', 'ClientRequestID'],
+  MaintenanceLog: ['TicketID', 'Timestamp', 'Date', 'ShiftAB', 'ShiftDN', 'ReportedBy', 'ReporterName', 'MachineID', 'IssueType', 'Description', 'Priority', 'Status', 'AssignedTo', 'ResolvedAt', 'DowntimeMinutes', 'Resolution', 'Photos', 'ResolutionPhotos', 'ClientRequestID', 'MmsJobNo', 'MmsStatus', 'MmsError'],
   RawMaterialLog: ['ReceiveID', 'Timestamp', 'Date', 'ReceivedBy', 'ReceiverName', 'MachineID', 'PartCode', 'SupplierCode', 'PartName', 'Specification', 'Quantity', 'Unit', 'LotNumber', 'Inspector', 'Customer', 'NetWeight', 'GrossWeight', 'CartonNo', 'PackingDate', 'RefNo', 'Remark', 'Photos', 'Status'],
   SortingLog: ['JobID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'MachineID', 'ProductCode', 'FoundProcess', 'TotalQty', 'GoodQty', 'DefectQty', 'DefectDetails', 'Status', 'RegisteredBy', 'RegisteredByName', 'SortedBy', 'SortedByName', 'PulledAt', 'CompletedAt', 'Remark', 'JobOrderID'],
   WasteLog: ['WasteID', 'Timestamp', 'Date', 'RecordedBy', 'RecorderName', 'WasteType', 'WeightKg', 'Remark'],
@@ -223,6 +236,7 @@ function getPublicLineConfig() {
     ngReasons: c.NG_REASONS, defectPartGroups: c.DEFECT_PART_GROUPS,
     sortingProcesses: c.SORTING_PROCESSES, sortingFgProcesses: c.SORTING_FG_PROCESSES,
     issueTypes: c.ISSUE_TYPES, machineGroups: c.MACHINE_GROUPS, dailyCheck: c.DAILY_CHECK, modules: c.MODULES,
-    netHoursPerShift: c.NET_HOURS_PER_SHIFT
+    netHoursPerShift: c.NET_HOURS_PER_SHIFT,
+    mms: c.MMS && c.MMS.ENABLED ? { webUrl: c.MMS.WEB_URL, area: c.MMS.AREA } : null
   };
 }

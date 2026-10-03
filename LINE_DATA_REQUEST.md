@@ -49,3 +49,7 @@
 | D5 | ต้นทุน P&L | ราคาขาย + รายการต้นทุนที่ใช้จริง |
 | D6 | ค่าแรง | ตำแหน่ง, ค่าแรงรายวัน, ค่า OT/ชม. ต่อคน |
 | D7 | ต้องการโมดูลไหน "ไม่ใช้" บ้าง | ปิดได้: rawmaterial, sorting, waste, alarm, dailycheck, cost, labor |
+
+## E. เชื่อมระบบซ่อมส่วนกลาง (Maintenance-Management-System)
+- แจ้งซ่อมในเว็บนี้ → ส่งเป็นใบ BM ในระบบซ่อมกลาง (ไลน์หลัก `Assembly M/C`) อัตโนมัติ ; ปิดงานที่ระบบซ่อมกลาง → ปิดงานที่นี่ (ดึงสถานะทุก ~2 นาทีตอนเปิดหน้าแจ้งซ่อม หรือรัน `installMmsSyncTrigger` ครั้งเดียวให้ sync ทุก 10 นาที)
+- ตั้งค่าที่ `LINE_CONFIG.MMS` (`src/Config.gs`) ; ใน Settings ของระบบซ่อมกลาง ควรเพิ่ม Station `Arc chute Beta` (Parent `Arc chute`) และ Line `Arc Stack` + Station `Arc Stack medium` / `Arc Stack High`
