@@ -176,6 +176,9 @@ function submitProduction(token, data) {
   var ng = normalizeDefects(data.defectByComponent, data.defectQty);
   var actual = toNumber(data.actualQty);
   if (ng.defectQty > 0 && !hasNgReason(data.remark)) throw new Error('กรุณาระบุอาการ NG');
+  // แถว NG แยกจากแถว FG: กรอก FG + NG พร้อมกัน → บันทึกเป็น 2 แถว (FG แถวหนึ่ง, NG แถวหนึ่ง) ไม่ทิ้งยอด FG
+  var fgSplit = 0;
+  if (LINE_CONFIG.NG_ROW_SEPARATE && ng.defectQty > 0 && actual > 0) fgSplit = actual;
   if (LINE_CONFIG.NG_ROW_SEPARATE && ng.defectQty > 0 && actual >= 0) actual = 0;
 
   // กันบันทึกซ้ำจากเนื้อหาเหมือนกันภายใน 2 นาที
@@ -190,19 +193,27 @@ function submitProduction(token, data) {
     }
   }
 
-  var logId = generateUUID();
-  appendRow('ProductionLog', {
-    LogID: logId, Timestamp: formatDate(now), Date: workDate, Shift: u.shift || '', TimePeriod: timePeriod,
+  var planned = toNumber(data.plannedQty, machineCapacity(m, m.currentProduct));
+  var base = {
+    Timestamp: formatDate(now), Date: workDate, Shift: u.shift || '', TimePeriod: timePeriod,
     EmployeeID: u.employeeId, EmployeeName: u.name, MachineID: m.machineId, ProductCode: m.currentProduct,
-    PlannedQty: toNumber(data.plannedQty, machineCapacity(m, m.currentProduct)), ActualQty: actual, DefectQty: ng.defectQty,
-    DefectDetails: Object.keys(ng.details).length ? JSON.stringify(ng.details) : '', Remark: data.remark || '',
     Status: 'completed', ClientRequestID: data.clientRequestId || '', JobOrderID: m.currentJobOrder
-  });
+  };
+  var fgLogId = '';
+  if (fgSplit > 0) {
+    fgLogId = generateUUID();
+    appendRow('ProductionLog', Object.assign({}, base, { LogID: fgLogId, PlannedQty: planned, ActualQty: fgSplit, DefectQty: 0, DefectDetails: '', Remark: '' }));
+  }
+  var logId = generateUUID();
+  appendRow('ProductionLog', Object.assign({}, base, {
+    LogID: logId, PlannedQty: fgSplit > 0 ? 0 : planned, ActualQty: actual, DefectQty: ng.defectQty,
+    DefectDetails: Object.keys(ng.details).length ? JSON.stringify(ng.details) : '', Remark: data.remark || ''
+  }));
   if (m.currentJobOrder) {
     var jo = findRow('JobOrders', 'JobOrderID', m.currentJobOrder);
     if (jo && jo.Status === 'open') updateRow('JobOrders', 'JobOrderID', m.currentJobOrder, { Status: 'in-progress' });
   }
-  return { success: true, logId: logId };
+  return { success: true, logId: logId, fgLogId: fgLogId, split: fgSplit > 0 };
 }
 
 function getProductionRow(logId) {
@@ -223,7 +234,9 @@ function updateProductionEntry(token, logId, updates) {
   var actual = updates.actualQty !== undefined ? toNumber(updates.actualQty) : row.actualQty;
   if (ng) {
     if (ng.defectQty > 0 && !hasNgReason(remark)) throw new Error('กรุณาระบุอาการ NG');
-    if (LINE_CONFIG.NG_ROW_SEPARATE && ng.defectQty > 0 && actual >= 0) actual = 0;
+    if (LINE_CONFIG.NG_ROW_SEPARATE && ng.defectQty > 0 && actual > 0) {
+      throw new Error('รายการเดียวใส่ได้อย่างใดอย่างหนึ่ง: FG หรือ NG — ถ้าต้องการเพิ่ม NG ให้บันทึกรายการใหม่ในช่วงเวลาเดียวกัน');
+    }
     upd.DefectQty = ng.defectQty;
     upd.DefectDetails = Object.keys(ng.details).length ? JSON.stringify(ng.details) : '';
   }
