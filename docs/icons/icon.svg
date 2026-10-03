@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#26282D"/><stop offset="1" stop-color="#141518"/></linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8A9099"/><stop offset=".45" stop-color="#E4E7EB"/><stop offset="1" stop-color="#9AA0A8"/></linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#E0213F"/><stop offset="1" stop-color="#A80C25"/></linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFD25A" stop-opacity=".9"/><stop offset="1" stop-color="#FF8A1F" stop-opacity="0"/></radialGradient>
+    <!-- one splitter plate: steel strip with the V-notch at the bottom -->
+    <path id="plate" d="M0 0 H22 V196 L11 150 L0 196 Z"/>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- side insulating plates -->
+  <rect x="96" y="104" width="44" height="300" rx="10" fill="url(#side)"/>
+  <rect x="372" y="104" width="44" height="300" rx="10" fill="url(#side)"/>
+  <!-- splitter plates (7) -->
+  <g fill="url(#steel)">
+    <use href="#plate" x="152" y="128"/><use href="#plate" x="184" y="128"/><use href="#plate" x="216" y="128"/><use href="#plate" x="248" y="128"/><use href="#plate" x="280" y="128"/><use href="#plate" x="312" y="128"/><use href="#plate" x="344" y="128"/>
+  </g>
+  <!-- rivet bar across the stack -->
+  <rect x="128" y="170" width="256" height="20" rx="6" fill="#C8102E"/>
+  <g fill="#6E0A1A"><circle cx="163" cy="180" r="5"/><circle cx="195" cy="180" r="5"/><circle cx="227" cy="180" r="5"/><circle cx="259" cy="180" r="5"/><circle cx="291" cy="180" r="5"/><circle cx="323" cy="180" r="5"/><circle cx="355" cy="180" r="5"/></g>
+  <!-- arc being split under the notches -->
+  <ellipse cx="256" cy="352" rx="120" ry="40" fill="url(#glow)"/>
+  <path d="M136 356 L170 338 L192 362 L222 334 L246 360 L270 332 L296 360 L320 336 L344 360 L376 342" fill="none" stroke="#FFC234" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M136 356 L170 338 L192 362 L222 334 L246 360 L270 332 L296 360 L320 336 L344 360 L376 342" fill="none" stroke="#FFF6D6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
