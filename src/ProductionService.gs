@@ -11,6 +11,37 @@ function hasNgReason(remark) {
   return !!r && r !== NG_OTHER && r !== NG_OTHER + ':' && r !== NG_OTHER + ' ()';
 }
 
+// ---------- อาการ NG (ชีต NgReasons — ผู้ใช้เพิ่มเองได้, แยกตามกลุ่มเครื่อง; MachineGroup ว่าง = ใช้ทุกเครื่อง) ----------
+function getNgReasons(token) {
+  requireLogin(token);
+  var list = getAllRows('NgReasons').filter(function (r) { return isActiveValue(r.Active) && String(r.ReasonName || '').trim(); })
+    .map(function (r) { return { reasonId: String(r.ReasonID), reasonName: String(r.ReasonName).trim(), machineGroup: String(r.MachineGroup || '') }; });
+  return { success: true, data: list };
+}
+
+function addNgReason(token, reasonName, machineGroup) {
+  var u = requireLogin(token);
+  reasonName = String(reasonName || '').trim();
+  machineGroup = String(machineGroup || '').trim();
+  if (!reasonName) throw new Error('กรุณากรอกอาการ NG');
+  if (reasonName === NG_OTHER) throw new Error('มี "' + NG_OTHER + '" อยู่แล้ว');
+  if (reasonName.length > 100) throw new Error('อาการ NG ยาวเกินไป');
+  var exists = getAllRows('NgReasons').some(function (r) {
+    return isActiveValue(r.Active) && String(r.ReasonName).trim() === reasonName && (!r.MachineGroup || String(r.MachineGroup) === machineGroup);
+  });
+  if (exists || LINE_CONFIG.NG_REASONS.indexOf(reasonName) >= 0) return { success: true, duplicate: true, reasonName: reasonName };
+  var id = makeTypeId('NG');
+  appendRow('NgReasons', { ReasonID: id, ReasonName: reasonName, MachineGroup: machineGroup, Active: true, CreatedAt: formatDate(), CreatedBy: u.name });
+  return { success: true, reasonId: id, reasonName: reasonName };
+}
+
+function deleteNgReason(token, reasonId) {
+  requireRole(token, 'supervisor');
+  if (!findRow('NgReasons', 'ReasonID', reasonId)) throw new Error('ไม่พบอาการ NG');
+  updateRow('NgReasons', 'ReasonID', reasonId, { Active: false });
+  return { success: true };
+}
+
 /** {code:{componentName, qty}} → {details, defectQty} */
 function normalizeDefects(defectByComponent, fallbackQty) {
   var details = {};
