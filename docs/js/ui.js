@@ -449,7 +449,7 @@ const UI = (() => {
     isDesktop, applyDeviceClass, esc, showToast, showLoading, hideLoading, renderTopNav, renderNav, initPage,
     openModal, closeModal, getBkkHour, getToday, addDays, nowLocalInput, hourToPeriod, getTimePeriods, currentPeriod,
     isDayHour, getShiftInfo, formatNumber, formatDate, timeAgo, getLineConfig, groupMachines, machineGridHtml, machineOptions, emptyState, statusLabel, downloadText, withButton,
-    requestIdKeeper, applyNumericKeyboards,
+    requestIdKeeper, applyNumericKeyboards, BRAND_SVG,
     NG_OTHER, loadNgReasons, ngReasonList, fillNgSelect, addNgReasonPrompt, deleteNgReasonByName, bindNgControls
   };
 })();

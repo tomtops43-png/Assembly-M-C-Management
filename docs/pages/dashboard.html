@@ -16,6 +16,29 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 <link rel="stylesheet" href="../css/style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  .auto-report { margin: 0; padding: 14px 16px; background: var(--bg); border-radius: 8px; font-family: var(--font); font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; max-height: 520px; overflow: auto; }
+  /* ---- หน้า PDF (A4 กว้าง 794px) ---- */
+  .rp { width: 794px; padding: 34px 40px; background: #fff; color: #16171B; font-family: 'IBM Plex Sans Thai', 'Segoe UI', Tahoma, sans-serif; font-size: 11.5px; }
+  .rp-head { display: flex; align-items: center; gap: 14px; padding-bottom: 10px; border-bottom: 3px solid #C8102E; }
+  .rp-head img { width: 46px; height: 46px; }
+  .rp-head h1 { margin: 0; font-size: 19px; } .rp-head div div { color: #6B6F7A; font-size: 12px; }
+  .rp-meta { margin: 10px 0 14px; color: #34373F; line-height: 1.6; }
+  .rp h2 { font-size: 13.5px; margin: 16px 0 6px; padding-left: 8px; border-left: 4px solid #C8102E; }
+  .rp-kpi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 18px; padding: 10px 12px; border: 1px solid #E3E4E8; border-radius: 6px; background: #FAFAFB; }
+  .rp-kpi b { font-size: 13px; }
+  .rp table { width: 100%; border-collapse: collapse; }
+  .rp th { background: #EEF0F4; text-align: left; font-weight: 700; padding: 5px 6px; border: 1px solid #DADCE2; }
+  .rp td { padding: 4px 6px; border: 1px solid #E3E4E8; vertical-align: top; }
+  .rp td.n, .rp th.n { text-align: right; }
+  .rp tr { page-break-inside: avoid; }
+  .rp-red th { background: #FDECEE; }
+  .rp-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .rp-chart { border: 1px solid #E3E4E8; border-radius: 6px; padding: 6px; page-break-inside: avoid; }
+  .rp-chart div { font-weight: 700; margin-bottom: 4px; } .rp-chart img { width: 100%; }
+  .rp-foot { margin-top: 18px; color: #9A9EA9; font-size: 10px; text-align: right; }
+  .rp-section { page-break-inside: avoid; }
+</style>
 </head>
 <body>
 <main class="main"><div class="container">
@@ -38,7 +61,13 @@
   </div>
 
   <div class="kpi-grid" id="kpi"></div>
-  <div class="card"><div class="card-title"><i class="bi bi-chat-square-text"></i> สรุปอัตโนมัติ</div><div id="autoReport" class="small"></div></div>
+  <div class="card">
+    <div class="card-title"><i class="bi bi-file-earmark-text"></i> Auto Generated Report <span class="spacer"></span>
+      <button class="btn btn-outline btn-sm" id="repGen"><i class="bi bi-arrow-repeat"></i> Generate now</button>
+      <button class="btn btn-outline btn-sm" id="repPdf"><i class="bi bi-download"></i> Download PDF</button></div>
+    <div class="small text-gray mb-2" id="repStamp"></div>
+    <pre class="auto-report" id="autoReport"></pre>
+  </div>
 
   <div class="grid-2">
     <div class="card"><div class="card-title">ยอดผลิตตามเครื่อง</div><div class="chart-container"><canvas id="cMachine"></canvas></div></div>
@@ -132,13 +161,8 @@
       <div class="kpi-card danger"><div class="kpi-value">${k.defectRate}%</div><div class="kpi-label">% NG (${n(k.defect)} ชิ้น)</div></div>
       <div class="kpi-card warning"><div class="kpi-value">${k.openTickets}</div><div class="kpi-label">แจ้งซ่อมค้าง</div></div>`;
 
-    const worst = data.byMachine.slice().sort((a, b) => b.defectRate - a.defectRate)[0];
-    const topReason = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a])[0];
-    $('autoReport').innerHTML = `ช่วง ${data.range.from || 'เริ่มต้น'} ถึง ${data.range.to || 'ปัจจุบัน'}: ผลิตได้ <b>${n(k.actual)}</b> ชิ้น จากแผน ${n(k.plan)} ชิ้น,
-      NG ${n(k.defect)} ชิ้น (${k.defectRate}%), OEE ${k.oee === null ? '-' : k.oee + '%'}.
-      ${worst && worst.defect ? `เครื่องที่ %NG สูงสุด: <b>${UI.esc(worst.machineId)}</b> (${worst.defectRate}%).` : ''}
-      ${topReason ? `อาการ NG อันดับ 1: <b>${UI.esc(topReason)}</b> (${n(data.ngByReason[topReason])} ชิ้น).` : ''}
-      แจ้งซ่อม ${data.maintenance.total} ใบ (ค้าง ${data.maintenance.open}) downtime ${n(data.maintenance.downtime)} นาที.`;
+    generateReport(reportMode);
+    reportMode = 'auto';
 
     chart('cMachine', { type: 'bar', data: { labels: data.byMachine.map((m) => m.machineName), datasets: [
       { label: 'FG', data: data.byMachine.map((m) => m.actual), backgroundColor: '#1E9E5A', yAxisID: 'y' },
@@ -175,6 +199,159 @@
       Object.keys(data.byShift).map((s) => `<tr><td>${UI.esc(s)}</td><td class="num">${n(data.byShift[s].actual)}</td><td class="num">${n(data.byShift[s].defect)}</td></tr>`).join('') + '</tbody>';
     renderTable();
   }
+
+  // ---------- Auto Generated Report (ข้อความ + PDF) ----------
+  let reportMode = 'auto', reportAt = null;
+  const fmtStamp = (d) => d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const pctTxt = (v) => (v === null || v === undefined ? '-' : v + '%');
+  const shiftTxt = () => `กะ A/B: ${$('fShiftAB').value || 'ทั้งหมด'} | Day/Night: ${$('fShiftDN').value || 'ทั้งหมด'}`;
+  const rangeTxt = () => data.range.from ? (data.range.from === data.range.to ? data.range.from : data.range.from + ' ถึง ' + data.range.to) : 'ทั้งหมด';
+  const mNameOf = (id) => { const m = data.byMachine.find((x) => x.machineId === id); return m ? m.machineName : id; };
+  const issueLabels = {};
+  UI.getLineConfig().then((c) => ((c && c.issueTypes) || []).forEach((i) => { issueLabels[i.key] = i.label; })).catch(() => {});
+  const issueLbl = (k) => issueLabels[k] || k || '';
+  const issueTxt = (t) => [issueLbl(t.issueType), t.description].filter(Boolean).join(' · ') || '-';
+  const joCount = () => data.jobOrders.filter((j) => j.jobOrderId !== '__unassigned__').length;
+
+  function generateReport(mode) {
+    if (!data) return;
+    reportAt = new Date();
+    const k = data.kpi, mt = data.maintenance, dc = data.dailyCheck;
+    const topM = data.byMachine.slice().sort((a, b) => b.actual - a.actual)[0];
+    const topP = data.byProduct.slice().sort((a, b) => b.actual - a.actual)[0];
+    const worst = data.byMachine.filter((m) => m.defect).sort((a, b) => b.defectRate - a.defectRate)[0];
+    const reasons = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a]);
+    const L = [];
+    L.push(`${APP_CONFIG.LINE_NAME.toUpperCase()} — DASHBOARD AUTO REPORT`);
+    L.push(`สร้างเมื่อ: ${fmtStamp(reportAt)}`);
+    L.push(`ช่วงวันที่: ${rangeTxt()}`);
+    L.push(`${shiftTxt()}${$('fProduct').value ? ' | รุ่น: ' + $('fProduct').value : ''}${$('fJo').value ? ' | JO: ' + $('fJo').selectedOptions[0].text : ''}`);
+    L.push('', 'KPI Summary');
+    L.push(`- ยอดผลิตรวม (FG): ${n(k.actual)} ชิ้น (แผน ${n(k.plan)})`);
+    L.push(`- OEE: ${pctTxt(k.oee)}`);
+    L.push(`- อัตรา NG: ${k.defectRate}% (${n(k.defect)} ชิ้น)`);
+    L.push(`- งานซ่อมเปิดอยู่: ${mt.open}${mt.carriedOver ? ` (ยกมาจากวันก่อน ${mt.carriedOver})` : ''}`);
+    L.push(`- Job Order ที่อยู่ในรายงาน: ${joCount()}`);
+    L.push('', 'Top Performance');
+    L.push(`- เครื่องจักรที่ผลิตสูงสุด: ${topM && topM.actual ? `${topM.machineName} (${n(topM.actual)})` : '-'}`);
+    L.push(`- รุ่นที่ผลิตสูงสุด: ${topP && topP.actual ? `${topP.productCode} (${n(topP.actual)})` : '-'}`);
+    L.push(`- เครื่องที่ %NG สูงสุด: ${worst ? `${worst.machineName} (${worst.defectRate}%)` : '-'}`);
+    L.push(`- อาการ NG อันดับ 1: ${reasons[0] ? `${reasons[0]} (${n(data.ngByReason[reasons[0]])} ชิ้น)` : '-'}`);
+    L.push('', 'Production by machine');
+    if (data.byMachine.length) data.byMachine.forEach((m) => L.push(`- ${m.machineName}: FG ${n(m.actual)} | NG ${n(m.defect)} | OEE ${pctTxt(m.oee)} | %NG ${m.defectRate}%`));
+    else L.push('- ไม่มีข้อมูล');
+    L.push('', 'Production by product');
+    if (data.byProduct.length) data.byProduct.forEach((p) => L.push(`- ${p.productCode}: แผน ${n(p.plan)} | FG ${n(p.actual)} | NG ${n(p.defect)} | %Yield ${p.yield}% | %NG ${p.defectRate}%`));
+    else L.push('- ไม่มีข้อมูล');
+    if (reasons.length) { L.push('', 'NG by defect (Pareto)'); reasons.slice(0, 10).forEach((r, i) => L.push(`${i + 1}) ${r}: ${n(data.ngByReason[r])} ชิ้น`)); }
+    L.push('', 'Maintenance');
+    L.push(`- Tickets ทั้งหมด: ${mt.total}`);
+    L.push(`- Downtime รวม: ${n(mt.downtime)} นาที`);
+    L.push(`- งานที่ยังไม่ปิด ณ วันรายงาน: ${mt.open} รายการ`);
+    L.push(`- งานซ่อมเสร็จแล้วในช่วงรายงาน: ${mt.resolved} รายการ`);
+    const unclosed = mt.unclosedList || [], done = mt.completedList || [];
+    L.push('', 'Unclosed Maintenance Jobs (ยังไม่ปิด / อาจทำให้ยอดตก)');
+    if (unclosed.length) unclosed.forEach((t, i) => L.push(`${i + 1}) ${t.ticketId} | ${mNameOf(t.machineId)} | ${t.status}${t.carried ? ' | ค้างจากวันก่อน' : ''} | ปัญหา: ${issueTxt(t)}`));
+    else L.push('- ไม่มีงานค้าง');
+    L.push('', 'Completed Maintenance Jobs (เสร็จแล้วในช่วงรายงาน / ล่าสุด 5 รายการ)');
+    if (done.length) done.slice(0, 5).forEach((t, i) => L.push(`${i + 1}) ${t.ticketId} | ${mNameOf(t.machineId)} | ${issueLbl(t.issueType) || '-'} | Downtime ${n(t.downtimeMinutes)} นาที`));
+    else L.push('- ไม่มีรายการเสร็จแล้ว');
+    if (dc) {
+      L.push('', 'Daily Check');
+      L.push(`- Compliance: ${pctTxt(dc.compliance)} (${dc.checked}/${dc.expected}) | Accept ${dc.accept} | Reject ${dc.reject}`);
+      if (dc.missing.length) L.push(`- ยังไม่ตรวจ: ${dc.missing.slice(0, 15).map((m) => `${m.machineId} ${m.shiftDN === 'Night' ? 'กะดึก' : 'กะเช้า'}${m.formTab ? ' (' + m.formTab + ')' : ''}`).join(', ')}${dc.missing.length > 15 ? ' …' : ''}`);
+    }
+    $('autoReport').textContent = L.join('\n');
+    $('repStamp').textContent = `อัปเดตล่าสุด: ${fmtStamp(reportAt)} (${mode})`;
+  }
+  $('repGen').onclick = () => UI.withButton($('repGen'), async () => { reportMode = 'manual'; await load(); });
+
+  // ---------- PDF ----------
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`) && window.html2pdf) return resolve();
+      const s = document.createElement('script'); s.src = src; s.onload = resolve; s.onerror = () => reject(new Error('โหลดตัวสร้าง PDF ไม่ได้'));
+      document.head.appendChild(s);
+    });
+  }
+  const esc = UI.esc;
+  const tbl = (cls, head, rowsHtml, emptyCols) => `<table class="${cls}"><thead><tr>${head}</tr></thead><tbody>${rowsHtml || `<tr><td colspan="${emptyCols}">-</td></tr>`}</tbody></table>`;
+  const chartImg = (id, title) => { const c = charts[id]; return c ? `<div class="rp-chart"><div>${title}</div><img src="${c.toBase64Image('image/png', 1)}"></div>` : ''; };
+
+  /** โลโก้ SVG → PNG (html2canvas วาดรูป SVG ไม่ได้) */
+  async function logoPng() {
+    try {
+      const img = new Image();
+      img.src = 'data:image/svg+xml;base64,' + btoa(UI.BRAND_SVG);
+      await img.decode();
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      c.getContext('2d').drawImage(img, 0, 0, 128, 128);
+      return c.toDataURL('image/png');
+    } catch (e) { return ''; }
+  }
+
+  function reportHtml(logoSrc) {
+    const k = data.kpi, mt = data.maintenance, dc = data.dailyCheck;
+    const logo = logoSrc ? `<img src="${logoSrc}" width="46" height="46">` : '';
+    const reasons = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a]);
+    return `<div class="rp">
+      <div class="rp-head">${logo}<div><h1>${esc(APP_CONFIG.LINE_NAME)} Production Report</h1><div>Standard Production Report Form</div></div></div>
+      <div class="rp-meta">สร้างรายงานเมื่อ: ${esc(fmtStamp(reportAt || new Date()))}<br>ช่วงข้อมูล: ${esc(rangeTxt())}<br>${esc(shiftTxt())}${$('fProduct').value ? ' | รุ่น: ' + esc($('fProduct').value) : ''}</div>
+      <div class="rp-section"><h2>KPI Summary</h2><div class="rp-kpi">
+        <div>Total FG: <b>${n(k.actual)}</b></div><div>OEE: <b>${pctTxt(k.oee)}</b></div><div>NG Rate: <b>${k.defectRate}%</b> (${n(k.defect)})</div>
+        <div>Plan: <b>${n(k.plan)}</b></div><div>Open tickets: <b>${mt.open}</b> (ยกมา ${mt.carriedOver})</div><div>Completed: <b>${mt.resolved}</b> · DT ${n(mt.downtime)} นาที</div>
+      </div></div>
+      <h2>Production report by product</h2>
+      ${tbl('', '<th>Product</th><th class="n">Plan</th><th class="n">FG</th><th class="n">NG</th><th class="n">%Yield</th><th class="n">%NG</th>',
+        data.byProduct.map((p) => `<tr><td>${esc(p.productCode)}</td><td class="n">${n(p.plan)}</td><td class="n">${n(p.actual)}</td><td class="n">${n(p.defect)}</td><td class="n">${p.yield}%</td><td class="n">${p.defectRate}%</td></tr>`).join(''), 6)}
+      <h2>Production report by machine</h2>
+      ${tbl('', '<th>Machine</th><th class="n">Capacity/hr</th><th class="n">FG</th><th class="n">NG</th><th class="n">OEE</th><th class="n">%NG</th>',
+        data.byMachine.map((m) => `<tr><td>${esc(m.machineName)}</td><td class="n">${m.capacity ? n(m.capacity) : '-'}</td><td class="n">${n(m.actual)}</td><td class="n">${n(m.defect)}</td><td class="n">${pctTxt(m.oee)}</td><td class="n">${m.defectRate}%</td></tr>`).join(''), 6)}
+      ${reasons.length ? `<h2>NG by defect (Pareto)</h2>${tbl('', '<th>#</th><th>อาการ</th><th class="n">NG</th><th class="n">%</th>',
+        reasons.slice(0, 10).map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r)}</td><td class="n">${n(data.ngByReason[r])}</td><td class="n">${k.defect ? (data.ngByReason[r] / k.defect * 100).toFixed(1) : 0}%</td></tr>`).join(''), 4)}` : ''}
+      <h2>Unclosed maintenance jobs (may impact output)</h2>
+      ${tbl('rp-red', '<th>Ticket</th><th>Machine</th><th>Status</th><th>Issue / Problem</th><th>Carry</th>',
+        (mt.unclosedList || []).map((t) => `<tr><td>${esc(t.ticketId)}</td><td>${esc(mNameOf(t.machineId))}</td><td>${esc(t.status)}</td><td>${esc(issueTxt(t))}</td><td>${t.carried ? 'Y' : ''}</td></tr>`).join(''), 5)}
+      <h2>Completed maintenance jobs</h2>
+      ${tbl('', '<th>Ticket</th><th>Machine</th><th>Type</th><th>Resolved</th><th class="n">DT(m)</th>',
+        (mt.completedList || []).map((t) => `<tr><td>${esc(t.ticketId)}</td><td>${esc(mNameOf(t.machineId))}</td><td>${esc(issueLbl(t.issueType) || '-')}</td><td>${esc(t.resolvedAt || '-')}</td><td class="n">${n(t.downtimeMinutes)}</td></tr>`).join(''), 5)}
+      ${dc ? `<h2>Daily Check</h2><div>Compliance <b>${pctTxt(dc.compliance)}</b> (${dc.checked}/${dc.expected}) · Accept ${dc.accept} · Reject ${dc.reject}</div>` : ''}
+      <h2>Shift breakdown</h2>
+      ${tbl('', '<th>Shift</th><th class="n">FG</th><th class="n">NG</th>',
+        Object.keys(data.byShift).map((s) => `<tr><td>${esc(s)}</td><td class="n">${n(data.byShift[s].actual)}</td><td class="n">${n(data.byShift[s].defect)}</td></tr>`).join(''), 3)}
+      <div style="page-break-before: always"></div>
+      <h2>Charts</h2>
+      <div class="rp-charts">${chartImg('cMachine', 'Output by machine')}${chartImg('cTrend', 'Production trend')}${chartImg('cProduct', 'Product mix')}${chartImg('cReason', 'NG Pareto (main defect causes)')}</div>
+      <div class="rp-foot">${esc(APP_CONFIG.SYSTEM_TITLE)}</div>
+    </div>`;
+  }
+
+  $('repPdf').onclick = () => UI.withButton($('repPdf'), async () => {
+    if (!data) return UI.showToast('ยังไม่มีข้อมูล — กดค้นหาก่อน', 'warning');
+    if (!reportAt) generateReport('auto');
+    const name = `${APP_CONFIG.LINE_NAME.replace(/[^A-Za-z0-9]+/g, '')}_report_${data.range.from || 'all'}${data.range.to && data.range.to !== data.range.from ? '_' + data.range.to : ''}_${$('fShiftAB').value || 'all'}-${($('fShiftDN').value || 'all').toLowerCase()}.pdf`;
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1';
+    holder.innerHTML = reportHtml(await logoPng());
+    document.body.appendChild(holder);
+    try {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      await window.html2pdf().set({
+        margin: [8, 0, 8, 0], filename: name, image: { type: 'jpeg', quality: 0.92 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.rp-section', '.rp-chart'] }
+      }).from(holder.firstElementChild).save();
+      UI.showToast('ดาวน์โหลด PDF แล้ว', 'success');
+    } catch (err) {
+      // สำรอง: เปิดหน้าพิมพ์ → เลือก "บันทึกเป็น PDF"
+      const w = window.open('', '_blank');
+      if (!w) return UI.showToast(err.message + ' — อนุญาต pop-up แล้วลองใหม่', 'error');
+      w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${esc(name)}</title>${document.querySelector('style').outerHTML}</head><body style="margin:0">${holder.innerHTML}<script>setTimeout(function(){print()},400)<\/script></body></html>`);
+      w.document.close();
+    } finally { holder.remove(); }
+  });
 
   const COLS = [['date', 'วันที่'], ['timePeriod', 'ช่วง'], ['shift', 'กะ'], ['machineId', 'เครื่อง'], ['productCode', 'รุ่น'], ['jobOrderId', 'JO'], ['actualQty', 'FG'], ['defectQty', 'NG'], ['remark', 'อาการ'], ['employeeName', 'ผู้บันทึก'], ['status', 'สถานะ']];
   function renderTable() {
