@@ -30,7 +30,7 @@ function submitSortingJob(token, d) {
   if (!hasNgReason(d.remark)) throw new Error('กรุณาระบุหมายเหตุ');
   var id = makeId('ST', date);
   appendRow('SortingLog', {
-    JobID: id, Timestamp: formatDate(), Date: date, Shift: d.shift || u.shift || '', ShiftDN: detectShift(),
+    JobID: id, Timestamp: formatDate(), Date: date, Shift: d.shift === 'Day' || d.shift === 'Night' ? d.shift : detectShift(), ShiftDN: detectShift(),
     MachineID: d.machineId, ProductCode: d.productCode, FoundProcess: d.foundProcess, TotalQty: toNumber(d.totalQty),
     GoodQty: 0, DefectQty: 0, DefectDetails: '', Status: 'pending', RegisteredBy: u.employeeId, RegisteredByName: u.name,
     SortedBy: '', SortedByName: '', PulledAt: '', CompletedAt: '', Remark: d.remark, JobOrderID: d.jobOrderId || ''

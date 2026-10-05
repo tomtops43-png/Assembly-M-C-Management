@@ -196,7 +196,7 @@ function submitProduction(token, data) {
 
   var planned = toNumber(data.plannedQty, machineCapacity(m, m.currentProduct));
   var base = {
-    Timestamp: formatDate(now), Date: workDate, Shift: u.shift || '', TimePeriod: timePeriod,
+    Timestamp: formatDate(now), Date: workDate, Shift: shiftFromPeriod(timePeriod), TimePeriod: timePeriod,
     EmployeeID: u.employeeId, EmployeeName: u.name, MachineID: m.machineId, ProductCode: m.currentProduct,
     Status: 'completed', ClientRequestID: data.clientRequestId || '', JobOrderID: m.currentJobOrder
   };

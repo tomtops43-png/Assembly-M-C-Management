@@ -96,7 +96,7 @@ function submitDailyCheck(token, data) {
   }
   var id = makeId('DC');
   appendRow('DailyCheckLog', {
-    CheckID: id, Timestamp: formatDate(), Date: date, Shift: data.shift || u.shift || '',
+    CheckID: id, Timestamp: formatDate(), Date: date, Shift: shiftDN,
     ShiftDN: shiftDN, TimePeriod: shiftDN, MachineID: data.machineId, FormID: form.id,
     Results: JSON.stringify(results), Decision: decision, Remark: data.remark || '', RecordedBy: u.employeeId,
     RecorderName: u.name, Status: 'active', ClientRequestID: data.clientRequestId || '', UpdatedAt: '', UpdatedBy: ''

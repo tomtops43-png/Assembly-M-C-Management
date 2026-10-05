@@ -206,7 +206,7 @@
     const img = (u) => `<a href="${UI.esc(u)}" target="_blank" rel="noopener" class="photo-thumb">${u.includes('thumbnail') ? `<img src="${UI.esc(u)}">` : 'ไฟล์'}</a>`;
     $('dBody').innerHTML = `<table class="data-table"><tbody>
       <tr><th>เครื่อง</th><td>${UI.esc(mName(t.machineId))}</td></tr><tr><th>ประเภท</th><td>${UI.esc(issueLabel(t.issueType))}</td></tr>
-      <tr><th>ความเร่งด่วน</th><td>${UI.esc(t.priority)}</td></tr><tr><th>แจ้งเมื่อ</th><td>${UI.esc(t.timestamp)} (${UI.esc(t.shiftDN)} ${UI.esc(t.shiftAB)})</td></tr>
+      <tr><th>ความเร่งด่วน</th><td>${UI.esc(t.priority)}</td></tr><tr><th>แจ้งเมื่อ</th><td>${UI.esc(t.timestamp)} (${UI.esc(UI.shiftLabel(t.shiftDN))})</td></tr>
       <tr><th>ผู้แจ้ง</th><td>${UI.esc(t.reporterName)}</td></tr><tr><th>รายละเอียด</th><td style="white-space:normal">${UI.esc(t.description)}</td></tr>
       <tr><th>ผลการซ่อม</th><td style="white-space:normal">${UI.esc(t.resolution || '-')}</td></tr>
       ${t.mmsJobNo ? `<tr><th>ระบบซ่อมกลาง</th><td>${UI.esc(t.mmsJobNo)} · ${UI.esc(t.mmsStatus || '-')}</td></tr>` : ''}</tbody></table>

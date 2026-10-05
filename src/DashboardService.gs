@@ -54,7 +54,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
   requireLogin(token);
   var range = resolveDateRange(dateRange);
   var rows = queryProduction({
-    dateFrom: range.from, dateTo: range.to, shift: shiftAB || '', shiftDN: shiftDN || '',
+    dateFrom: range.from, dateTo: range.to, shiftDN: shiftDN || '', // ไลน์นี้ไม่มีกะ A/B — มีแค่กะเช้า/ดึก (shiftAB ไม่ใช้แล้ว)
     productCode: productCode || '', jobOrderId: jobOrderId || ''
   });
   var machines = getMachines();
@@ -80,7 +80,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     if (rowCap > 0) bm.capacity = rowCap; // ชิ้น/ชม. (ใช้ในรายงาน)
     var bp = byProduct[r.productCode] = byProduct[r.productCode] || { productCode: r.productCode, actual: 0, defect: 0, plan: 0 };
     bp.actual += r.actualQty; bp.defect += r.defectQty; bp.plan += plan;
-    var bs = byShift[r.shift || '-'] = byShift[r.shift || '-'] || { actual: 0, defect: 0 };
+    var bs = byShift[r.shiftDN || '-'] = byShift[r.shiftDN || '-'] || { actual: 0, defect: 0 };
     bs.actual += r.actualQty; bs.defect += r.defectQty;
     var dd = daily[r.date] = daily[r.date] || { date: r.date, actual: 0, defect: 0 };
     dd.actual += r.actualQty; dd.defect += r.defectQty;
@@ -205,7 +205,6 @@ function getSortedProductionData(token, sortField, sortOrder, filters) {
   requireLogin(token);
   var f = safeJson(filters, {}) || {};
   if (f.dateRange) { var r = resolveDateRange(f.dateRange); f.dateFrom = r.from; f.dateTo = r.to; }
-  if (f.shiftAB) f.shift = f.shiftAB;
   var rows = queryProduction(f);
   if (sortField) {
     var dir = sortOrder === 'asc' ? 1 : -1;

@@ -65,7 +65,6 @@
   <button class="modal-close" data-close-modal>&times;</button>
   <h3 class="modal-title" id="fTitle"></h3>
   <div class="small text-gray mb-2" id="fInfo"></div>
-  <div class="form-group"><label class="form-label">กะ A/B</label><select class="form-input" id="fShift"><option value="">-</option><option>A</option><option>B</option></select></div>
   <div class="btn-group mb-2"><button class="btn btn-outline btn-sm" id="fAllOk"><i class="bi bi-check2-all"></i> <span id="fAllOkLabel">ปกติทุกข้อ</span></button></div>
   <div id="fItems"></div>
   <div class="form-group"><label class="form-label">หมายเหตุ <span id="remarkReq" class="req hidden">* (มีข้อผิดปกติ)</span></label><textarea class="form-input" id="fRemark" rows="2"></textarea></div>
@@ -85,7 +84,6 @@
   if (!UI.initPage('dailycheck', 'Daily Check', 'bi-clipboard-check')) return;
   const $ = (id) => document.getElementById(id);
   const P = APP_CONFIG.STORAGE_PREFIX, user = Auth.getUser();
-  const SHIFT_KEY = P + 'dailycheck_shift_' + user.employeeId;
   const isSup = Auth.hasRole('supervisor');
   const SHIFT_LABEL = { Day: 'กะเช้า', Night: 'กะดึก' };
   let data = null, selMachine = '', selFormId = '', selDate = '', selShift = '', results = [], reqId = null, formOpenAt = 0;
@@ -199,10 +197,6 @@
     results = c ? c.results.slice() : f.items.map(() => '');
     $('fTitle').textContent = `${machineName(selMachine)} · ${f.tab || f.name} · ${SHIFT_LABEL[s]}`;
     $('fInfo').textContent = UI.formatDate(d) + (c ? ` · บันทึกโดย ${c.recorderName} ${hhmm(c.timestamp)}` + (c.verifiedBy ? ` · ยืนยันโดย ${c.verifiedBy}` : '') : '');
-    let savedShift = '';
-    try { savedShift = localStorage.getItem(SHIFT_KEY) || ''; } catch (e) {}
-    $('fShift').value = c ? c.shift : (user.shift || savedShift);
-    $('fShift').disabled = !!user.shift || !!c;
     $('fRemark').value = c ? c.remark : '';
     $('fAllOkLabel').textContent = okLabel(f) + 'ทุกข้อ';
     $('fCancel').classList.toggle('hidden', !(c && isSup));
@@ -222,8 +216,7 @@
   $('fSave').onclick = () => UI.withButton($('fSave'), async () => {
     if (results.includes('')) return UI.showToast('กรุณาตรวจให้ครบทุกหัวข้อ', 'warning');
     if (results.includes('NG') && !$('fRemark').value.trim()) return UI.showToast('มีข้อที่ไม่ผ่าน ต้องระบุหมายเหตุ', 'warning');
-    if (!user.shift && $('fShift').value) { try { localStorage.setItem(SHIFT_KEY, $('fShift').value); } catch (e) {} }
-    const r = await API.post('submitDailyCheck', { data: { machineId: selMachine, formId: selFormId, shiftDN: selShift, results, remark: $('fRemark').value.trim(), date: selDate, shift: $('fShift').value, clientRequestId: reqId } });
+    const r = await API.post('submitDailyCheck', { data: { machineId: selMachine, formId: selFormId, shiftDN: selShift, results, remark: $('fRemark').value.trim(), date: selDate, clientRequestId: reqId } });
     if (!r.success) return UI.showToast(r.message, 'error');
     UI.closeModal('formModal'); formOpenAt = 0; UI.showToast(r.updated ? 'แก้ไขแล้ว' : 'บันทึกแล้ว', 'success'); load();
   });
