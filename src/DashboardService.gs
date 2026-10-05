@@ -67,13 +67,20 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
   var totals = { actual: 0, defect: 0, plan: 0, entries: rows.length };
   var byMachine = {}, byProduct = {}, byShift = {}, daily = {}, ngByReason = {}, ngByPart = {};
   var ngDaily = {}; // date → { อาการ: qty } (กราฟ NG ตามอาการรายวันในรายงาน PDF)
+  var hourlyPlan = {}; // 'machine|date|กะ' → { machineId, hours: { ช่วงเวลา: {cap, productCode} } }
   var oeeAgg = {}; // machine → { shifts: { 'date|Day': {actual, hours, shiftPlan, hourlyRows} } }
 
   rows.forEach(function (r) {
     var m = mMap[r.machineId] || { capacity: 0, assignedProducts: [] };
     var rowCap = machineCapacity(m, r.productCode, caps); // ชิ้น/ชม. ของสินค้าที่ผลิตในแถวนี้
-    // ลงยอดทั้งกะ: แผนเก็บไว้ในแถวแล้ว (capacity × ชม.) — รายชั่วโมง: capacity ต่อชม.
-    var plan = r.status === 'sort-adjust' ? 0 : isShiftPeriod(r.timePeriod) ? r.plannedQty : (rowCap || r.plannedQty);
+    // ลงยอดทั้งกะ: แผนเก็บไว้ในแถวแล้ว (capacity × ชม.)
+    // ลงรายชั่วโมง: ไม่คิดแผนรายแถว — รวมเป็นแผนรายกะหลังวนลูป (ดู hourlyPlan ด้านล่าง)
+    var plan = r.status !== 'sort-adjust' && isShiftPeriod(r.timePeriod) ? r.plannedQty : 0;
+    if (r.status !== 'sort-adjust' && !isShiftPeriod(r.timePeriod)) {
+      var hk = r.machineId + '|' + r.date + '|' + (r.shiftDN || '-');
+      var hp = hourlyPlan[hk] = hourlyPlan[hk] || { machineId: r.machineId, hours: {} };
+      hp.hours[r.timePeriod] = { cap: rowCap, productCode: r.productCode };
+    }
     totals.actual += r.actualQty; totals.defect += r.defectQty; totals.plan += plan;
 
     var bm = byMachine[r.machineId] = byMachine[r.machineId] || { machineId: r.machineId, machineName: m.machineName || r.machineId, actual: 0, defect: 0, plan: 0 };
@@ -113,6 +120,24 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
         else { sh.hourlyRows++; if (rowCap > 0) sh.hours[r.timePeriod] = rowCap; }
       }
     }
+  });
+
+  // แผนของการลงรายชั่วโมง = รายวัน/รายกะ: capacity × max(ชม.สุทธิต่อกะ, ชม.ที่ลงจริง)
+  // นับครั้งเดียวต่อ (เครื่อง, วัน, กะ) ไม่ว่าจะลงกี่ครั้ง/กี่แถว (FG+NG แยกแถว, ลงซ้ำชั่วโมงเดิม)
+  // ถ้ากะนั้นผลิตหลายรุ่น แบ่งแผนให้แต่ละรุ่นตามจำนวนชั่วโมงที่ผลิต
+  Object.keys(hourlyPlan).forEach(function (k) {
+    var hp = hourlyPlan[k];
+    var periods = Object.keys(hp.hours);
+    if (!periods.length) return;
+    var fallback = machineCapacity(mMap[hp.machineId] || { capacity: 0, assignedProducts: [] }, '', caps);
+    var hrsTotal = Math.max(LINE_CONFIG.NET_HOURS_PER_SHIFT, periods.length);
+    periods.forEach(function (p) {
+      var h = hp.hours[p];
+      var share = Math.round((h.cap || fallback) * hrsTotal / periods.length);
+      totals.plan += share;
+      if (byMachine[hp.machineId]) byMachine[hp.machineId].plan += share;
+      if (byProduct[h.productCode]) byProduct[h.productCode].plan += share;
+    });
   });
 
   var oeeActualSum = 0, oeeCapSum = 0;
