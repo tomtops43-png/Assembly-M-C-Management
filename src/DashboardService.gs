@@ -72,7 +72,8 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
   rows.forEach(function (r) {
     var m = mMap[r.machineId] || { capacity: 0, assignedProducts: [] };
     var rowCap = machineCapacity(m, r.productCode, caps); // ชิ้น/ชม. ของสินค้าที่ผลิตในแถวนี้
-    var plan = r.status === 'sort-adjust' ? 0 : (rowCap || r.plannedQty);
+    // ลงยอดทั้งกะ: แผนเก็บไว้ในแถวแล้ว (capacity × ชม.) — รายชั่วโมง: capacity ต่อชม.
+    var plan = r.status === 'sort-adjust' ? 0 : isShiftPeriod(r.timePeriod) ? r.plannedQty : (rowCap || r.plannedQty);
     totals.actual += r.actualQty; totals.defect += r.defectQty; totals.plan += plan;
 
     var bm = byMachine[r.machineId] = byMachine[r.machineId] || { machineId: r.machineId, machineName: m.machineName || r.machineId, actual: 0, defect: 0, plan: 0 };

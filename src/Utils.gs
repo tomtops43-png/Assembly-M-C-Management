@@ -28,7 +28,11 @@ function detectTimePeriod(d) { return hourToPeriod(bkkHour(d)); }
 
 function periodHour(p) { return Number(String(p || '').substring(0, 2)); }
 
-function shiftFromPeriod(p) { return isDayHour(periodHour(p)) ? 'Day' : 'Night'; }
+/** ช่วงเวลา → กะ ('Day'/'Night' = ลงยอดทั้งกะ คืนค่าเดิม) */
+function shiftFromPeriod(p) { return isShiftPeriod(p) ? p : isDayHour(periodHour(p)) ? 'Day' : 'Night'; }
+
+/** TimePeriod ของรายการ "ลงยอดทั้งกะ" เก็บเป็น 'Day' / 'Night' แทนช่วงชั่วโมง */
+function isShiftPeriod(p) { return p === 'Day' || p === 'Night'; }
 
 /** ช่วงเวลา 24 ช่อง เรียงแบบโรงงาน 8..23,0..7 */
 function getTimePeriods() {
