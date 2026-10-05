@@ -76,6 +76,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
 
     var bm = byMachine[r.machineId] = byMachine[r.machineId] || { machineId: r.machineId, machineName: m.machineName || r.machineId, actual: 0, defect: 0, plan: 0 };
     bm.actual += r.actualQty; bm.defect += r.defectQty; bm.plan += plan;
+    if (rowCap > 0) bm.capacity = rowCap; // ชิ้น/ชม. (ใช้ในรายงาน)
     var bp = byProduct[r.productCode] = byProduct[r.productCode] || { productCode: r.productCode, actual: 0, defect: 0, plan: 0 };
     bp.actual += r.actualQty; bp.defect += r.defectQty; bp.plan += plan;
     var bs = byShift[r.shift || '-'] = byShift[r.shift || '-'] || { actual: 0, defect: 0 };
@@ -140,7 +141,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
 
   // Maintenance summary
   var tickets = getAllRows('MaintenanceLog').map(ticketToObj);
-  var maint = { total: 0, open: 0, resolved: 0, carriedOver: 0, downtime: 0, byMachine: {}, byType: {} };
+  var maint = { total: 0, open: 0, resolved: 0, carriedOver: 0, downtime: 0, byMachine: {}, byType: {}, unclosedList: [], completedList: [] };
   tickets.forEach(function (t) {
     var refDate = t.resolvedAt ? getWorkDate(parseDate(t.resolvedAt)) : t.date;
     var inRange = (!range.from || refDate >= range.from) && (!range.to || refDate <= range.to);
@@ -151,11 +152,18 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     if (isOpen) maint.open++; else maint.resolved++;
     if (carried) maint.carriedOver++;
     maint.downtime += t.downtimeMinutes;
+    var brief = { ticketId: t.ticketId, machineId: t.machineId, status: t.status, issueType: t.issueType, description: String(t.description || '').substring(0, 120),
+      date: t.date, resolvedAt: t.resolvedAt, downtimeMinutes: t.downtimeMinutes, carried: !!carried };
+    if (isOpen) maint.unclosedList.push(brief); else maint.completedList.push(brief);
     var bm = maint.byMachine[t.machineId] = maint.byMachine[t.machineId] || { tickets: 0, downtime: 0 };
     bm.tickets++; bm.downtime += t.downtimeMinutes;
     var bt = maint.byType[t.issueType] = maint.byType[t.issueType] || { tickets: 0, downtime: 0 };
     bt.tickets++; bt.downtime += t.downtimeMinutes;
   });
+
+  maint.completedList.sort(function (a, b) { return String(b.resolvedAt).localeCompare(String(a.resolvedAt)); });
+  maint.completedList = maint.completedList.slice(0, 30);
+  maint.unclosedList = maint.unclosedList.slice(0, 30);
 
   // Job Order progress (JO ที่อยู่ในช่วง)
   var joIds = {};
