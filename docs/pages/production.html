@@ -44,6 +44,7 @@
         <div class="lock-field"><i class="bi bi-lock-fill"></i><span id="joText">-</span></div>
       </div>
     </div>
+    <div class="notice danger hidden" id="setupNotice"><i class="bi bi-exclamation-octagon-fill"></i> เครื่องนี้ยังตั้ง <b>ผลิตภัณฑ์</b> และ <b>Job Order</b> ไม่ครบ — ยังลงยอดไม่ได้ ให้หัวหน้าตั้งที่เมนู "เครื่องจักร" ก่อน</div>
     <div id="joProgress" class="hidden mb-3"></div>
 
     <div class="form-group">
@@ -198,12 +199,15 @@
     if (!list.length) { $('machineGrid').innerHTML = UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร — ให้ admin เพิ่มที่เมนู "จัดการ"'); return; }
     $('machineGrid').innerHTML = UI.machineGridHtml(list, (m) => `
       <button class="machine-btn status-${m.status} ${selMachine && selMachine.machineId === m.machineId ? 'active' : ''}" data-id="${UI.esc(m.machineId)}" ${m.status === 'down' ? 'disabled' : ''}>
-        ${UI.esc(m.machineName)}<small>${UI.esc(m.currentProduct || 'ยังไม่ตั้งสินค้า')}</small></button>`);
+        ${UI.esc(m.machineName)}<small>${m.currentProduct ? UI.esc(m.currentProduct) + (m.currentJobOrder ? '' : ' · <span class="text-danger">ยังไม่มี JO</span>') : 'ยังไม่ตั้งสินค้า'}</small></button>`);
   }
   $('machineGrid').addEventListener('click', (e) => {
     const b = e.target.closest('[data-id]');
     if (b) selectMachine(b.dataset.id);
   });
+
+  // ลงยอดได้เฉพาะเครื่องที่ตั้งทั้งผลิตภัณฑ์และ Job Order แล้ว
+  function isReady(m) { return !!(m && m.currentProduct && m.currentJobOrder); }
 
   function selectMachine(id) {
     selMachine = master.machines.find((m) => m.machineId === id);
@@ -214,9 +218,10 @@
     $('productText').textContent = selMachine.currentProduct
       ? selMachine.currentProduct + (prod ? ' — ' + prod.productName : '')
       : 'ยังไม่ได้ตั้งสินค้า — แจ้งหัวหน้าให้ตั้งที่เมนูเครื่องจักร';
-    $('joText').textContent = selMachine.currentJobOrder || 'ไม่ระบุ';
+    $('joText').textContent = selMachine.currentJobOrder || 'ยังไม่ได้เลือก Job Order — แจ้งหัวหน้าให้ตั้งที่เมนูเครื่องจักร';
+    $('setupNotice').classList.toggle('hidden', isReady(selMachine));
     $('actualQty').value = prod ? prod.defaultQty : cfg.defaultQty;
-    $('submitBtn').disabled = !selMachine.currentProduct;
+    $('submitBtn').disabled = !isReady(selMachine);
     renderComponents($('componentInputs'), selMachine.currentProduct, {}, recalcNg);
     fillReasons($('ngReason'), selMachine.group);
     $('ngReasonOther').classList.toggle('hidden', $('ngReason').value !== OTHER);
@@ -303,6 +308,7 @@
   // ---------- บันทึก ----------
   $('submitBtn').onclick = () => UI.withButton($('submitBtn'), async () => {
     if (!selMachine || !selMachine.currentProduct) return UI.showToast('เครื่องนี้ยังไม่ได้ตั้งสินค้า', 'warning');
+    if (!selMachine.currentJobOrder) return UI.showToast('เครื่องนี้ยังไม่ได้เลือก Job Order — ลงยอดไม่ได้', 'warning');
     const ng = readComponents($('componentInputs'));
     const remark = ng.total > 0 ? reasonValue($('ngReason'), $('ngReasonOther')) : '';
     if (ng.total > 0 && !remark) return UI.showToast('กรุณาระบุอาการ NG', 'warning');
@@ -323,7 +329,7 @@
     $('componentInputs').querySelectorAll('input').forEach((i) => { i.value = ''; });
     $('ngReason').value = ''; $('ngReasonOther').value = ''; recalcNg();
     loadEntries(); loadJoProgress();
-  }).finally(() => { if (selMachine) $('submitBtn').disabled = !selMachine.currentProduct; });
+  }).finally(() => { if (selMachine) $('submitBtn').disabled = !isReady(selMachine); });
 
   function machineName(id) { const m = master && master.machines.find((x) => x.machineId === id); return m ? m.machineName : id; }
 
