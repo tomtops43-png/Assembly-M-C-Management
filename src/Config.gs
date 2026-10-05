@@ -59,7 +59,7 @@ var LINE_CONFIG = {
   DEFECT_PART_GROUPS: [],         // TODO(ข้อมูลไลน์)
 
   // ---- คัดแยก (Sorting) ----
-  SORTING_PROCESSES: ['FG', 'ไลน์ผลิต', 'QC'], // TODO(ข้อมูลไลน์) กระบวนการที่พบ
+  SORTING_PROCESSES: ['FG', 'ไลน์ผลิต'],       // กระบวนการที่พบ (ยืนยันแล้ว — ตัด QC ออก)
   SORTING_FG_PROCESSES: ['FG'],                 // กระบวนการที่ถือว่านับเป็น FG ไปแล้ว
   SORTING_ADJUST_NG_REASON: 'ปรับยอดจากการคัดแยก',
 
