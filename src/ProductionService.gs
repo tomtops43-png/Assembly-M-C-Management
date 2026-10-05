@@ -231,6 +231,7 @@ function submitProduction(token, data) {
  */
 function submitProductionShift(token, data) {
   var u = requirePermission(token, 'production');
+  if (u.role !== 'admin') throw new Error('การลงยอดทั้งกะใช้ได้เฉพาะ Admin');
   data = data || {};
   var m = getMachine(data.machineId);
   if (!m) throw new Error('ไม่พบเครื่องจักร');
