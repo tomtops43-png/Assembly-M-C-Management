@@ -59,6 +59,7 @@
   if (!UI.initPage('waste', 'ทิ้งขยะ', 'bi-trash3')) return;
   const $ = (id) => document.getElementById(id);
   let types = [];
+  const reqIds = UI.requestIdKeeper();
   async function loadTypes() {
     const r = await API.get('getWasteTypes');
     types = r.success ? r.data : [];
@@ -79,15 +80,20 @@
       (r.data.map((w) => `<tr><td>${UI.esc(w.timestamp)}</td><td>${UI.esc(w.wasteType)}</td><td class="num">${UI.formatNumber(w.weightKg, 2)}</td><td>${UI.esc(w.recorderName)}</td><td>${UI.esc(w.remark)}</td></tr>`).join('') || '<tr><td colspan="5" class="text-center text-gray">ไม่มีข้อมูล</td></tr>') + '</tbody>';
   }
   $('save').onclick = () => UI.withButton($('save'), async () => {
-    const r = await API.post('submitWaste', { data: { wasteType: $('type').value, weightKg: Number($('weight').value) || 0, recordedAt: $('at').value, remark: $('remark').value.trim() } });
+    const data = { wasteType: $('type').value, weightKg: Number($('weight').value) || 0, recordedAt: $('at').value, remark: $('remark').value.trim() };
+    if (!data.wasteType) return UI.showToast('กรุณาเลือกชนิดขยะ', 'warning');
+    if (data.weightKg <= 0) return UI.showToast('กรุณากรอกน้ำหนัก', 'warning');
+    data.clientRequestId = reqIds.get(data);
+    const r = await API.post('submitWaste', { data });
     if (!r.success) return UI.showToast(r.message, 'error');
+    reqIds.reset();
     $('weight').value = ''; $('remark').value = ''; $('at').value = UI.nowLocalInput();
     UI.showToast('บันทึกแล้ว', 'success'); loadToday(); loadHist();
   });
   $('resetAt').onclick = () => { $('at').value = UI.nowLocalInput(); };
   $('manage').onclick = () => UI.openModal('typeModal');
-  $('addType').onclick = async () => { const r = await API.post('addWasteType', { typeName: $('newType').value }); if (!r.success) return UI.showToast(r.message, 'error'); $('newType').value = ''; loadTypes(); };
-  $('typeList').addEventListener('click', async (e) => { const b = e.target.closest('[data-del]'); if (b && confirm('ลบชนิดนี้?')) { await API.post('deleteWasteType', { typeId: b.dataset.del }); loadTypes(); } });
+  $('addType').onclick = () => UI.withButton($('addType'), async () => { const r = await API.post('addWasteType', { typeName: $('newType').value }); if (!r.success) return UI.showToast(r.message, 'error'); $('newType').value = ''; await loadTypes(); });
+  $('typeList').addEventListener('click', async (e) => { const b = e.target.closest('[data-del]'); if (b && confirm('ลบชนิดนี้?')) { const r = await API.post('deleteWasteType', { typeId: b.dataset.del }); if (!r.success) UI.showToast(r.message, 'error'); loadTypes(); } });
   document.querySelectorAll('[data-days]').forEach((b) => b.onclick = () => { $('to').value = UI.getToday(); $('from').value = UI.addDays(UI.getToday(), -(Number(b.dataset.days) - 1)); loadHist(); });
   $('search').onclick = loadHist;
 

@@ -19,7 +19,7 @@ function getSheet(name) { return getSpreadsheet().getSheetByName(name); }
 
 function withLock(fn) {
   var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  lock.waitLock(20000); // ช่วงคนบันทึกพร้อมกัน (ต้นชั่วโมง) รอได้นานขึ้นก่อนแจ้ง error
   try { return fn(); } finally { lock.releaseLock(); }
 }
 

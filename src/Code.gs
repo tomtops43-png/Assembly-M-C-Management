@@ -125,8 +125,16 @@ function runAction(table, name, arg) {
     return fn(arg);
   } catch (err) {
     console.warn(name + ': ' + (err && err.message || err));
-    return { success: false, message: String(err && err.message || err) };
+    return { success: false, message: friendlyError(err) };
   }
+}
+
+/** error ภาษาอังกฤษจาก Google (lock/quota/timeout) → ข้อความไทยที่ผู้ใช้เข้าใจ */
+function friendlyError(err) {
+  var msg = String(err && err.message || err);
+  if (/lock/i.test(msg) && /timeout|timed out|too long/i.test(msg)) return 'ระบบกำลังมีผู้ใช้บันทึกพร้อมกันจำนวนมาก — กรุณากดบันทึกอีกครั้ง';
+  if (/too many times|Service .* (timed out|unavailable|error)|Exceeded maximum execution|try again later/i.test(msg)) return 'ระบบ Google ตอบช้าชั่วคราว — กรุณาลองใหม่อีกครั้ง';
+  return msg;
 }
 
 function doGet(e) {
@@ -149,8 +157,45 @@ function doPost(e) {
   return jsonOut(handlePostAction(body));
 }
 
+/**
+ * กันบันทึกเบิ้ล (ทุก write ที่ส่ง clientRequestId มา): เน็ตช้า → ผู้ใช้กดซ้ำ / request แรกยังทำงานอยู่
+ * จอง id ไว้ใน cache ภายใต้ lock → ทำงาน → เก็บผลสำเร็จไว้ 6 ชม. (ส่งซ้ำได้ผลเดิม + duplicate: true)
+ */
+var REQUEST_DEDUP_TTL = 21600;
+
+function requestIdOf(body) {
+  var id = body.clientRequestId || (body.data && typeof body.data === 'object' && body.data.clientRequestId);
+  return id ? String(id).substring(0, 80) : '';
+}
+
 function handlePostAction(body) {
-  return runAction(WRITE_ACTIONS, body && body.action, body || {});
+  body = body || {};
+  var rid = requestIdOf(body);
+  if (!rid || !WRITE_ACTIONS[body.action] || body.action === 'login') return runAction(WRITE_ACTIONS, body.action, body);
+  var cache = CacheService.getScriptCache();
+  var key = 'rq_' + body.action + '_' + rid;
+  var claim;
+  try {
+    claim = withLock(function () {
+      var hit = cache.get(key);
+      if (hit) return hit;
+      cache.put(key, 'pending', 300);
+      return '';
+    });
+  } catch (err) {
+    return { success: false, message: friendlyError(err) };
+  }
+  if (claim === 'pending') return { success: false, pending: true, message: 'รายการนี้กำลังบันทึกอยู่ — รอสักครู่แล้วกดบันทึกอีกครั้ง' };
+  if (claim) {
+    var prev = safeJson(claim, null);
+    if (prev) { prev.duplicate = true; return prev; }
+  }
+  var res = runAction(WRITE_ACTIONS, body.action, body);
+  try {
+    if (res && res.success) cache.put(key, JSON.stringify(res), REQUEST_DEDUP_TTL);
+    else cache.remove(key);
+  } catch (err) { console.warn('dedup cache: ' + (err && err.message || err)); }
+  return res;
 }
 
 // ---------- Setup ----------
