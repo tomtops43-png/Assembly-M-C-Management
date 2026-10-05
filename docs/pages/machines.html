@@ -145,7 +145,7 @@
     const r = await API.get('getJobOrderOptions', { filters: { machineId: current.machineId, productCode } });
     if (!r.success) return;
     $('mJo').innerHTML = '<option value="">ไม่ระบุ</option>' + r.data.map((j) =>
-      `<option value="${UI.esc(j.jobOrderId)}" ${j.jobOrderId === selected ? 'selected' : ''}>คิว ${j.queueNo || '-'} · ${UI.esc(j.jobOrderId)} · ${UI.formatNumber(j.plannedQty)} ชิ้น · ${UI.esc(j.priority)}</option>`).join('');
+      `<option value="${UI.esc(j.jobOrderId)}" ${j.jobOrderId === selected ? 'selected' : ''}>คิว ${j.queueNo || '-'} · ${UI.esc(j.jobOrderId)} · ${UI.formatNumber(j.plannedQty)} ชิ้น · ${UI.esc(j.priority)}${j.isTemp ? ' · ชั่วคราว' : ''}</option>`).join('');
   }
 
   function renderAssigned() {
