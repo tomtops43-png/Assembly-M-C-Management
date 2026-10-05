@@ -263,7 +263,7 @@ body.is-mobile .toast-wrap { left: 50%; right: auto; transform: translateX(-50%)
 .toast i { font-size: 18px; }
 .toast.hide { opacity: 0; }
 .toast-success i { color: #3DDC84; } .toast-error i { color: #FF6B6B; } .toast-warning i { color: #FFC233; } .toast-info i { color: #FF8FA0; }
-.loading-overlay { position: fixed; inset: 0; background: rgba(22,23,27,.28); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 150; display: none; align-items: center; justify-content: center; }
+.loading-overlay { position: fixed; inset: 0; background: rgba(22,23,27,.12); z-index: 150; display: none; align-items: center; justify-content: center; }
 .loading-overlay.show { display: flex; animation: fadeIn .18s ease-out; }
 .loading-card { display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 200px; padding: 26px 30px 22px; border-radius: 16px; background: rgba(255,255,255,.96); box-shadow: 0 20px 50px rgba(22,23,27,.25), 0 0 0 1px rgba(200,16,46,.08); animation: popIn .28s cubic-bezier(.2,1.4,.4,1); }
 .loading-text { font-weight: 700; color: var(--ink); letter-spacing: .2px; }
@@ -299,9 +299,40 @@ body.is-mobile #netLoader .net-pill { right: 50%; bottom: calc(100px + env(safe-
 body.is-mobile #netLoader.show .net-pill { transform: translate(50%, 0); }
 body.is-mobile #netLoader.show.overlay-on .net-pill { transform: translate(50%, 14px) scale(.96); }
 
-/* skeleton: กล่องที่ยังว่างระหว่างโหลด → แถบวาววิ่ง */
-body.net-busy .kpi-grid:empty, body.net-busy .auto-report:empty, .skeleton { min-height: 92px; border-radius: var(--radius); background: linear-gradient(100deg, #E9E9ED 30%, #F7F7F9 50%, #E9E9ED 70%) 0 0 / 300% 100%; animation: shimmer 1.3s linear infinite; }
-body.net-busy .auto-report:empty { min-height: 34px; }
+/* skeleton: กล่องที่ยังว่างระหว่างโหลด → โครงเทาวาววิ่ง (รูปทรงตามชนิดเนื้อหา)
+   ใช้: <div data-skeleton="list|grid"> · .kpi-grid / ตารางว่างใน .table-wrap ได้อัตโนมัติ */
+body.net-busy .auto-report:empty, .skeleton { min-height: 34px; border-radius: var(--radius); background: linear-gradient(100deg, #E9E9ED 30%, #F7F7F9 50%, #E9E9ED 70%) 0 0 / 300% 100%; animation: shimmer 1.3s linear infinite; }
+body.net-busy [data-skeleton]:empty, body.net-busy .kpi-grid:empty, body.net-busy .table-wrap:has(> table:empty) { position: relative; min-height: 236px; }
+body.net-busy .kpi-grid:empty { display: block; min-height: 92px; }
+body.net-busy .table-wrap:has(> table:empty) { min-height: 214px; }
+body.net-busy [data-skeleton="grid"]:empty { min-height: 244px; }
+body.net-busy [data-skeleton]:empty::before, body.net-busy .kpi-grid:empty::before, body.net-busy .table-wrap:has(> table:empty)::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, #E6E6EA 30%, #F6F6F8 50%, #E6E6EA 70%) 0 0 / 300% 100%; animation: shimmer 1.3s linear infinite;
+  /* list: แถวการ์ด 64px เว้น 12px */
+  -webkit-mask: repeating-linear-gradient(#000 0 64px, transparent 64px 76px); mask: repeating-linear-gradient(#000 0 64px, transparent 64px 76px);
+}
+/* ตาราง: แถบหัวตารางเข้ม + แถวบาง */
+body.net-busy .table-wrap:has(> table:empty)::before {
+  -webkit-mask: linear-gradient(#000, #000) 0 0 / 100% 40px no-repeat, repeating-linear-gradient(#000 0 28px, transparent 28px 38px) 0 50px / 100% 100% no-repeat;
+  mask: linear-gradient(#000, #000) 0 0 / 100% 40px no-repeat, repeating-linear-gradient(#000 0 28px, transparent 28px 38px) 0 50px / 100% 100% no-repeat;
+}
+/* กริดการ์ด (เครื่องจักร / KPI): แถว × คอลัมน์ */
+body.net-busy [data-skeleton="grid"]:empty::before, body.net-busy .kpi-grid:empty::before {
+  -webkit-mask: repeating-linear-gradient(#000 0 112px, transparent 112px 124px), repeating-linear-gradient(90deg, #000 0 calc(25% - 9px), transparent calc(25% - 9px) 25%);
+  -webkit-mask-composite: source-in;
+  mask: repeating-linear-gradient(#000 0 112px, transparent 112px 124px), repeating-linear-gradient(90deg, #000 0 calc(25% - 9px), transparent calc(25% - 9px) 25%);
+  mask-composite: intersect;
+}
+body.net-busy .kpi-grid:empty::before { -webkit-mask-size: 100% 92px, auto; mask-size: 100% 92px, auto; -webkit-mask-repeat: no-repeat, repeat; mask-repeat: no-repeat, repeat; }
+body.is-mobile.net-busy [data-skeleton="grid"]:empty::before, body.is-mobile.net-busy .kpi-grid:empty::before {
+  -webkit-mask: repeating-linear-gradient(#000 0 112px, transparent 112px 124px), repeating-linear-gradient(90deg, #000 0 calc(50% - 6px), transparent calc(50% - 6px) 50%);
+  -webkit-mask-composite: source-in;
+  mask: repeating-linear-gradient(#000 0 112px, transparent 112px 124px), repeating-linear-gradient(90deg, #000 0 calc(50% - 6px), transparent calc(50% - 6px) 50%);
+  mask-composite: intersect;
+}
+body.is-mobile.net-busy .kpi-grid:empty { min-height: 92px; }
+body.is-mobile.net-busy .kpi-grid:empty::before { -webkit-mask-size: 100% 92px, auto; mask-size: 100% 92px, auto; -webkit-mask-repeat: no-repeat, repeat; mask-repeat: no-repeat, repeat; }
 
 /* การ์ด/กราฟที่กำลังรีเฟรช: ใส่ class .is-loading */
 .is-loading { position: relative; }
@@ -317,7 +348,7 @@ body.net-busy .auto-report:empty { min-height: 34px; }
 @keyframes fadeIn { from { opacity: 0; } }
 @keyframes popIn { from { opacity: 0; transform: scale(.9) translateY(6px); } }
 @media (prefers-reduced-motion: reduce) {
-  .loader-ring, .loader-core, .loading-dots i, #netLoader .net-bar span, .skeleton, body.net-busy .kpi-grid:empty, .is-loading > .chart-container::after { animation-duration: 2.4s; }
+  .loader-ring, .loader-core, .loading-dots i, #netLoader .net-bar span, .skeleton, body.net-busy [data-skeleton]:empty::before, body.net-busy .kpi-grid:empty::before, body.net-busy .table-wrap:has(> table:empty)::before, .is-loading > .chart-container::after { animation-duration: 2.4s; }
 }
 .spinner-sm { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.45); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
