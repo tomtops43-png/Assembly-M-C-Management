@@ -40,9 +40,11 @@ var LINE_CONFIG = {
   WORKDAY_START_HOUR: 8,   // วันทำงานตัดรอบ 08:00
   DAY_SHIFT_START: 8,      // Day = 08:00-19:59
   NIGHT_SHIFT_START: 20,   // Night = 20:00-07:59
-  NET_HOURS_PER_SHIFT: 10.5,            // ยืนยันจากป้ายเป้าหมาย JRTL-EI-030 (1 คน/10.5 ชม.)
-  OT_HOURS: { Day: [18, 19], Night: [6, 7] }, // TODO(ข้อมูลไลน์) ชั่วโมงที่นับเป็น OT
-  OT_HOURS_PER_DAY: 2.5,
+  NET_HOURS_PER_SHIFT: 10.5,            // ยืนยันจากป้ายเป้าหมาย JRTL-EI-030 (1 คน/10.5 ชม.) = ชม.ปกติ + OT
+  NORMAL_HOURS_PER_SHIFT: 8,            // ชม.ทำงานปกติต่อกะ (ไม่มี OT) — ยืนยันจากไลน์
+  OT_HOURS_PER_SHIFT: 2.5,              // OT ต่อกะ: เช้า 17:30-20:00, ดึก 05:30-08:00
+  // ช่วงเวลา (ชั่วโมง) ที่ถือว่าเป็น OT — มีการลงยอดในช่วงนี้ = กะนั้นมี OT (17:00-17:59 / 05:00-05:59 ยังเป็นเวลาปกติส่วนใหญ่)
+  OT_HOURS: { Day: [18, 19], Night: [6, 7] },
 
   SESSION_HOURS: 12,
 
@@ -235,7 +237,7 @@ var SHEET_SCHEMAS = {
   AlarmTypes: ['TypeID', 'TypeName', 'Active', 'CreatedAt', 'CreatedBy'],
   Positions: ['PositionID', 'PositionName', 'Category', 'Active', 'CreatedAt', 'CreatedBy'],
 
-  ProductionLog: ['LogID', 'Timestamp', 'Date', 'Shift', 'TimePeriod', 'EmployeeID', 'EmployeeName', 'MachineID', 'ProductCode', 'PlannedQty', 'ActualQty', 'DefectQty', 'DefectDetails', 'Remark', 'Status', 'ClientRequestID', 'JobOrderID'],
+  ProductionLog: ['LogID', 'Timestamp', 'Date', 'Shift', 'TimePeriod', 'EmployeeID', 'EmployeeName', 'MachineID', 'ProductCode', 'PlannedQty', 'ActualQty', 'DefectQty', 'DefectDetails', 'Remark', 'Status', 'ClientRequestID', 'JobOrderID', 'OT'],
   Inbox: ['InboxID', 'EmployeeID', 'Type', 'Title', 'Message', 'RefID', 'Status', 'CreatedAt', 'CreatedBy'],
   ActionLog: ['ActionID', 'Timestamp', 'EmployeeID', 'EmployeeName', 'Action', 'Payload'],
   MaintenanceLog: ['TicketID', 'Timestamp', 'Date', 'ShiftAB', 'ShiftDN', 'ReportedBy', 'ReporterName', 'MachineID', 'IssueType', 'Description', 'Priority', 'Status', 'AssignedTo', 'ResolvedAt', 'DowntimeMinutes', 'Resolution', 'Photos', 'ResolutionPhotos', 'ClientRequestID', 'MmsJobNo', 'MmsStatus', 'MmsError'],
@@ -259,7 +261,7 @@ function getPublicLineConfig() {
     ngReasons: c.NG_REASONS, defectPartGroups: c.DEFECT_PART_GROUPS,
     sortingProcesses: c.SORTING_PROCESSES, sortingFgProcesses: c.SORTING_FG_PROCESSES,
     issueTypes: c.ISSUE_TYPES, machineGroups: c.MACHINE_GROUPS, dailyCheck: c.DAILY_CHECK, modules: c.MODULES,
-    netHoursPerShift: c.NET_HOURS_PER_SHIFT,
+    netHoursPerShift: c.NET_HOURS_PER_SHIFT, normalHoursPerShift: c.NORMAL_HOURS_PER_SHIFT, otHoursPerShift: c.OT_HOURS_PER_SHIFT,
     mms: c.MMS && c.MMS.ENABLED ? { webUrl: c.MMS.WEB_URL, area: c.MMS.AREA } : null
   };
 }

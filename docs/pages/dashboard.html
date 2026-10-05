@@ -166,7 +166,7 @@
     const k = data.kpi;
     $('kpi').innerHTML = `
       <div class="kpi-card success"><div class="kpi-value">${n(k.actual)}</div><div class="kpi-label">ยอดผลิต (FG) · แผน ${n(k.plan)}</div></div>
-      <div class="kpi-card"><div class="kpi-value">${k.oee === null ? '-' : k.oee + '%'}</div><div class="kpi-label">% OEE</div></div>
+      <div class="kpi-card"><div class="kpi-value">${k.oee === null ? '-' : k.oee + '%'}</div><div class="kpi-label">% OEE${k.otShifts ? ` · มี OT ${k.otShifts} กะ` : ''}</div></div>
       <div class="kpi-card danger"><div class="kpi-value">${k.defectRate}%</div><div class="kpi-label">% NG (${n(k.defect)} ชิ้น)</div></div>
       <div class="kpi-card warning"><div class="kpi-value">${k.openTickets}</div><div class="kpi-label">แจ้งซ่อมค้าง</div></div>`;
 
@@ -237,7 +237,8 @@
     L.push(`${shiftTxt()}${$('fProduct').value ? ' | รุ่น: ' + $('fProduct').value : ''}${$('fJo').value ? ' | JO: ' + $('fJo').selectedOptions[0].text : ''}`);
     L.push('', 'KPI Summary');
     L.push(`- ยอดผลิตรวม (FG): ${n(k.actual)} ชิ้น (แผน ${n(k.plan)})`);
-    L.push(`- OEE: ${pctTxt(k.oee)}`);
+    L.push(`- OEE: ${pctTxt(k.oee)} (แผนคิด 8 ชม./กะ + OT 2.5 ชม. เมื่อมี OT)`);
+    if (k.otShifts) L.push(`- กะที่มี OT: ${k.otShifts} กะ`);
     L.push(`- อัตรา NG: ${k.defectRate}% (${n(k.defect)} ชิ้น)`);
     L.push(`- งานซ่อมเปิดอยู่: ${mt.open}${mt.carriedOver ? ` (ยกมาจากวันก่อน ${mt.carriedOver})` : ''}`);
     L.push(`- Job Order ที่อยู่ในรายงาน: ${joCount()}`);
@@ -247,7 +248,7 @@
     L.push(`- เครื่องที่ %NG สูงสุด: ${worst ? `${worst.machineName} (${worst.defectRate}%)` : '-'}`);
     L.push(`- อาการ NG อันดับ 1: ${reasons[0] ? `${reasons[0]} (${n(data.ngByReason[reasons[0]])} ชิ้น)` : '-'}`);
     L.push('', 'Production by machine');
-    if (data.byMachine.length) data.byMachine.forEach((m) => L.push(`- ${m.machineName}: FG ${n(m.actual)} | NG ${n(m.defect)} | OEE ${pctTxt(m.oee)} | %NG ${m.defectRate}%`));
+    if (data.byMachine.length) data.byMachine.forEach((m) => L.push(`- ${m.machineName}: FG ${n(m.actual)} | NG ${n(m.defect)} | OEE ${pctTxt(m.oee)} | %NG ${m.defectRate}%${m.otShifts ? ` | OT ${m.otShifts} กะ${m.otActual ? ' (FG ช่วง OT ' + n(m.otActual) + ')' : ''}` : ''}`));
     else L.push('- ไม่มีข้อมูล');
     L.push('', 'Production by product');
     if (data.byProduct.length) data.byProduct.forEach((p) => L.push(`- ${p.productCode}: แผน ${n(p.plan)} | FG ${n(p.actual)} | NG ${n(p.defect)} | %Yield ${p.yield}% | %NG ${p.defectRate}%`));
@@ -370,8 +371,8 @@
       ${tbl('', '<th>Product</th><th class="n">Plan</th><th class="n">FG</th><th class="n">NG</th><th class="n">%Yield</th><th class="n">%NG</th>',
         data.byProduct.map((p) => `<tr><td>${esc(p.productCode)}</td><td class="n">${n(p.plan)}</td><td class="n">${n(p.actual)}</td><td class="n">${n(p.defect)}</td><td class="n">${p.yield}%</td><td class="n">${p.defectRate}%</td></tr>`).join(''), 6)}
       <h2>Production report by machine</h2>
-      ${tbl('', '<th>Machine</th><th class="n">Capacity/hr</th><th class="n">FG</th><th class="n">NG</th><th class="n">OEE</th><th class="n">%NG</th>',
-        data.byMachine.map((m) => `<tr><td>${esc(m.machineName)}</td><td class="n">${m.capacity ? n(m.capacity) : '-'}</td><td class="n">${n(m.actual)}</td><td class="n">${n(m.defect)}</td><td class="n">${pctTxt(m.oee)}</td><td class="n">${m.defectRate}%</td></tr>`).join(''), 6)}
+      ${tbl('', '<th>Machine</th><th class="n">Capacity/hr</th><th class="n">FG</th><th class="n">NG</th><th class="n">OEE</th><th class="n">%NG</th><th class="n">OT</th>',
+        data.byMachine.map((m) => `<tr><td>${esc(m.machineName)}</td><td class="n">${m.capacity ? n(m.capacity) : '-'}</td><td class="n">${n(m.actual)}</td><td class="n">${n(m.defect)}</td><td class="n">${pctTxt(m.oee)}</td><td class="n">${m.defectRate}%</td><td class="n">${m.otShifts ? m.otShifts + ' shift' + (m.otActual ? ' / ' + n(m.otActual) : '') : '-'}</td></tr>`).join(''), 7)}
       ${reasons.length ? `<h2>NG by defect (Pareto)</h2>${tbl('', '<th>#</th><th>อาการ</th><th class="n">NG</th><th class="n">%</th>',
         reasons.slice(0, 10).map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r)}</td><td class="n">${n(data.ngByReason[r])}</td><td class="n">${k.defect ? (data.ngByReason[r] / k.defect * 100).toFixed(1) : 0}%</td></tr>`).join(''), 4)}` : ''}
       <h2>Unclosed maintenance jobs (may impact output)</h2>
