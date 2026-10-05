@@ -163,7 +163,7 @@
   };
   $('mAssigned').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-rm]');
-    if (!b || !confirm('นำสินค้า ' + b.dataset.rm + ' ออกจากเครื่องนี้?')) return;
+    if (!b || !await UI.confirm({ title: 'นำสินค้าออกจากเครื่อง?', message: b.dataset.rm, danger: true, okText: 'นำออก' })) return;
     const r = await API.post('removeProductFromMachine', { machineId: current.machineId, productCode: b.dataset.rm });
     if (!r.success) return UI.showToast(r.message, 'error');
     current.assignedProducts = current.assignedProducts.filter((c) => c !== b.dataset.rm); renderAssigned(); renderProducts(selectedProduct());

@@ -325,6 +325,12 @@
   $('actualQty').addEventListener('input', recalcNg);
   $('ngReason').addEventListener('change', () => $('ngReasonOther').classList.toggle('hidden', $('ngReason').value !== OTHER));
 
+  /** สรุปในกล่องยืนยัน: แถวข้อมูล + ช่อง FG / NG ตัวใหญ่ */
+  function confirmSummary(rows, fg, ng) {
+    return `<div class="dlg-rows">${rows.map(([k, v]) => `<div><span>${UI.esc(k)}</span><b>${UI.esc(v)}</b></div>`).join('')}</div>
+      <div class="dlg-tiles"><div class="ok"><span>FG</span><b>${UI.formatNumber(fg)}</b></div><div class="${ng > 0 ? 'ng' : ''}"><span>NG</span><b>${UI.formatNumber(ng)}</b></div></div>`;
+  }
+
   // ---------- บันทึก ----------
   $('submitBtn').onclick = () => UI.withButton($('submitBtn'), async () => {
     if (!selMachine || !selMachine.currentProduct) return UI.showToast('เครื่องนี้ยังไม่ได้ตั้งสินค้า', 'warning');
@@ -340,7 +346,8 @@
     const sig = JSON.stringify(data);
     if (sig !== pendingSig) { pendingSig = sig; pendingReqId = API.newRequestId(); }
     data.clientRequestId = pendingReqId;
-    if (!confirm(`ยืนยันบันทึก ${selMachine.machineName} ช่วง ${data.timePeriod}\nFG ${data.actualQty}  NG ${data.defectQty}`)) return;
+    if (!await UI.confirm({ title: 'ยืนยันบันทึกยอดผลิต', icon: 'bi-clipboard-check', okText: 'บันทึก',
+      html: confirmSummary([['เครื่อง', selMachine.machineName], ['ช่วงเวลา', data.timePeriod]], data.actualQty, data.defectQty) })) return;
     const res = await API.post('submitProduction', { data });
     if (res.settingsChanged) { UI.showToast(res.message, 'warning'); await loadAll(true); return; }
     if (!res.success) return UI.showToast(res.message, 'error');
@@ -533,8 +540,8 @@
     const data = { machineId: selMachine.machineId, workDate: $('workDate').value, shiftDN: sfShift, lines };
     data.clientRequestId = sfReq.get(data);
     const fg = lines.reduce((s, l) => s + l.actualQty, 0), ng = lines.reduce((s, l) => s + l.ngItems.reduce((a, n) => a + n.qty, 0), 0);
-    if (!confirm(`ยืนยันลงยอดทั้งกะ\n${selMachine.machineName} · ${UI.shiftLabel(sfShift)} วันที่ ${UI.formatDate(data.workDate)}\nFG ${fg}  NG ${ng}` +
-      (lines.length > 1 ? `\n(${lines.length} รุ่น/JO)` : ''))) return;
+    if (!await UI.confirm({ title: 'ยืนยันลงยอดทั้งกะ', icon: 'bi-calendar2-check', okText: 'บันทึก',
+      html: confirmSummary([['เครื่อง', selMachine.machineName], ['กะ', UI.shiftLabel(sfShift) + ' · ' + UI.formatDate(data.workDate)]].concat(lines.length > 1 ? [['รุ่น/JO', lines.length + ' รายการ']] : []), fg, ng) })) return;
     const res = await API.post('submitProductionShift', { data });
     if (!res.success) return UI.showToast(res.message, 'error');
     sfReq.reset();
@@ -595,7 +602,7 @@
     UI.closeModal('editModal'); UI.showToast('แก้ไขแล้ว', 'success'); loadEntries();
   });
   $('eDelete').onclick = () => UI.withButton($('eDelete'), async () => {
-    const reason = (prompt('เหตุผลที่ลบรายการนี้') || '').trim();
+    const reason = (await UI.prompt({ title: 'ลบรายการนี้?', message: 'กรุณาระบุเหตุผลที่ลบ', placeholder: 'เช่น ลงยอดผิดเครื่อง', okText: 'ลบรายการ', icon: 'bi-trash3', danger: true }) || '').trim();
     if (!reason) return;
     const res = await API.post('requestDeleteProduction', { logId: editing.logId, reason });
     if (!res.success) return UI.showToast(res.message, 'error');

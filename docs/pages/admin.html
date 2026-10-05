@@ -208,7 +208,7 @@
   $('mTable').addEventListener('click', async (e) => {
     const ed = e.target.closest('[data-medit]'), del = e.target.closest('[data-mdel]');
     if (ed) { const m = machines.find((x) => x.machineId === ed.dataset.medit); $('mId').value = m.machineId; $('mName').value = m.machineName; $('mGroup').value = m.group || ''; $('mCap').value = m.capacity; window.scrollTo(0, 0); }
-    if (del && confirm('ลบเครื่อง ' + del.dataset.mdel + '? (ประวัติการผลิตยังอยู่)')) {
+    if (del && await UI.confirm({ title: 'ลบเครื่อง ' + del.dataset.mdel + '?', message: 'ประวัติการผลิตยังอยู่', danger: true })) {
       if (check(await API.post('deleteMachine', { machineId: del.dataset.mdel }))) loadMachines();
     }
   });
@@ -275,7 +275,7 @@
   };
   $('aTable').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-adel]');
-    if (b && confirm('ลบ ' + b.dataset.adel + '?') && check(await API.post('deleteMaterialAlias', { alias: b.dataset.adel }))) loadAliases();
+    if (b && await UI.confirm({ title: 'ลบ ' + b.dataset.adel + '?', danger: true }) && check(await API.post('deleteMaterialAlias', { alias: b.dataset.adel }))) loadAliases();
   });
 
   // ---------- log ----------

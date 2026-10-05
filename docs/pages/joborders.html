@@ -160,7 +160,7 @@
   $('eRename').onclick = () => UI.withButton($('eRename'), async () => {
     const newId = $('eNewId').value.trim().toUpperCase();
     if (!newId) return UI.showToast('กรุณากรอกเลข JO จริง', 'warning');
-    if (!confirm(`เปลี่ยน ${editing.jobOrderId} → ${newId}\nยอดผลิต/งานคัดแยก/เครื่องที่ผูกอยู่จะย้ายไปเลขใหม่ทั้งหมด`)) return;
+    if (!await UI.confirm({ title: `เปลี่ยน ${editing.jobOrderId} → ${newId}`, message: 'ยอดผลิต/งานคัดแยก/เครื่องที่ผูกอยู่จะย้ายไปเลขใหม่ทั้งหมด', okText: 'เปลี่ยนเลข' })) return;
     const r = await API.post('renameJobOrder', { jobOrderId: editing.jobOrderId, newJobOrderId: newId });
     if (!r.success) return UI.showToast(r.message, 'error');
     UI.closeModal('editModal');

@@ -46,6 +46,61 @@ const UI = (() => {
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // ---------- กล่องยืนยัน / กรอกข้อความ (แทน confirm()/prompt() ของเบราว์เซอร์) ----------
+  /**
+   * UI.confirm({ title, message, html, okText, cancelText, danger, icon }) → Promise<boolean>
+   * UI.prompt({ title, message, placeholder, value, okText, required }) → Promise<string|null>
+   * ส่ง string ตรง ๆ ก็ได้ = message
+   */
+  function dialog(opts, withInput) {
+    opts = typeof opts === 'string' ? { message: opts } : (opts || {});
+    return new Promise((resolve) => {
+      const danger = !!opts.danger;
+      const icon = opts.icon || (withInput ? 'bi-pencil-square' : danger ? 'bi-exclamation-triangle-fill' : 'bi-question-circle-fill');
+      const el = document.createElement('div');
+      el.className = 'dlg-overlay';
+      el.innerHTML = `<div class="dlg ${danger ? 'danger' : ''}" role="dialog" aria-modal="true">
+        <div class="dlg-icon"><i class="bi ${icon}"></i></div>
+        <div class="dlg-title">${esc(opts.title || (withInput ? 'กรอกข้อมูล' : 'ยืนยัน'))}</div>
+        ${opts.message ? `<div class="dlg-msg">${esc(opts.message).replace(/\n/g, '<br>')}</div>` : ''}
+        ${opts.html || ''}
+        ${withInput ? `<input class="form-input dlg-input" placeholder="${esc(opts.placeholder || '')}" value="${esc(opts.value || '')}">` : ''}
+        <div class="dlg-actions">
+          <button type="button" class="btn btn-outline" data-dlg="0">${esc(opts.cancelText || 'ยกเลิก')}</button>
+          <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-dlg="1">${esc(opts.okText || (danger ? 'ลบ' : 'ยืนยัน'))}</button>
+        </div></div>`;
+      document.body.appendChild(el);
+      requestAnimationFrame(() => el.classList.add('show'));
+      const input = el.querySelector('.dlg-input');
+      const prevFocus = document.activeElement;
+      (input || el.querySelector('[data-dlg="1"]')).focus();
+      const close = (ok) => {
+        let val = ok;
+        if (withInput) {
+          val = ok ? input.value.trim() : null;
+          if (ok && opts.required !== false && !val) { input.classList.add('dlg-shake'); input.focus(); setTimeout(() => input.classList.remove('dlg-shake'), 400); return; }
+        }
+        document.removeEventListener('keydown', onKey, true);
+        el.classList.remove('show');
+        setTimeout(() => el.remove(), 180);
+        if (prevFocus && prevFocus.focus) try { prevFocus.focus(); } catch (e) {}
+        resolve(val);
+      };
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); close(false); }
+        else if (e.key === 'Enter' && (!e.target.matches || !e.target.matches('textarea'))) { e.preventDefault(); close(true); }
+      };
+      document.addEventListener('keydown', onKey, true);
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-dlg]');
+        if (b) close(b.dataset.dlg === '1');
+        else if (e.target === el) close(false);
+      });
+    });
+  }
+  const confirmDialog = (opts) => dialog(opts, false);
+  const promptDialog = (opts) => dialog(opts, true);
+
   // ---------- toast / loading ----------
   function showToast(msg, type = 'info') {
     let wrap = document.getElementById('toastWrap');
@@ -203,7 +258,7 @@ const UI = (() => {
     document.title = title + ' · ' + C.LINE_NAME;
   }
 
-  function confirmLogout() { if (confirm('ออกจากระบบ?')) Auth.logout(); }
+  async function confirmLogout() { if (await confirmDialog({ title: 'ออกจากระบบ?', icon: 'bi-box-arrow-right', okText: 'ออกจากระบบ' })) Auth.logout(); }
 
   function renderNav(activeKey) {
     const pages = visiblePages();
@@ -465,7 +520,7 @@ const UI = (() => {
   }
   /** ปุ่ม "+ เพิ่มอาการ": ถามชื่อ → บันทึกลงชีต → คืนชื่อที่เพิ่ม (null = ยกเลิก/ผิดพลาด) */
   async function addNgReasonPrompt(group) {
-    const name = (prompt('เพิ่มอาการ NG ใหม่' + (group ? ' (เครื่องกลุ่ม ' + group + ')' : '')) || '').trim();
+    const name = (await promptDialog({ title: 'เพิ่มอาการ NG ใหม่', message: group ? 'เครื่องกลุ่ม ' + group : '', placeholder: 'เช่น รอยขีดข่วน', okText: 'เพิ่ม' }) || '').trim();
     if (!name) return null;
     if (name === NG_OTHER) { showToast('มี "' + NG_OTHER + '" อยู่แล้ว', 'warning'); return null; }
     const r = await API.post('addNgReason', { reasonName: name, machineGroup: group || '' });
@@ -478,7 +533,7 @@ const UI = (() => {
   async function deleteNgReasonByName(name, group) {
     const hit = (ngCache || []).find((r) => r.reasonName === name && (!group || !r.machineGroup || r.machineGroup === group));
     if (!hit) { showToast('อาการนี้เป็นค่าตั้งต้นของระบบ ลบจากหน้าเว็บไม่ได้', 'warning'); return false; }
-    if (!confirm('ลบอาการ NG "' + name + '" ออกจากรายการ?\n(รายการที่บันทึกไปแล้วไม่เปลี่ยน)')) return false;
+    if (!await confirmDialog({ title: 'ลบอาการ NG "' + name + '"?', message: 'รายการที่บันทึกไปแล้วไม่เปลี่ยน', danger: true })) return false;
     const r = await API.post('deleteNgReason', { reasonId: hit.reasonId });
     if (!r.success) { showToast(r.message, 'error'); return false; }
     await loadNgReasons(true);
@@ -529,7 +584,7 @@ const UI = (() => {
 
   return {
     isDesktop, applyDeviceClass, esc, showToast, showLoading, hideLoading, renderTopNav, renderNav, initPage,
-    openModal, closeModal, getBkkHour, getToday, addDays, nowLocalInput, hourToPeriod, getTimePeriods, currentPeriod,
+    openModal, closeModal, confirm: confirmDialog, prompt: promptDialog, getBkkHour, getToday, addDays, nowLocalInput, hourToPeriod, getTimePeriods, currentPeriod,
     isDayHour, getShiftInfo, shiftLabel, formatNumber, formatDate, timeAgo, getLineConfig, groupMachines, machineGridHtml, machineOptions, emptyState, loadingBlock, statusLabel, downloadText, withButton,
     requestIdKeeper, applyNumericKeyboards, BRAND_SVG,
     NG_OTHER, loadNgReasons, ngReasonList, fillNgSelect, addNgReasonPrompt, deleteNgReasonByName, bindNgControls

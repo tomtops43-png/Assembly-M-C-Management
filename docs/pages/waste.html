@@ -93,7 +93,7 @@
   $('resetAt').onclick = () => { $('at').value = UI.nowLocalInput(); };
   $('manage').onclick = () => UI.openModal('typeModal');
   $('addType').onclick = () => UI.withButton($('addType'), async () => { const r = await API.post('addWasteType', { typeName: $('newType').value }); if (!r.success) return UI.showToast(r.message, 'error'); $('newType').value = ''; await loadTypes(); });
-  $('typeList').addEventListener('click', async (e) => { const b = e.target.closest('[data-del]'); if (b && confirm('ลบชนิดนี้?')) { const r = await API.post('deleteWasteType', { typeId: b.dataset.del }); if (!r.success) UI.showToast(r.message, 'error'); loadTypes(); } });
+  $('typeList').addEventListener('click', async (e) => { const b = e.target.closest('[data-del]'); if (b && await UI.confirm({ title: 'ลบชนิดนี้?', danger: true })) { const r = await API.post('deleteWasteType', { typeId: b.dataset.del }); if (!r.success) UI.showToast(r.message, 'error'); loadTypes(); } });
   document.querySelectorAll('[data-days]').forEach((b) => b.onclick = () => { $('to').value = UI.getToday(); $('from').value = UI.addDays(UI.getToday(), -(Number(b.dataset.days) - 1)); loadHist(); });
   $('search').onclick = loadHist;
 
