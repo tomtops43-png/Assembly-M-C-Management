@@ -3,13 +3,27 @@
  */
 var JO_PRIORITY_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
 var JO_ACTIVE = ['open', 'in-progress'];
+var JO_TEMP_PREFIX = 'TMO-'; // JO ชั่วคราว (Manual) ระหว่างรอเลข MO จริง — TMO-yyyyMMdd-NNN
+
+function isTempJobOrderId(id) { return String(id || '').indexOf(JO_TEMP_PREFIX) === 0; }
+
+/** TMO-yyyyMMdd-NNN (เลขวิ่งต่อวัน) */
+function nextTempJobOrderId(workDate) {
+  var base = JO_TEMP_PREFIX + String(workDate).replace(/-/g, '') + '-';
+  var max = 0;
+  getAllRows('JobOrders').forEach(function (r) {
+    var id = String(r.JobOrderID);
+    if (id.indexOf(base) === 0) max = Math.max(max, toNumber(id.substring(base.length)));
+  });
+  return base + ('00' + (max + 1)).slice(-3);
+}
 
 function jobOrderToObj(r) {
   return {
     jobOrderId: String(r.JobOrderID), createdAt: r.CreatedAt, createdBy: r.CreatedBy, createdByName: r.CreatedByName,
     workDate: r.WorkDate, dueDate: r.DueDate, machineId: String(r.MachineID), productCode: String(r.ProductCode),
     shift: r.Shift || 'ALL', plannedQty: toNumber(r.PlannedQty), priority: r.Priority || 'normal',
-    status: r.Status || 'open', remark: r.Remark || ''
+    status: r.Status || 'open', remark: r.Remark || '', isTemp: isTempJobOrderId(r.JobOrderID)
   };
 }
 
@@ -113,12 +127,11 @@ function createJobOrder(token, d) {
   if (toNumber(d.plannedQty) <= 0) throw new Error('กรุณากรอกจำนวนเป้าหมาย');
   if (!d.machineId) throw new Error('กรุณาเลือกเครื่องจักร');
   if (d.dueDate && d.dueDate < workDate) throw new Error('กำหนดส่งต้องไม่ก่อนวันที่แผน');
-  var id = String(d.jobOrderId || '').trim();
+  var id = String(d.jobOrderId || '').trim().toUpperCase();
   if (id) {
-    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{2,39}$/.test(id)) throw new Error('รูปแบบเลข Job Order ไม่ถูกต้อง');
-    if (findRow('JobOrders', 'JobOrderID', id)) throw new Error('เลข Job Order นี้มีอยู่แล้ว');
+    validateRealJobOrderId(id);
   } else {
-    id = makeId('JO', workDate);
+    id = nextTempJobOrderId(workDate); // ไม่กรอกเลข = JO ชั่วคราว (Manual)
   }
   appendRow('JobOrders', {
     JobOrderID: id, CreatedAt: formatDate(), CreatedBy: u.employeeId, CreatedByName: u.name, WorkDate: workDate,
@@ -128,6 +141,47 @@ function createJobOrder(token, d) {
   });
   logAction(u, 'createJobOrder', { jobOrderId: id });
   return { success: true, jobOrderId: id };
+}
+
+function validateRealJobOrderId(id) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{2,39}$/.test(id)) throw new Error('รูปแบบเลข Job Order ไม่ถูกต้อง');
+  if (isTempJobOrderId(id)) throw new Error('เลขขึ้นต้น ' + JO_TEMP_PREFIX + ' สงวนไว้สำหรับ JO ชั่วคราว');
+  if (findRow('JobOrders', 'JobOrderID', id)) throw new Error('เลข Job Order นี้มีอยู่แล้ว');
+}
+
+/** แทนค่าในคอลัมน์ทั้งคอลัมน์ (อ่าน-เขียนครั้งเดียว) → จำนวนแถวที่เปลี่ยน */
+function replaceColumnValue(name, col, oldVal, newVal) {
+  var n = withLock(function () {
+    var sh = getSheet(name);
+    if (!sh || sh.getLastRow() < 2) return 0;
+    var ci = getHeaders(name).indexOf(col);
+    if (ci < 0) return 0;
+    var rng = sh.getRange(2, ci + 1, sh.getLastRow() - 1, 1);
+    var vals = rng.getValues(), count = 0;
+    vals.forEach(function (v) { if (String(v[0]) === String(oldVal)) { v[0] = newVal; count++; } });
+    if (count) rng.setValues(vals);
+    return count;
+  });
+  if (n) afterWrite(name);
+  return n;
+}
+
+/** เปลี่ยน JO ชั่วคราว (TMO-) เป็นเลข MO จริง — ย้ายยอดผลิต/คัดแยก/เครื่องที่ผูกอยู่ไปเลขใหม่ */
+function renameJobOrder(token, jobOrderId, newJobOrderId) {
+  var u = requireRole(token, 'supervisor');
+  var oldId = String(jobOrderId || '');
+  var newId = String(newJobOrderId || '').trim().toUpperCase();
+  if (!findRow('JobOrders', 'JobOrderID', oldId)) throw new Error('ไม่พบ Job Order');
+  if (!isTempJobOrderId(oldId)) throw new Error('เปลี่ยนเลขได้เฉพาะ JO ชั่วคราว (' + JO_TEMP_PREFIX + ')');
+  validateRealJobOrderId(newId);
+  var moved = {
+    jobOrders: replaceColumnValue('JobOrders', 'JobOrderID', oldId, newId),
+    production: replaceColumnValue('ProductionLog', 'JobOrderID', oldId, newId),
+    sorting: replaceColumnValue('SortingLog', 'JobOrderID', oldId, newId),
+    machines: replaceColumnValue('Machines', 'CurrentJobOrder', oldId, newId)
+  };
+  logAction(u, 'renameJobOrder', { from: oldId, to: newId, moved: moved });
+  return { success: true, jobOrderId: newId, moved: moved };
 }
 
 function updateJobOrder(token, jobOrderId, updates) {

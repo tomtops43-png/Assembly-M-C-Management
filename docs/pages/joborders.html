@@ -21,7 +21,12 @@
   <div class="card">
     <div class="card-title"><i class="bi bi-plus-circle"></i> สร้าง Job Order</div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">เลข JO (ว่าง = อัตโนมัติ)</label><input class="form-input" id="joId" placeholder="JO-yyyyMMdd-XXXXXX"></div>
+      <div class="form-group"><label class="form-label">ประเภทเลข JO</label>
+        <select class="form-input" id="joType"><option value="temp">Manual ชั่วคราว (รอ JO จริง)</option><option value="real">JO จริง (เลข MO)</option></select></div>
+      <div class="form-group"><label class="form-label">เลข JO</label>
+        <input class="form-input hidden" id="joId" placeholder="MO-yyyyMMdd-NNNNNN" autocapitalize="characters">
+        <div class="lock-field" id="joTempPreview"><i class="bi bi-hourglass-split"></i><span></span></div>
+        <div class="form-hint" id="joIdHint">ระบบออกเลขชั่วคราวให้อัตโนมัติ — ได้เลข MO จริงแล้วค่อยเปลี่ยนที่ปุ่ม "แก้ไข" (ยอดผลิตย้ายตามให้)</div></div>
       <div class="form-group"><label class="form-label">วันที่แผน</label><input type="date" class="form-input" id="joDate"></div>
       <div class="form-group"><label class="form-label">รุ่นสินค้า <span class="req">*</span></label><select class="form-input" id="joProduct"></select></div>
       <div class="form-group"><label class="form-label">จำนวนเป้าหมาย <span class="req">*</span></label><input type="number" class="form-input" id="joQty"></div>
@@ -54,6 +59,12 @@
   </div>
   <div class="form-group"><label class="form-label">หมายเหตุ</label><input class="form-input" id="eRemark"></div>
   <button class="btn btn-primary btn-full" id="eSave">บันทึก</button>
+  <div class="notice mt-3 hidden" id="eRenameBox">
+    <div class="fw-bold mb-2"><i class="bi bi-arrow-left-right"></i> เปลี่ยนเป็นเลข JO จริง</div>
+    <div class="d-flex gap-2"><input class="form-input" id="eNewId" placeholder="MO-yyyyMMdd-NNNNNN" autocapitalize="characters">
+      <button class="btn btn-success" id="eRename">เปลี่ยนเลข</button></div>
+    <div class="form-hint">ยอดผลิต / งานคัดแยก / เครื่องที่ผูกกับเลขชั่วคราวนี้ จะย้ายไปเลขใหม่ทั้งหมด</div>
+  </div>
 </div></div>
 
 <script src="../js/config.js"></script>
@@ -74,15 +85,32 @@
     $('joMachine').innerHTML = '<option value="">— เลือก —</option><option value="ALL">ทุกเครื่อง</option>' +
       (m.success ? UI.machineOptions(m.data.filter((x) => x.installed)) : '');
   }
+  // ประเภทเลข JO: ชั่วคราว (TMO-) / จริง (MO)
+  const tempPreview = () => `TMO-${($('joDate').value || UI.getToday()).replace(/-/g, '')}-xxx (ชั่วคราว)`;
+  function syncJoType() {
+    const real = $('joType').value === 'real';
+    $('joId').classList.toggle('hidden', !real);
+    $('joTempPreview').classList.toggle('hidden', real);
+    $('joTempPreview').querySelector('span').textContent = tempPreview();
+    $('joIdHint').textContent = real ? 'กรอกเลข Job Order จริงตามเอกสาร เช่น MO-20260924-001255'
+      : 'ระบบออกเลขชั่วคราวให้อัตโนมัติ — ได้เลข MO จริงแล้วค่อยเปลี่ยนที่ปุ่ม "แก้ไข" (ยอดผลิตย้ายตามให้)';
+  }
+  $('joType').onchange = syncJoType;
+  $('joDate').addEventListener('change', syncJoType);
+  $('joId').addEventListener('input', () => { $('joId').value = $('joId').value.toUpperCase(); });
+
   $('joProduct').onchange = () => { const p = products.find((x) => x.productCode === $('joProduct').value); if (p && !$('joQty').value) $('joQty').value = p.defaultQty || ''; };
 
   $('joCreate').onclick = () => UI.withButton($('joCreate'), async () => {
-    const data = { jobOrderId: $('joId').value.trim(), workDate: $('joDate').value, productCode: $('joProduct').value, plannedQty: Number($('joQty').value) || 0,
+    const real = $('joType').value === 'real';
+    if (real && !$('joId').value.trim()) return UI.showToast('กรุณากรอกเลข JO จริง หรือเลือกแบบ Manual ชั่วคราว', 'warning');
+    if (real && /^TMO-/i.test($('joId').value.trim())) return UI.showToast('เลขขึ้นต้น TMO- สงวนไว้สำหรับ JO ชั่วคราว', 'warning');
+    const data = { jobOrderId: real ? $('joId').value.trim().toUpperCase() : '', workDate: $('joDate').value, productCode: $('joProduct').value, plannedQty: Number($('joQty').value) || 0,
       machineId: $('joMachine').value, shift: $('joShift').value, dueDate: $('joDue').value, priority: $('joPrio').value, remark: $('joRemark').value.trim() };
     if (data.dueDate && data.dueDate < data.workDate) return UI.showToast('กำหนดส่งต้องไม่ก่อนวันที่แผน', 'warning');
     const r = await API.post('createJobOrder', { data });
     if (!r.success) return UI.showToast(r.message, 'error');
-    UI.showToast('สร้าง ' + r.jobOrderId + ' แล้ว', 'success');
+    UI.showToast('สร้าง ' + r.jobOrderId + ' แล้ว' + (real ? '' : ' (ชั่วคราว — รอเปลี่ยนเป็นเลขจริง)'), 'success');
     ['joId', 'joQty', 'joDue', 'joRemark'].forEach((id) => { $(id).value = ''; });
     load();
   });
@@ -96,11 +124,11 @@
   }
   function render() {
     const q = $('fSearch').value.trim().toLowerCase();
-    const rows = list.filter((j) => !q || [j.jobOrderId, j.productCode, j.machineId, j.remark].join(' ').toLowerCase().includes(q));
+    const rows = list.filter((j) => !q || [j.jobOrderId, j.productCode, j.machineId, j.remark, j.isTemp ? 'ชั่วคราว temp' : ''].join(' ').toLowerCase().includes(q));
     $('list').innerHTML = rows.length ? rows.map((j) => {
       const pct = j.plannedQty ? Math.min(100, j.actualQty / j.plannedQty * 100) : 0;
       return `<div class="entry-card priority-${j.priority}">
-        <div class="entry-head"><span>${j.queueNo ? `<span class="badge badge-info">คิว ${j.queueNo}</span> ` : ''}${UI.esc(j.jobOrderId)}</span>
+        <div class="entry-head"><span>${j.queueNo ? `<span class="badge badge-info">คิว ${j.queueNo}</span> ` : ''}${UI.esc(j.jobOrderId)}${j.isTemp ? ' <span class="badge badge-pending"><i class="bi bi-hourglass-split"></i> ชั่วคราว</span>' : ''}</span>
           <span class="badge badge-${j.status}">${UI.esc(j.status)}</span></div>
         <div class="entry-meta">${UI.esc(j.productCode)} · เครื่อง ${j.machineId === 'ALL' ? 'ทุกเครื่อง' : UI.esc(j.machineId)} · กะ ${UI.esc(j.shift)} · วันที่ ${UI.formatDate(j.workDate)}
           ${j.dueDate ? '· ส่ง ' + UI.formatDate(j.dueDate) : ''} · ${PRIO[j.priority] || j.priority}${j.remark ? ' · ' + UI.esc(j.remark) : ''}</div>
@@ -119,6 +147,8 @@
     $('eTitle').textContent = editing.jobOrderId;
     $('eStatus').value = editing.status; $('eDue').value = editing.dueDate || ''; $('ePrio').value = editing.priority;
     $('eQty').value = editing.plannedQty; $('eRemark').value = editing.remark;
+    $('eRenameBox').classList.toggle('hidden', !editing.isTemp);
+    $('eNewId').value = '';
     UI.openModal('editModal');
   });
   $('eSave').onclick = () => UI.withButton($('eSave'), async () => {
@@ -127,9 +157,21 @@
     if (!r.success) return UI.showToast(r.message, 'error');
     UI.closeModal('editModal'); UI.showToast('บันทึกแล้ว', 'success'); load();
   });
+  $('eNewId').addEventListener('input', () => { $('eNewId').value = $('eNewId').value.toUpperCase(); });
+  $('eRename').onclick = () => UI.withButton($('eRename'), async () => {
+    const newId = $('eNewId').value.trim().toUpperCase();
+    if (!newId) return UI.showToast('กรุณากรอกเลข JO จริง', 'warning');
+    if (!confirm(`เปลี่ยน ${editing.jobOrderId} → ${newId}\nยอดผลิต/งานคัดแยก/เครื่องที่ผูกอยู่จะย้ายไปเลขใหม่ทั้งหมด`)) return;
+    const r = await API.post('renameJobOrder', { jobOrderId: editing.jobOrderId, newJobOrderId: newId });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.closeModal('editModal');
+    UI.showToast(`เปลี่ยนเป็น ${r.jobOrderId} แล้ว (ย้ายยอดผลิต ${r.moved.production} รายการ)`, 'success');
+    load();
+  });
   $('fStatus').onchange = load; $('reload').onclick = load; $('fSearch').oninput = render;
 
   $('joDate').value = UI.getToday();
+  syncJoType();
   UI.showLoading();
   await Promise.all([loadMasters(), load()]);
   UI.hideLoading();

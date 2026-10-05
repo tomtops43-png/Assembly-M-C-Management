@@ -95,6 +95,7 @@ var WRITE_ACTIONS = {
   deleteMaterialAlias: function (b) { return deleteMaterialAlias(b.token, b.alias); },
   createJobOrder: function (b) { return createJobOrder(b.token, b.data); },
   updateJobOrder: function (b) { return updateJobOrder(b.token, b.jobOrderId, b.updates); },
+  renameJobOrder: function (b) { return renameJobOrder(b.token, b.jobOrderId, b.newJobOrderId); },
   submitRawMaterial: function (b) { return submitRawMaterial(b.token, b.data); },
   ocrWithDrive: function (b) { return ocrWithDrive(b.token, b.data); },
   updateProductUnitPrice: function (b) { return updateProductUnitPrice(b.token, b.productCode, b.unitPrice); },
