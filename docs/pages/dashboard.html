@@ -21,7 +21,8 @@
   /* ---- หน้า PDF (A4 กว้าง 794px) ---- */
   .rp { width: 794px; padding: 34px 40px; background: #fff; color: #16171B; font-family: 'IBM Plex Sans Thai', 'Segoe UI', Tahoma, sans-serif; font-size: 11.5px; }
   .rp-head { display: flex; align-items: center; gap: 14px; padding-bottom: 10px; border-bottom: 3px solid #C8102E; }
-  .rp-head img { width: 46px; height: 46px; }
+  .rp-head { gap: 18px; }
+  .rp-head .rp-logo { width: 150px; height: auto; flex: none; }
   .rp-head h1 { margin: 0; font-size: 19px; } .rp-head div div { color: #6B6F7A; font-size: 12px; }
   .rp-meta { margin: 10px 0 14px; color: #34373F; line-height: 1.6; }
   .rp h2 { font-size: 13.5px; margin: 16px 0 6px; padding-left: 8px; border-left: 4px solid #C8102E; }
@@ -287,13 +288,14 @@
   const chartImg = (id, title) => { const c = charts[id]; return c ? `<div class="rp-chart"><div>${title}</div><img src="${c.toBase64Image('image/png', 1)}"></div>` : ''; };
 
   /** โลโก้ SVG → PNG (html2canvas วาดรูป SVG ไม่ได้) */
+  /** โลโก้บริษัท (docs/icons/company-logo.jpg) เป็น dataURL — ฝังในรายงาน PDF/พิมพ์ */
   async function logoPng() {
     try {
       const img = new Image();
-      img.src = 'data:image/svg+xml;base64,' + btoa(UI.BRAND_SVG);
+      img.src = '../icons/company-logo.jpg';
       await img.decode();
-      const c = document.createElement('canvas'); c.width = c.height = 128;
-      c.getContext('2d').drawImage(img, 0, 0, 128, 128);
+      const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0);
       return c.toDataURL('image/png');
     } catch (e) { return ''; }
   }
@@ -354,7 +356,7 @@
 
   function reportHtml(logoSrc) {
     const k = data.kpi, mt = data.maintenance, dc = data.dailyCheck;
-    const logo = logoSrc ? `<img src="${logoSrc}" width="46" height="46">` : '';
+    const logo = logoSrc ? `<img class="rp-logo" src="${logoSrc}" alt="logo">` : '';
     const reasons = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a]);
     const ex = extraCharts();
     return `<div class="rp">
