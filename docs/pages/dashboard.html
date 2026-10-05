@@ -57,7 +57,7 @@
       <select class="date-input" id="fJo"><option value="">ทุก Job Order</option><option value="__unassigned__">ไม่ระบุ JO</option></select>
       <button class="btn btn-primary btn-sm" id="apply"><i class="bi bi-search"></i> ค้นหา</button>
     </div>
-    <div class="progress-bar-container mt-2 hidden" id="loadBar"><div class="progress-bar-fill" style="width:100%;background:var(--primary)"></div></div>
+    <div class="progress-bar-container indeterminate mt-2 hidden" id="loadBar"><div class="progress-bar-fill" style="width:100%;background:var(--primary)"></div></div>
     <div class="small text-gray mt-1 hidden" id="slowMsg">ช่วงวันที่กว้าง กำลังประมวลผล...</div>
   </div>
 
@@ -133,6 +133,7 @@
     ctrl = new AbortController();
     const my = ctrl;
     $('loadBar').classList.remove('hidden');
+    setDashLoading(true);
     const slow = setTimeout(() => $('slowMsg').classList.remove('hidden'), 12000);
     const params = { dateRange: rangeParam(), shiftAB: $('fShiftAB').value, shiftDN: $('fShiftDN').value, productCode: $('fProduct').value, jobOrderId: $('fJo').value };
     try {
@@ -147,8 +148,15 @@
       if (!err.cancelled) UI.showToast(err.message, 'error');
     } finally {
       clearTimeout(slow);
-      if (my === ctrl) { $('loadBar').classList.add('hidden'); $('slowMsg').classList.add('hidden'); }
+      if (my === ctrl) { $('loadBar').classList.add('hidden'); $('slowMsg').classList.add('hidden'); setDashLoading(false); }
     }
+  }
+
+  // การ์ดกราฟ + ปุ่มค้นหา แสดงสถานะกำลังโหลด
+  const applyHtml = $('apply').innerHTML;
+  function setDashLoading(on) {
+    document.querySelectorAll('.chart-container').forEach((c) => c.parentElement.classList.toggle('is-loading', on));
+    $('apply').innerHTML = on ? '<span class="spinner-sm"></span> กำลังค้นหา...' : applyHtml;
   }
 
   const n = (v, d = 0) => UI.formatNumber(v, d);
@@ -448,6 +456,7 @@
   });
 
   // ตัวกรองสินค้า / JO
+  setDashLoading(true);
   const [p, jo] = await Promise.all([API.get('getProducts'), Auth.hasRole('supervisor') ? API.get('getJobOrders', { filters: {} }) : API.get('getJobOrderOptions', { filters: { includeAll: true } })]);
   if (p.success) $('fProduct').innerHTML += p.data.map((x) => `<option value="${UI.esc(x.productCode)}">${UI.esc(x.productCode)}</option>`).join('');
   if (jo.success) $('fJo').innerHTML += jo.data.slice(0, 200).map((x) => `<option value="${UI.esc(x.jobOrderId)}">${UI.esc(x.jobOrderId)}</option>`).join('');

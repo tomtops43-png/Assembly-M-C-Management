@@ -187,7 +187,7 @@
   }
   async function checkVersion() {
     if (document.hidden || !master) return;
-    const r = await API.get('getMasterDataVersion', {}, { retries: 0 });
+    const r = await API.get('getMasterDataVersion', {}, { retries: 0, silent: true });
     if (r.success && r.version !== master.version) { await loadAll(true); UI.showToast('อัปเดตข้อมูลเครื่อง/สินค้าแล้ว', 'info'); }
   }
   setInterval(checkVersion, 60000);
