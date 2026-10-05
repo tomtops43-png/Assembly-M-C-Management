@@ -26,6 +26,10 @@
         <input type="date" class="date-input" id="workDate">
       </div>
     </div>
+    <div class="tabs mt-2 mb-0" id="modeTabs">
+      <button class="tab-btn active" data-mode="hourly"><i class="bi bi-clock"></i> ลงรายชั่วโมง</button>
+      <button class="tab-btn" data-mode="shift"><i class="bi bi-calendar2-check"></i> ลงยอดทั้งกะ</button>
+    </div>
   </div>
 
   <div class="card">
@@ -34,6 +38,7 @@
   </div>
 
   <div class="card hidden" id="formCard">
+   <div id="hourlyForm">
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">2. ผลิตภัณฑ์</label>
@@ -72,6 +77,25 @@
       <input class="form-input mt-2 hidden" id="ngReasonOther" placeholder="ระบุอาการ">
     </div>
     <button class="btn btn-success btn-full btn-lg" id="submitBtn"><i class="bi bi-check2-circle"></i> บันทึกยอดผลิต</button>
+   </div>
+
+   <!-- ลงยอดทั้งกะ: Leader ลงครั้งเดียวตอนเลิกกะ (1 ครั้ง/เครื่อง/กะ) -->
+   <div id="shiftForm" class="hidden">
+    <div class="notice info"><i class="bi bi-info-circle"></i> ลงยอดรวมทั้งกะของ <b id="sfMachine">-</b> ครั้งเดียว — ลงได้ 1 ครั้งต่อเครื่องต่อกะ (ถ้ากะนี้มีการลงรายชั่วโมงไว้แล้ว จะลงแบบทั้งกะซ้ำไม่ได้)</div>
+    <div class="form-group">
+      <label class="form-label">2. กะที่จะลงยอด</label>
+      <div class="choice-grid" id="sfShift">
+        <button class="choice-btn" type="button" data-s="Day"><i class="bi bi-sun"></i>กะเช้า<small class="text-gray">08:00–19:59</small></button>
+        <button class="choice-btn" type="button" data-s="Night"><i class="bi bi-moon"></i>กะดึก<small class="text-gray">20:00–07:59</small></button>
+      </div>
+      <div class="form-hint" id="sfShiftHint"></div>
+    </div>
+    <label class="form-label">3. ยอดแยกตามรุ่น / Job Order</label>
+    <div id="sfLines"></div>
+    <button class="btn btn-outline btn-full mb-3" type="button" id="sfAddLine"><i class="bi bi-plus-lg"></i> เพิ่มรุ่น / Job Order (กรณีเปลี่ยนรุ่นกลางกะ)</button>
+    <div class="sf-summary" id="sfSummary"></div>
+    <button class="btn btn-success btn-full btn-lg" id="sfSubmit"><i class="bi bi-check2-circle"></i> บันทึกยอดทั้งกะ</button>
+   </div>
   </div>
 
   <div class="card">
@@ -222,6 +246,7 @@
     $('ngReasonOther').classList.toggle('hidden', $('ngReason').value !== OTHER);
     recalcNg();
     loadJoProgress();
+    if (mode === 'shift' && sfMachineId !== id) resetShiftForm();
   }
 
   /** แผนต่อชั่วโมง = capacity ของสินค้าที่ผลิต → ของเครื่อง */
@@ -328,6 +353,195 @@
 
   function machineName(id) { const m = master && master.machines.find((x) => x.machineId === id); return m ? m.machineName : id; }
 
+  // ---------- โหมด: ลงรายชั่วโมง / ลงยอดทั้งกะ ----------
+  const MODE_KEY = P + 'production_mode_' + user.employeeId;
+  let mode = 'hourly';
+  try { mode = localStorage.getItem(MODE_KEY) === 'shift' ? 'shift' : 'hourly'; } catch (e) {}
+  function applyMode() {
+    document.querySelectorAll('#modeTabs [data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+    $('hourlyForm').classList.toggle('hidden', mode !== 'hourly');
+    $('shiftForm').classList.toggle('hidden', mode !== 'shift');
+    if (mode === 'shift') { applyDefaultShift(); if (selMachine) resetShiftForm(); }
+  }
+  $('modeTabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-mode]'); if (!b || b.dataset.mode === mode) return;
+    mode = b.dataset.mode;
+    try { localStorage.setItem(MODE_KEY, mode); } catch (err) {}
+    applyMode();
+  });
+
+  // ---------- ลงยอดทั้งกะ ----------
+  let sfShift = 'Day', sfMachineId = '', sfLines = [];
+  const joCache = {};
+  const netHours = () => Number(cfg.netHoursPerShift) || 10.5;
+
+  /** กะที่เพิ่งจบ/กำลังจะจบ: 08–11 น. = กะดึกของเมื่อวาน, 12–19 น. = กะเช้าวันนี้, 20–07 น. = กะเช้า (เพิ่งเลิก) / กะดึก */
+  function applyDefaultShift() {
+    const h = UI.getBkkHour(), today = UI.getToday();
+    if (h >= 8 && h < 12) { sfShift = 'Night'; $('workDate').value = UI.addDays(today, -1); }
+    else if (h >= 12 && h < 20) { sfShift = 'Day'; $('workDate').value = today; }
+    else if (h >= 20) { sfShift = 'Day'; $('workDate').value = today; }
+    else { sfShift = 'Night'; $('workDate').value = today; }
+    renderShiftPick();
+  }
+  function renderShiftPick() {
+    document.querySelectorAll('#sfShift [data-s]').forEach((b) => b.classList.toggle('active', b.dataset.s === sfShift));
+    const d = $('workDate').value;
+    $('sfShiftHint').textContent = sfShift === 'Day'
+      ? `กะเช้า วันที่ ${UI.formatDate(d)} (08:00–19:59)`
+      : `กะดึก เริ่ม ${UI.formatDate(d)} 20:00 – ${UI.formatDate(UI.addDays(d, 1))} 07:59`;
+  }
+  $('sfShift').addEventListener('click', (e) => { const b = e.target.closest('[data-s]'); if (b) { sfShift = b.dataset.s; renderShiftPick(); } });
+  $('workDate').addEventListener('change', () => { if (mode === 'shift') renderShiftPick(); });
+
+  const sfProducts = () => (selMachine && master.machineProducts[selMachine.machineId]) || [];
+  const sfProduct = (code) => sfProducts().find((p) => p.productCode === code);
+  const sfCap = (code) => { const p = sfProduct(code); return (p && p.capacity) || (selMachine && (selMachine.capacity || selMachine.effectiveCapacity)) || 0; };
+  function newLine(productCode, jobOrderId) { return { productCode: productCode || '', jobOrderId: jobOrderId || '', hours: netHours(), actual: '', ng: [] }; }
+
+  function resetShiftForm() {
+    if (!selMachine) return;
+    sfMachineId = selMachine.machineId;
+    $('sfMachine').textContent = selMachine.machineName;
+    sfLines = [newLine(selMachine.currentProduct, selMachine.currentJobOrder)];
+    renderShiftPick();
+    renderLines();
+  }
+
+  async function loadJoOptions(productCode) {
+    const key = selMachine.machineId + '|' + productCode;
+    if (!productCode) return [];
+    if (!joCache[key]) {
+      const r = await API.get('getJobOrderOptions', { filters: { machineId: selMachine.machineId, productCode } });
+      joCache[key] = r.success ? r.data : [];
+    }
+    return joCache[key];
+  }
+
+  function ngRowHtml(li, ni, n, bom, group) {
+    const reasons = UI.ngReasonList(cfg, group);
+    return `<div class="sf-ng" data-li="${li}" data-ni="${ni}">
+      <select class="form-input" data-f="reason"><option value="">— อาการ —</option>${reasons.map((r) => `<option ${r === n.reason ? 'selected' : ''}>${UI.esc(r)}</option>`).join('')}</select>
+      ${bom.length ? `<select class="form-input" data-f="comp"><option value="">— ชิ้นส่วน —</option>${bom.map((c) => `<option value="${UI.esc(c.componentCode)}" ${c.componentCode === n.comp ? 'selected' : ''}>${UI.esc(c.componentName || c.componentCode)}</option>`).join('')}</select>` : ''}
+      <input type="number" min="0" inputmode="numeric" class="form-input" data-f="qty" placeholder="จำนวน" value="${UI.esc(n.qty)}">
+      <button class="btn btn-outline btn-sm" type="button" data-del-ng title="ลบ"><i class="bi bi-x-lg"></i></button>
+      <input class="form-input sf-other ${n.reason === OTHER ? '' : 'hidden'}" data-f="other" placeholder="ระบุอาการ" value="${UI.esc(n.other || '')}">
+    </div>`;
+  }
+
+  function renderLines() {
+    const prods = sfProducts();
+    const group = selMachine ? selMachine.group : '';
+    $('sfLines').innerHTML = sfLines.map((l, i) => {
+      const bom = ((master.bom || {})[l.productCode] || []);
+      return `<div class="sf-line" data-li="${i}">
+        <div class="d-flex justify-between align-center mb-2"><b>${sfLines.length > 1 ? 'รุ่นที่ ' + (i + 1) : 'รุ่น / Job Order'}</b>
+          ${sfLines.length > 1 ? `<button class="btn btn-outline btn-sm" type="button" data-del-line><i class="bi bi-trash"></i> ลบบรรทัด</button>` : ''}</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">รุ่นสินค้า</label><select class="form-input" data-f="productCode">
+            <option value="">— เลือกรุ่น —</option>${prods.map((p) => `<option value="${UI.esc(p.productCode)}" ${p.productCode === l.productCode ? 'selected' : ''}>${UI.esc(p.productCode)} — ${UI.esc(p.productName || '')}</option>`).join('')}</select></div>
+          <div class="form-group"><label class="form-label">Job Order</label><select class="form-input" data-f="jobOrderId"><option value="">กำลังโหลด...</option></select></div>
+          <div class="form-group"><label class="form-label">ชม. ทำงาน</label><input type="number" min="0" max="12" step="0.5" inputmode="decimal" class="form-input" data-f="hours" value="${UI.esc(l.hours)}"></div>
+        </div>
+        <div class="form-group"><label class="form-label">ผลิตได้ทั้งกะ (FG)</label>
+          <input type="number" min="0" inputmode="numeric" class="form-input form-input-lg" data-f="actual" value="${UI.esc(l.actual)}"></div>
+        <label class="form-label">NG แยกตามอาการ</label>
+        <div class="sf-ngs">${l.ng.map((n, ni) => ngRowHtml(i, ni, n, bom, group)).join('') || '<div class="small text-gray mb-2">ไม่มี NG</div>'}</div>
+        <button class="btn btn-outline btn-sm" type="button" data-add-ng><i class="bi bi-plus-lg"></i> เพิ่ม NG</button>
+        <div class="sf-line-sum small text-gray mt-2" data-sum></div>
+      </div>`;
+    }).join('');
+    sfLines.forEach((l, i) => fillJoSelect(i));
+    updateSummary();
+  }
+
+  async function fillJoSelect(i) {
+    const l = sfLines[i];
+    const sel = $('sfLines').querySelector(`.sf-line[data-li="${i}"] [data-f="jobOrderId"]`);
+    if (!sel) return;
+    if (!l.productCode) { sel.innerHTML = '<option value="">— เลือกรุ่นก่อน —</option>'; return; }
+    const list = (await loadJoOptions(l.productCode)).slice();
+    if (l.productCode === selMachine.currentProduct && selMachine.currentJobOrder && !list.some((j) => j.jobOrderId === selMachine.currentJobOrder)) {
+      list.unshift({ jobOrderId: selMachine.currentJobOrder });
+    }
+    if (!l.jobOrderId && list.length === 1) l.jobOrderId = list[0].jobOrderId;
+    sel.innerHTML = `<option value="">${list.length ? '— เลือก Job Order —' : 'ไม่มี Job Order ของรุ่นนี้'}</option>` +
+      list.map((j) => `<option value="${UI.esc(j.jobOrderId)}" ${j.jobOrderId === l.jobOrderId ? 'selected' : ''}>${UI.esc(j.jobOrderId)}${j.queueNo ? ' (คิว ' + j.queueNo + ')' : ''}</option>`).join('');
+    updateSummary();
+  }
+
+  const ngTotal = (l) => l.ng.reduce((s, n) => s + (Math.max(0, Number(n.qty) || 0)), 0);
+  function updateSummary() {
+    let fg = 0, ng = 0, plan = 0, hrs = 0;
+    sfLines.forEach((l, i) => {
+      const cap = sfCap(l.productCode), h = Number(l.hours) || 0, p = Math.round(cap * h);
+      const a = Number(l.actual) || 0, n = ngTotal(l);
+      fg += a; ng += n; plan += p; hrs += h;
+      const el = $('sfLines').querySelector(`.sf-line[data-li="${i}"] [data-sum]`);
+      if (el) el.innerHTML = `แผน <b>${UI.formatNumber(p)}</b> (${UI.formatNumber(cap)}/ชม. × ${h} ชม.) · FG <b>${UI.formatNumber(a)}</b> · NG <b>${UI.formatNumber(n)}</b>` +
+        (p ? ` · ทำได้ <b>${Math.round(a / p * 100)}%</b>` : '');
+    });
+    const over = hrs > 12.5;
+    $('sfSummary').innerHTML = `<div class="d-flex justify-between flex-wrap gap-2">
+      <span>รวมทั้งกะ: FG <b class="text-success">${UI.formatNumber(fg)}</b></span><span>NG <b class="text-danger">${UI.formatNumber(ng)}</b></span>
+      <span>แผน <b>${UI.formatNumber(plan)}</b></span><span class="${over ? 'text-danger' : ''}">ชม. รวม <b>${hrs}</b>${over ? ' (เกิน 1 กะ)' : ''}</span></div>`;
+  }
+
+  $('sfLines').addEventListener('input', (e) => {
+    const f = e.target.dataset.f; if (!f) return;
+    const ngEl = e.target.closest('.sf-ng'), lineEl = e.target.closest('.sf-line');
+    if (ngEl) {
+      const n = sfLines[+ngEl.dataset.li].ng[+ngEl.dataset.ni];
+      n[f] = e.target.value;
+      if (f === 'reason') ngEl.querySelector('[data-f="other"]').classList.toggle('hidden', n.reason !== OTHER);
+    } else if (lineEl) {
+      const l = sfLines[+lineEl.dataset.li];
+      l[f] = e.target.value;
+      if (f === 'productCode') { l.jobOrderId = ''; l.ng.forEach((n) => { n.comp = ''; }); renderLines(); return; }
+    }
+    updateSummary();
+  });
+  $('sfLines').addEventListener('click', (e) => {
+    const lineEl = e.target.closest('.sf-line'); if (!lineEl) return;
+    const li = +lineEl.dataset.li;
+    if (e.target.closest('[data-add-ng]')) { sfLines[li].ng.push({ reason: '', comp: '', qty: '', other: '' }); renderLines(); }
+    else if (e.target.closest('[data-del-ng]')) { sfLines[li].ng.splice(+e.target.closest('.sf-ng').dataset.ni, 1); renderLines(); }
+    else if (e.target.closest('[data-del-line]')) { sfLines.splice(li, 1); spreadHours(); renderLines(); }
+  });
+  function spreadHours() { const h = Math.round(netHours() / sfLines.length * 2) / 2; sfLines.forEach((l) => { l.hours = h; }); }
+  $('sfAddLine').onclick = () => { if (!selMachine) return; sfLines.push(newLine()); spreadHours(); renderLines(); };
+
+  const sfReq = UI.requestIdKeeper();
+  $('sfSubmit').onclick = () => UI.withButton($('sfSubmit'), async () => {
+    if (!selMachine) return UI.showToast('กรุณาเลือกเครื่อง', 'warning');
+    const lines = [];
+    for (let i = 0; i < sfLines.length; i++) {
+      const l = sfLines[i], no = sfLines.length > 1 ? ` (รุ่นที่ ${i + 1})` : '';
+      if (!l.productCode) return UI.showToast('กรุณาเลือกรุ่นสินค้า' + no, 'warning');
+      if (!l.jobOrderId) return UI.showToast('กรุณาเลือก Job Order' + no, 'warning');
+      const ngItems = [];
+      for (const n of l.ng) {
+        const q = Number(n.qty) || 0; if (q <= 0) continue;
+        if (!n.reason) return UI.showToast('กรุณาเลือกอาการ NG' + no, 'warning');
+        if (n.reason === OTHER && !String(n.other || '').trim()) return UI.showToast('กรุณาระบุอาการ "อื่นๆ"' + no, 'warning');
+        const comp = n.comp ? ((master.bom || {})[l.productCode] || []).find((c) => c.componentCode === n.comp) : null;
+        ngItems.push({ reason: n.reason === OTHER ? OTHER + ': ' + n.other.trim() : n.reason, componentCode: n.comp || '', componentName: comp ? comp.componentName : '', qty: q });
+      }
+      if (!(Number(l.actual) > 0) && !ngItems.length) return UI.showToast('ยังไม่ได้ใส่ยอด FG/NG' + no, 'warning');
+      lines.push({ productCode: l.productCode, jobOrderId: l.jobOrderId, hours: Number(l.hours) || 0, actualQty: Number(l.actual) || 0, ngItems });
+    }
+    const data = { machineId: selMachine.machineId, workDate: $('workDate').value, shiftDN: sfShift, lines };
+    data.clientRequestId = sfReq.get(data);
+    const fg = lines.reduce((s, l) => s + l.actualQty, 0), ng = lines.reduce((s, l) => s + l.ngItems.reduce((a, n) => a + n.qty, 0), 0);
+    if (!confirm(`ยืนยันลงยอดทั้งกะ\n${selMachine.machineName} · ${UI.shiftLabel(sfShift)} วันที่ ${UI.formatDate(data.workDate)}\nFG ${fg}  NG ${ng}` +
+      (lines.length > 1 ? `\n(${lines.length} รุ่น/JO)` : ''))) return;
+    const res = await API.post('submitProductionShift', { data });
+    if (!res.success) return UI.showToast(res.message, 'error');
+    sfReq.reset();
+    UI.showToast(res.duplicate ? 'รายการนี้บันทึกไว้แล้ว' : `บันทึกยอดทั้งกะแล้ว (${res.rows} รายการ)`, 'success');
+    resetShiftForm(); loadEntries();
+  });
+
   // ---------- รายการย้อนหลัง ----------
   async function loadEntries() {
     const filters = user.role === 'admin' && $('fFrom').value ? { dateFrom: $('fFrom').value, dateTo: $('fTo').value || $('fFrom').value } : {};
@@ -340,7 +554,7 @@
       <div class="entry-card ${e.status === 'cancelled' ? 'cancelled' : ''}">
         <div class="entry-head"><span>${UI.esc(machineName(e.machineId))} ${e.shift ? '[' + UI.esc(e.shift) + ']' : ''}</span>
           <span><span class="text-success">${UI.formatNumber(e.actualQty)}</span> / ${UI.formatNumber(e.plannedQty)} ${e.defectQty ? `<span class="badge badge-down">NG ${e.defectQty}</span>` : ''}</span></div>
-        <div class="entry-meta">${UI.formatDate(e.date)} (${UI.esc(e.timePeriod)}) · ${UI.esc(e.productCode)} ${e.jobOrderId ? '· JO ' + UI.esc(e.jobOrderId) : ''} ${e.remark ? '· ' + UI.esc(e.remark) : ''}
+        <div class="entry-meta">${UI.formatDate(e.date)} (${e.timePeriod === 'Day' || e.timePeriod === 'Night' ? 'ทั้ง' + UI.shiftLabel(e.timePeriod) : UI.esc(e.timePeriod)}) · ${UI.esc(e.productCode)} ${e.jobOrderId ? '· JO ' + UI.esc(e.jobOrderId) : ''} ${e.remark ? '· ' + UI.esc(e.remark) : ''}
           ${user.role === 'admin' ? '· ' + UI.esc(e.employeeName) : ''}</div>
         ${e.canEdit ? `<div class="entry-actions"><button class="btn btn-outline btn-sm" data-edit="${e.logId}"><i class="bi bi-pencil"></i> แก้ไข/ลบ</button></div>` : ''}
       </div>`).join('');
@@ -389,7 +603,7 @@
   });
 
   // ---------- start ----------
-  initWorkDate(); rollover(); renderPeriods();
+  initWorkDate(); rollover(); renderPeriods(); applyMode();
   if (user.role === 'admin') $('adminFilter').classList.remove('hidden');
   UI.showLoading();
   try {

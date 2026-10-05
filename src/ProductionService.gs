@@ -165,6 +165,11 @@ function submitProduction(token, data) {
   if (!isValidDateStr(workDate) || workDate > getWorkDate()) throw new Error('วันที่งานไม่ถูกต้อง');
   var timePeriod = data.timePeriod || detectTimePeriod();
   if (getTimePeriods().indexOf(timePeriod) < 0) throw new Error('ช่วงเวลาไม่ถูกต้อง');
+  var shiftDN = shiftFromPeriod(timePeriod);
+  var hasShiftEntry = readProductionRange(workDate, workDate).some(function (r) {
+    return r.machineId === m.machineId && r.timePeriod === shiftDN && r.status !== 'cancelled';
+  });
+  if (hasShiftEntry) throw new Error('เครื่องนี้ลงยอดแบบ "ทั้งกะ" ของ' + (shiftDN === 'Day' ? 'กะเช้า' : 'กะดึก') + 'วันนี้ไปแล้ว — แก้ไขที่รายการเดิมแทน');
 
   var now = new Date();
   var recent = getRowsSince('ProductionLog', 'Timestamp', formatDate(new Date(now.getTime() - 86400000)));
@@ -215,6 +220,111 @@ function submitProduction(token, data) {
     if (jo && jo.Status === 'open') updateRow('JobOrders', 'JobOrderID', m.currentJobOrder, { Status: 'in-progress' });
   }
   return { success: true, logId: logId, fgLogId: fgLogId, split: fgSplit > 0 };
+}
+
+/**
+ * ลงยอดทั้งกะ (Leader ลงตอนเลิกกะ) — 1 ครั้ง/เครื่อง/กะ
+ * data = { machineId, workDate, shiftDN:'Day'|'Night', clientRequestId,
+ *          lines:[{ productCode, jobOrderId, hours, actualQty, ngItems:[{ reason, componentCode, componentName, qty }] }] }
+ * บันทึกต่อ line: แถว FG 1 แถว (PlannedQty = capacity × ชม.) + แถว NG แยกตามอาการ (PlannedQty 0)
+ * TimePeriod = 'Day'/'Night' → รายงานแยกจากแถวรายชั่วโมงได้
+ */
+function submitProductionShift(token, data) {
+  var u = requirePermission(token, 'production');
+  data = data || {};
+  var m = getMachine(data.machineId);
+  if (!m) throw new Error('ไม่พบเครื่องจักร');
+  var shiftDN = data.shiftDN;
+  if (!isShiftPeriod(shiftDN)) throw new Error('กรุณาเลือกกะ');
+  var workDate = data.workDate || getWorkDate();
+  if (!isValidDateStr(workDate) || workDate > getWorkDate()) throw new Error('วันที่งานไม่ถูกต้อง');
+  if (workDate === getWorkDate() && shiftDN === 'Night' && detectShift() === 'Day') throw new Error('ยังไม่ถึงกะดึกของวันนี้');
+
+  var existing = readProductionRange(workDate, workDate);
+  if (data.clientRequestId) {
+    var recent = getRowsSince('ProductionLog', 'Timestamp', formatDate(new Date(Date.now() - 86400000)));
+    for (var i = 0; i < recent.length; i++) {
+      if (String(recent[i].ClientRequestID) === String(data.clientRequestId)) return { success: true, duplicate: true };
+    }
+  }
+  var clash = existing.filter(function (r) {
+    return r.machineId === m.machineId && r.shiftDN === shiftDN && r.status !== 'cancelled' && r.status !== 'sort-adjust';
+  });
+  if (clash.length) {
+    var byShift = clash.some(function (r) { return r.timePeriod === shiftDN; });
+    throw new Error('เครื่องนี้มียอดของ' + (shiftDN === 'Day' ? 'กะเช้า' : 'กะดึก') + ' วันที่ ' + workDate + ' แล้ว ' + clash.length + ' รายการ (' +
+      (byShift ? 'ลงแบบทั้งกะ' : 'ลงรายชั่วโมง') + ') — ลบรายการเดิมก่อน หรือแก้ไขที่รายการเดิม');
+  }
+
+  var lines = (data.lines || []).filter(function (l) { return l && l.productCode; });
+  if (!lines.length) throw new Error('กรุณาใส่ยอดอย่างน้อย 1 รุ่น');
+  var caps = productCapacityMap();
+  var joRows = {};
+  getAllRows('JobOrders').forEach(function (r) { joRows[String(r.JobOrderID)] = r; });
+  var totalHours = 0;
+  var prepared = lines.map(function (l, idx) {
+    var no = lines.length > 1 ? ' (บรรทัดที่ ' + (idx + 1) + ')' : '';
+    var productCode = String(l.productCode);
+    if (m.assignedProducts.indexOf(productCode) < 0 && productCode !== m.currentProduct) throw new Error('รุ่น ' + productCode + ' ไม่ได้ผูกกับเครื่องนี้' + no);
+    var joId = String(l.jobOrderId || '');
+    if (!joId) throw new Error('กรุณาเลือก Job Order' + no);
+    var jo = joRows[joId];
+    if (!jo) throw new Error('ไม่พบ Job Order ' + joId + no);
+    if (String(jo.ProductCode) !== productCode) throw new Error('Job Order ' + joId + ' เป็นของรุ่น ' + jo.ProductCode + no);
+    if (jo.MachineID && jo.MachineID !== 'ALL' && String(jo.MachineID) !== m.machineId) throw new Error('Job Order ' + joId + ' ไม่ได้กำหนดให้เครื่องนี้' + no);
+    if (JO_ACTIVE.indexOf(jo.Status || 'open') < 0 && joId !== m.currentJobOrder) throw new Error('Job Order ' + joId + ' ปิดไปแล้ว' + no);
+    var hours = toNumber(l.hours);
+    if (hours < 0 || hours > 12) throw new Error('ชั่วโมงทำงานต้องอยู่ระหว่าง 0–12' + no);
+    totalHours += hours;
+    var actual = Math.max(0, Math.round(toNumber(l.actualQty)));
+    var ngByReason = {};
+    (l.ngItems || []).forEach(function (it) {
+      var q = Math.max(0, Math.round(toNumber(it && it.qty)));
+      if (!q) return;
+      var reason = String(it.reason || '').trim();
+      if (!hasNgReason(reason)) throw new Error('กรุณาระบุอาการ NG ให้ครบ' + no);
+      var g = ngByReason[reason] = ngByReason[reason] || { qty: 0, details: {} };
+      g.qty += q;
+      if (it.componentCode) {
+        var d = g.details[it.componentCode] = g.details[it.componentCode] || { componentName: it.componentName || '', qty: 0 };
+        d.qty += q;
+      }
+    });
+    // บางรายการไม่ได้ระบุชิ้นส่วน → เก็บส่วนที่เหลือเป็น "ไม่ระบุชิ้นส่วน" (กราฟ NG ตามกลุ่มชิ้นส่วนไม่หาย)
+    Object.keys(ngByReason).forEach(function (k) {
+      var g = ngByReason[k], keys = Object.keys(g.details);
+      var withComp = keys.reduce(function (s2, c) { return s2 + g.details[c].qty; }, 0);
+      if (keys.length && withComp < g.qty) g.details._NA = { componentName: 'ไม่ระบุชิ้นส่วน', qty: g.qty - withComp };
+    });
+    var ngTotal = Object.keys(ngByReason).reduce(function (s, k) { return s + ngByReason[k].qty; }, 0);
+    if (!actual && !ngTotal) throw new Error('ยังไม่ได้ใส่ยอด FG/NG' + no);
+    return { productCode: productCode, joId: joId, jo: jo, hours: hours, actual: actual, ngByReason: ngByReason,
+      planned: Math.round(machineCapacity(m, productCode, caps) * hours) };
+  });
+  if (totalHours > 12.5) throw new Error('ชั่วโมงทำงานรวมเกิน 1 กะ (' + totalHours + ' ชม.)');
+
+  var now = formatDate();
+  var ids = [];
+  prepared.forEach(function (p) {
+    var base = {
+      Timestamp: now, Date: workDate, Shift: shiftDN, TimePeriod: shiftDN,
+      EmployeeID: u.employeeId, EmployeeName: u.name, MachineID: m.machineId, ProductCode: p.productCode,
+      Status: 'completed', ClientRequestID: data.clientRequestId || '', JobOrderID: p.joId
+    };
+    var fgId = generateUUID(); ids.push(fgId);
+    appendRow('ProductionLog', Object.assign({}, base, { LogID: fgId, PlannedQty: p.planned, ActualQty: p.actual, DefectQty: 0, DefectDetails: '', Remark: '' }));
+    Object.keys(p.ngByReason).forEach(function (reason) {
+      var g = p.ngByReason[reason];
+      var ngId = generateUUID(); ids.push(ngId);
+      appendRow('ProductionLog', Object.assign({}, base, {
+        LogID: ngId, PlannedQty: 0, ActualQty: 0, DefectQty: g.qty,
+        DefectDetails: Object.keys(g.details).length ? JSON.stringify(g.details) : '', Remark: reason
+      }));
+    });
+    if (p.jo.Status === 'open') { updateRow('JobOrders', 'JobOrderID', p.joId, { Status: 'in-progress' }); p.jo.Status = 'in-progress'; }
+  });
+  logAction(u, 'submitProductionShift', { machineId: m.machineId, workDate: workDate, shiftDN: shiftDN, rows: ids.length });
+  return { success: true, rows: ids.length };
 }
 
 function getProductionRow(logId) {

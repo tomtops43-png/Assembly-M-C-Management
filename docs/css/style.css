@@ -353,6 +353,16 @@ body.is-mobile.net-busy .kpi-grid:empty::before { -webkit-mask-size: 100% 92px, 
 .spinner-sm { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.45); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ----- ลงยอดทั้งกะ ----- */
+.sf-line { border: 1px solid var(--gray-light); border-radius: var(--radius); padding: 12px; margin-bottom: 12px; background: #FAFAFB; }
+.sf-ng { display: grid; grid-template-columns: 1.4fr 1.2fr 110px auto; gap: 6px; margin-bottom: 6px; align-items: center; }
+.sf-ng:not(:has(select[data-f="comp"])) { grid-template-columns: 1.4fr 110px auto; }
+.sf-ng .sf-other { grid-column: 1 / -1; }
+.sf-summary { padding: 12px 14px; border-radius: 8px; background: var(--ink); color: #fff; margin-bottom: 12px; font-size: 14px; }
+.sf-summary .text-success { color: #3DDC84; } .sf-summary .text-danger { color: #FF8FA0; }
+body.is-mobile .sf-ng { grid-template-columns: 1fr 90px auto; }
+body.is-mobile .sf-ng select[data-f="comp"] { grid-column: 1 / -1; grid-row: 2; }
+
 /* ----- photos ----- */
 .photo-upload-area { display: flex; gap: 8px; flex-wrap: wrap; }
 .photo-add-btn { width: 84px; height: 84px; border: 1.5px dashed #C6C8CE; border-radius: 10px; background: #FAFAFB; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 12px; color: var(--gray); cursor: pointer; }

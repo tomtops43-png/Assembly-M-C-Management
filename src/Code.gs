@@ -68,6 +68,7 @@ var WRITE_ACTIONS = {
   login: function (b) { return login(b.employeeId, b.pin); },
   logout: function (b) { return logout(b.token); },
   submitProduction: function (b) { return submitProduction(b.token, b.data); },
+  submitProductionShift: function (b) { return submitProductionShift(b.token, b.data); },
   cancelProduction: function (b) { return cancelProduction(b.token, b.logId); },
   updateProductionEntry: function (b) { return updateProductionEntry(b.token, b.logId, b.updates); },
   requestDeleteProduction: function (b) { return requestDeleteProduction(b.token, b.logId, b.reason); },
