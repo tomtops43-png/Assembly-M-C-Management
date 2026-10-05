@@ -128,9 +128,14 @@ var LINE_CONFIG = {
         ]
       },
       // ---- Check Witness (เช็ค Master) — JRTL-AI-003_Form_Check_Witness.xlsx ----
+      // Arc Stack: medium = 9 Fixture, high = 10 Fixture
       {
-        id: 'WITNESS-10', type: 'witness', tab: 'Witness', name: 'Form Check Witness Arc Stack / Arc Chute (10 Fixture)', docNo: 'JRTL-AI-003',
-        okLabel: 'ยอมรับ', ngLabel: 'ไม่ยอมรับ', machines: ['AC-06', 'AC-07', 'AC-08', 'AS-MED', 'AS-HIGH'], items: fixtureItems(10)
+        id: 'WITNESS-10', type: 'witness', tab: 'Witness', name: 'Form Check Witness Arc Stack High / Arc Chute (10 Fixture)', docNo: 'JRTL-AI-003',
+        okLabel: 'ยอมรับ', ngLabel: 'ไม่ยอมรับ', machines: ['AC-06', 'AC-07', 'AC-08', 'AS-HIGH'], items: fixtureItems(10)
+      },
+      {
+        id: 'WITNESS-9', type: 'witness', tab: 'Witness', name: 'Form Check Witness Arc Stack Medium (9 Fixture)', docNo: 'JRTL-AI-003',
+        okLabel: 'ยอมรับ', ngLabel: 'ไม่ยอมรับ', machines: ['AS-MED'], items: fixtureItems(9)
       },
       {
         id: 'WITNESS-12', type: 'witness', tab: 'Witness', name: 'Form Check Witness Arc Chute Beta (12 Fixture)', docNo: 'JRTL-AI-003',
