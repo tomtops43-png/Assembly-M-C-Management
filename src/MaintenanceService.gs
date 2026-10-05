@@ -69,7 +69,7 @@ function submitMaintenanceTicket(token, data) {
   var ticketId = makeId('MT');
   var photos = savePhotos(data.photos, ticketId + '_แจ้ง', { category: 'maintenance', date: getWorkDate(reportTime), sub: ticketId + '_' + data.machineId });
   appendRow('MaintenanceLog', {
-    TicketID: ticketId, Timestamp: formatDate(reportTime), Date: getWorkDate(reportTime), ShiftAB: u.shift || '',
+    TicketID: ticketId, Timestamp: formatDate(reportTime), Date: getWorkDate(reportTime), ShiftAB: '',
     ShiftDN: detectShift(reportTime), ReportedBy: u.employeeId, ReporterName: u.name, MachineID: data.machineId,
     IssueType: data.issueType, Description: data.description, Priority: priority, Status: 'open', AssignedTo: '',
     ResolvedAt: '', DowntimeMinutes: '', Resolution: '', Photos: photos.join(', '), ResolutionPhotos: '',

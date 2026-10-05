@@ -123,13 +123,8 @@
   let entries = [];
   let pendingReqId = null, pendingSig = '';
 
-  // ---------- วันที่งาน (smart assist: กะ B เปิด 08:00-11:59 → เมื่อวาน) ----------
-  function defaultWorkDate() {
-    const h = UI.getBkkHour();
-    let d = UI.getToday();
-    if (user.shift === 'B' && h >= 8 && h < 12) d = UI.addDays(d, -1);
-    return d;
-  }
+  // ---------- วันที่งาน (เปลี่ยนวันตอน 08:00 — กะดึกหลังเที่ยงคืนยังนับเป็นวันเดิม) ----------
+  function defaultWorkDate() { return UI.getToday(); }
   function initWorkDate() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(WD_KEY) || 'null'); } catch (e) {}
@@ -145,7 +140,7 @@
     const t = UI.getToday();
     if (t !== lastToday) { lastToday = t; $('workDate').max = t; $('workDate').value = defaultWorkDate(); }
     const s = UI.getShiftInfo();
-    $('shiftBadge').textContent = `กะ ${s.shiftAB || '-'} · ${s.shiftDN} · ${s.timePeriod}`;
+    $('shiftBadge').textContent = `${UI.shiftLabel(s.shiftDN)} · ${s.timePeriod}`;
     // ช่วงเวลาเลื่อนตามชั่วโมงปัจจุบัน (เปิดหน้าค้างไว้ข้ามชั่วโมง) — ยกเว้นผู้ใช้เลือกช่วงเองแล้ว
     if (!periodPicked && selPeriod !== UI.currentPeriod()) { selPeriod = UI.currentPeriod(); renderPeriods(); }
   }

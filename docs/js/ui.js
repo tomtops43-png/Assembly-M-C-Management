@@ -196,7 +196,7 @@ const UI = (() => {
       const d = bkkNow();
       const hhmm = pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
       const el = document.getElementById('topClock');
-      if (el) el.innerHTML = `<span class="shift-dot ${s.shiftDN === 'Night' ? 'night' : ''}"></span>${s.shiftDN}${s.shiftAB ? ' · กะ ' + esc(s.shiftAB) : ''}<span class="mono">${hhmm}</span>`;
+      if (el) el.innerHTML = `<span class="shift-dot ${s.shiftDN === 'Night' ? 'night' : ''}"></span>${shiftLabel(s.shiftDN)}<span class="mono">${hhmm}</span>`;
     };
     tick();
     setInterval(tick, 30000);
@@ -341,10 +341,15 @@ const UI = (() => {
   function currentPeriod() { return hourToPeriod(getBkkHour()); }
   function isDayHour(h) { return h >= 8 && h < 20; }
 
+  /** ไลน์นี้มีแค่กะเช้า (Day) / กะดึก (Night) — ค่าเก่า A/B แสดงตามเดิม */
+  function shiftLabel(v) {
+    return { Day: 'กะเช้า', Night: 'กะดึก', ALL: 'ทุกกะ' }[v] || (v ? 'กะ ' + v : '-');
+  }
+
   function getShiftInfo() {
     const h = getBkkHour();
     const u = (typeof Auth !== 'undefined' && Auth.getUser()) || {};
-    return { shiftDN: isDayHour(h) ? 'Day' : 'Night', shiftAB: u.shift || '', timePeriod: hourToPeriod(h) };
+    return { shiftDN: isDayHour(h) ? 'Day' : 'Night', timePeriod: hourToPeriod(h) };
   }
 
   function formatNumber(n, digits = 0) {
@@ -525,7 +530,7 @@ const UI = (() => {
   return {
     isDesktop, applyDeviceClass, esc, showToast, showLoading, hideLoading, renderTopNav, renderNav, initPage,
     openModal, closeModal, getBkkHour, getToday, addDays, nowLocalInput, hourToPeriod, getTimePeriods, currentPeriod,
-    isDayHour, getShiftInfo, formatNumber, formatDate, timeAgo, getLineConfig, groupMachines, machineGridHtml, machineOptions, emptyState, loadingBlock, statusLabel, downloadText, withButton,
+    isDayHour, getShiftInfo, shiftLabel, formatNumber, formatDate, timeAgo, getLineConfig, groupMachines, machineGridHtml, machineOptions, emptyState, loadingBlock, statusLabel, downloadText, withButton,
     requestIdKeeper, applyNumericKeyboards, BRAND_SVG,
     NG_OTHER, loadNgReasons, ngReasonList, fillNgSelect, addNgReasonPrompt, deleteNgReasonByName, bindNgControls
   };

@@ -51,8 +51,7 @@
       <span id="customBox" class="hidden"><input type="date" class="date-input" id="from"> – <input type="date" class="date-input" id="to"></span>
     </div>
     <div class="date-selector mt-2">
-      <select class="date-input" id="fShiftAB"><option value="">กะ A+B</option><option>A</option><option>B</option></select>
-      <select class="date-input" id="fShiftDN"><option value="">Day+Night</option><option>Day</option><option>Night</option></select>
+      <select class="date-input" id="fShiftDN"><option value="">กะเช้า + ดึก</option><option value="Day">กะเช้า</option><option value="Night">กะดึก</option></select>
       <select class="date-input" id="fProduct"><option value="">ทุกรุ่น</option></select>
       <select class="date-input" id="fJo"><option value="">ทุก Job Order</option><option value="__unassigned__">ไม่ระบุ JO</option></select>
       <button class="btn btn-primary btn-sm" id="apply"><i class="bi bi-search"></i> ค้นหา</button>
@@ -135,11 +134,11 @@
     $('loadBar').classList.remove('hidden');
     setDashLoading(true);
     const slow = setTimeout(() => $('slowMsg').classList.remove('hidden'), 12000);
-    const params = { dateRange: rangeParam(), shiftAB: $('fShiftAB').value, shiftDN: $('fShiftDN').value, productCode: $('fProduct').value, jobOrderId: $('fJo').value };
+    const params = { dateRange: rangeParam(), shiftDN: $('fShiftDN').value, productCode: $('fProduct').value, jobOrderId: $('fJo').value };
     try {
       const [d, t] = await Promise.all([
         API.get('getDashboardData', params, { long: true, signal: my.signal }),
-        API.get('getSortedProductionData', { sortField: sort.f, sortOrder: sort.o, filters: { dateRange: rangeParam(), shiftAB: params.shiftAB, shiftDN: params.shiftDN, productCode: params.productCode, jobOrderId: params.jobOrderId, limit: 500 } }, { long: true, signal: my.signal })
+        API.get('getSortedProductionData', { sortField: sort.f, sortOrder: sort.o, filters: { dateRange: rangeParam(), shiftDN: params.shiftDN, productCode: params.productCode, jobOrderId: params.jobOrderId, limit: 500 } }, { long: true, signal: my.signal })
       ]);
       if (!d.success) return UI.showToast(d.message, 'error');
       data = d.data; rows = t.success ? t.data : [];
@@ -205,7 +204,7 @@
       <div class="kpi-card success"><div class="kpi-value">${dc.accept}</div><div class="kpi-label">Accept</div></div><div class="kpi-card danger"><div class="kpi-value">${dc.reject}</div><div class="kpi-label">Reject</div></div></div>
       ${dc.missing.length ? '<div class="small text-gray">ช่องที่ขาด: ' + dc.missing.slice(0, 20).map((m) => `${m.machineId} ${m.shiftDN === 'Night' ? 'กะดึก' : 'กะเช้า'}${m.formTab ? ' (' + m.formTab + ')' : ''}`).join(', ') + (dc.missing.length > 20 ? ' …' : '') + '</div>' : ''}` : '<div class="small text-gray">เลือกช่วงวันที่เพื่อดู</div>';
     $('tShift').innerHTML = '<thead><tr><th>กะ</th><th class="num">FG</th><th class="num">NG</th></tr></thead><tbody>' +
-      Object.keys(data.byShift).map((s) => `<tr><td>${UI.esc(s)}</td><td class="num">${n(data.byShift[s].actual)}</td><td class="num">${n(data.byShift[s].defect)}</td></tr>`).join('') + '</tbody>';
+      Object.keys(data.byShift).map((s) => `<tr><td>${UI.esc(UI.shiftLabel(s))}</td><td class="num">${n(data.byShift[s].actual)}</td><td class="num">${n(data.byShift[s].defect)}</td></tr>`).join('') + '</tbody>';
     renderTable();
   }
 
@@ -213,7 +212,7 @@
   let reportMode = 'auto', reportAt = null;
   const fmtStamp = (d) => d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const pctTxt = (v) => (v === null || v === undefined ? '-' : v + '%');
-  const shiftTxt = () => `กะ A/B: ${$('fShiftAB').value || 'ทั้งหมด'} | Day/Night: ${$('fShiftDN').value || 'ทั้งหมด'}`;
+  const shiftTxt = () => `กะ: ${$('fShiftDN').value ? UI.shiftLabel($('fShiftDN').value) : 'เช้า + ดึก'}`;
   const rangeTxt = () => data.range.from ? (data.range.from === data.range.to ? data.range.from : data.range.from + ' ถึง ' + data.range.to) : 'ทั้งหมด';
   const mNameOf = (id) => { const m = data.byMachine.find((x) => x.machineId === id); return m ? m.machineName : id; };
   const issueLabels = {};
@@ -395,7 +394,7 @@
   $('repPdf').onclick = () => UI.withButton($('repPdf'), async () => {
     if (!data) return UI.showToast('ยังไม่มีข้อมูล — กดค้นหาก่อน', 'warning');
     if (!reportAt) generateReport('auto');
-    const name = `${APP_CONFIG.LINE_NAME.replace(/[^A-Za-z0-9]+/g, '')}_report_${data.range.from || 'all'}${data.range.to && data.range.to !== data.range.from ? '_' + data.range.to : ''}_${$('fShiftAB').value || 'all'}-${($('fShiftDN').value || 'all').toLowerCase()}.pdf`;
+    const name = `${APP_CONFIG.LINE_NAME.replace(/[^A-Za-z0-9]+/g, '')}_report_${data.range.from || 'all'}${data.range.to && data.range.to !== data.range.from ? '_' + data.range.to : ''}_${($('fShiftDN').value || 'all').toLowerCase()}.pdf`;
     const keepScroll = window.scrollY;
     const holder = document.createElement('div');
     // วางไว้มุมบนซ้ายของเอกสาร (หลังเนื้อหา) — html2canvas อ้างอิงตำแหน่ง scroll ถ้าวางแบบ fixed/เลื่อนจออยู่ จะได้ขอบขาวด้านบนและท้ายรายงานขาด

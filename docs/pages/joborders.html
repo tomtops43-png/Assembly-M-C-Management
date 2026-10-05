@@ -31,7 +31,7 @@
       <div class="form-group"><label class="form-label">รุ่นสินค้า <span class="req">*</span></label><select class="form-input" id="joProduct"></select></div>
       <div class="form-group"><label class="form-label">จำนวนเป้าหมาย <span class="req">*</span></label><input type="number" class="form-input" id="joQty"></div>
       <div class="form-group"><label class="form-label">เครื่องจักร <span class="req">*</span></label><select class="form-input" id="joMachine"></select></div>
-      <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="joShift"><option value="ALL">ทุกกะ</option><option>A</option><option>B</option></select></div>
+      <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="joShift"><option value="ALL">ทุกกะ</option><option value="Day">กะเช้า</option><option value="Night">กะดึก</option></select></div>
       <div class="form-group"><label class="form-label">กำหนดส่ง</label><input type="date" class="form-input" id="joDue"></div>
       <div class="form-group"><label class="form-label">ความสำคัญ</label><select class="form-input" id="joPrio"><option value="normal">ปกติ</option><option value="low">ต่ำ</option><option value="high">สูง</option><option value="urgent">เร่งด่วน</option></select></div>
     </div>
@@ -129,7 +129,7 @@
       return `<div class="entry-card priority-${j.priority}">
         <div class="entry-head"><span>${j.queueNo ? `<span class="badge badge-info">คิว ${j.queueNo}</span> ` : ''}${UI.esc(j.jobOrderId)}${j.isTemp ? ' <span class="badge badge-pending"><i class="bi bi-hourglass-split"></i> ชั่วคราว</span>' : ''}</span>
           <span class="badge badge-${j.status}">${UI.esc(j.status)}</span></div>
-        <div class="entry-meta">${UI.esc(j.productCode)} · เครื่อง ${j.machineId === 'ALL' ? 'ทุกเครื่อง' : UI.esc(j.machineId)} · กะ ${UI.esc(j.shift)} · วันที่ ${UI.formatDate(j.workDate)}
+        <div class="entry-meta">${UI.esc(j.productCode)} · เครื่อง ${j.machineId === 'ALL' ? 'ทุกเครื่อง' : UI.esc(j.machineId)} · ${UI.esc(UI.shiftLabel(j.shift))} · วันที่ ${UI.formatDate(j.workDate)}
           ${j.dueDate ? '· ส่ง ' + UI.formatDate(j.dueDate) : ''} · ${PRIO[j.priority] || j.priority}${j.remark ? ' · ' + UI.esc(j.remark) : ''}</div>
         <div class="d-flex justify-between small mt-2"><span>แผน <b>${UI.formatNumber(j.plannedQty)}</b></span><span>ผลิตได้ <b class="text-success">${UI.formatNumber(j.actualQty)}</b></span>
           <span>NG <b class="text-danger">${UI.formatNumber(j.defectQty)}</b></span><span>คงเหลือ <b>${UI.formatNumber(j.remaining)}</b></span><span><b>${j.completionRate}%</b></span></div>

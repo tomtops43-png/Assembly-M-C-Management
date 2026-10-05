@@ -30,7 +30,7 @@
         <div class="form-group"><label class="form-label">เครื่องที่พบ</label><select class="form-input" id="machine"></select></div>
         <div class="form-group"><label class="form-label">สินค้า</label><select class="form-input" id="product"></select></div>
         <div class="form-group"><label class="form-label">Job Order (ไม่บังคับ)</label><select class="form-input" id="jo"><option value="">ไม่ระบุ</option></select></div>
-        <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="shift"><option>A</option><option>B</option></select></div>
+        <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="shift"><option value="Day">กะเช้า</option><option value="Night">กะดึก</option></select></div>
         <div class="form-group"><label class="form-label">จำนวนที่ต้อง Sort</label><input type="number" class="form-input" id="qty"></div>
       </div>
       <div class="form-group"><label class="form-label">กระบวนการที่พบ</label><div class="choice-grid" id="procGrid"></div>
@@ -138,7 +138,7 @@
       const done = j.goodQty + j.defectQty, pct = j.totalQty ? Math.min(100, done / j.totalQty * 100) : 0;
       return `<div class="entry-card">
         <div class="entry-head"><span>${UI.esc(j.jobId)}</span><span class="badge badge-${j.status}">${UI.statusLabel(j.status)}</span></div>
-        <div class="entry-meta">${UI.formatDate(j.date)} · ${UI.esc(j.machineId)} · ${UI.esc(j.productCode)} · ${UI.esc(j.foundProcess)} · กะ ${UI.esc(j.shift)} ${j.jobOrderId ? '· ' + UI.esc(j.jobOrderId) : ''}<br>${UI.esc(j.remark)} · ลงทะเบียนโดย ${UI.esc(j.registeredByName)} ${j.sortedByName ? '· คัดโดย ' + UI.esc(j.sortedByName) : ''}</div>
+        <div class="entry-meta">${UI.formatDate(j.date)} · ${UI.esc(j.machineId)} · ${UI.esc(j.productCode)} · ${UI.esc(j.foundProcess)} · ${UI.esc(UI.shiftLabel(j.shift))} ${j.jobOrderId ? '· ' + UI.esc(j.jobOrderId) : ''}<br>${UI.esc(j.remark)} · ลงทะเบียนโดย ${UI.esc(j.registeredByName)} ${j.sortedByName ? '· คัดโดย ' + UI.esc(j.sortedByName) : ''}</div>
         <div class="d-flex justify-between small mt-1"><span>คัดแล้ว ${UI.formatNumber(done)}/${UI.formatNumber(j.totalQty)}</span><span class="text-success">ดี ${UI.formatNumber(j.goodQty)}</span><span class="text-danger">เสีย ${UI.formatNumber(j.defectQty)}</span></div>
         <div class="progress-bar-container mt-1"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
         <div class="entry-actions">
@@ -208,7 +208,7 @@
     await UI.loadNgReasons().catch(() => []);
     $('date').max = UI.getToday(); $('date').value = UI.getToday();
     $('dTo').value = UI.getToday(); $('dFrom').value = UI.addDays(UI.getToday(), -6);
-    if (user.shift) { $('shift').value = user.shift; }
+    $('shift').value = UI.getShiftInfo().shiftDN;
     renderProc(); $('machine').onchange(); await loadJobs();
   } catch (err) { UI.showToast(err.message, 'error'); }
   UI.hideLoading();

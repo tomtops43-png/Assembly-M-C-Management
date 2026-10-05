@@ -35,7 +35,6 @@
         <div class="form-group"><label class="form-label">ชื่อ *</label><input class="form-input" id="uName"></div>
         <div class="form-group"><label class="form-label">PIN 4 หลัก *</label><input class="form-input" id="uPin" inputmode="numeric" maxlength="4"></div>
         <div class="form-group"><label class="form-label">บทบาท</label><select class="form-input" id="uRole"></select></div>
-        <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="uShift"><option value="">-</option><option>A</option><option>B</option></select></div>
       </div>
       <button class="btn btn-primary" id="uAdd"><i class="bi bi-plus-lg"></i> เพิ่ม</button>
     </div>
@@ -98,7 +97,6 @@
     <div class="form-group"><label class="form-label">ชื่อ</label><input class="form-input" id="euName"></div>
     <div class="form-group"><label class="form-label">บทบาท</label><select class="form-input" id="euRole"></select></div>
     <div class="form-group"><label class="form-label">PIN ใหม่ (ว่าง = ไม่เปลี่ยน)</label><input class="form-input" id="euPin" inputmode="numeric" maxlength="4"></div>
-    <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="euShift"><option value="">-</option><option>A</option><option>B</option></select></div>
     <div class="form-group"><label class="form-label">สถานะ</label><select class="form-input" id="euActive"><option value="1">ใช้งาน</option><option value="0">ระงับ</option></select></div>
   </div>
   <div class="form-group">
@@ -143,14 +141,14 @@
     const r = await API.get('getAllUsers');
     if (!check(r)) return;
     users = r.data;
-    $('uTable').innerHTML = '<thead><tr><th>รหัส</th><th>ชื่อ</th><th>บทบาท</th><th>กะ</th><th>สิทธิ์</th><th>สถานะ</th><th></th></tr></thead><tbody>' +
-      users.map((u) => `<tr><td>${UI.esc(u.employeeId)}</td><td>${UI.esc(u.name)}</td><td>${Auth.ROLE_LABELS[u.role] || u.role}</td><td>${UI.esc(u.shift || '-')}</td>
+    $('uTable').innerHTML = '<thead><tr><th>รหัส</th><th>ชื่อ</th><th>บทบาท</th><th>สิทธิ์</th><th>สถานะ</th><th></th></tr></thead><tbody>' +
+      users.map((u) => `<tr><td>${UI.esc(u.employeeId)}</td><td>${UI.esc(u.name)}</td><td>${Auth.ROLE_LABELS[u.role] || u.role}</td>
         <td class="small">${Object.keys(u.permissions).filter((k) => u.permissions[k]).length} หน้า${Object.keys(u.permissionOverrides || {}).length ? ' *' : ''}</td>
         <td><span class="badge ${u.active ? 'badge-running' : 'badge-down'}">${u.active ? 'ใช้งาน' : 'ระงับ'}</span></td>
         <td><button class="btn btn-outline btn-sm" data-u="${UI.esc(u.employeeId)}">แก้ไข</button></td></tr>`).join('') + '</tbody>';
   }
   $('uAdd').onclick = () => UI.withButton($('uAdd'), async () => {
-    const r = await API.post('addUser', { userData: { employeeId: $('uId').value.trim().toUpperCase(), name: $('uName').value.trim(), pin: $('uPin').value.trim(), role: $('uRole').value, shift: $('uShift').value } });
+    const r = await API.post('addUser', { userData: { employeeId: $('uId').value.trim().toUpperCase(), name: $('uName').value.trim(), pin: $('uPin').value.trim(), role: $('uRole').value, shift: '' } });
     if (!check(r)) return;
     ['uId', 'uName', 'uPin'].forEach((id) => { $(id).value = ''; });
     UI.showToast('เพิ่มพนักงานแล้ว', 'success'); loadUsers();
@@ -163,7 +161,7 @@
     editingUser = users.find((u) => u.employeeId === id);
     $('euTitle').textContent = `แก้ไข ${editingUser.employeeId}`;
     $('euName').value = editingUser.name; $('euRole').value = editingUser.role; $('euPin').value = '';
-    $('euShift').value = editingUser.shift || ''; $('euActive').value = editingUser.active ? '1' : '0';
+    $('euActive').value = editingUser.active ? '1' : '0';
     renderPerms(editingUser.permissions);
     UI.openModal('userModal');
   }
@@ -172,7 +170,7 @@
   $('euSave').onclick = () => UI.withButton($('euSave'), async () => {
     const role = $('euRole').value, defs = Auth.defaultPermissions(role), ov = {};
     document.querySelectorAll('[data-perm]').forEach((c) => { if (c.checked !== !!defs[c.dataset.perm]) ov[c.dataset.perm] = c.checked; });
-    const updates = { name: $('euName').value.trim(), role, shift: $('euShift').value, active: $('euActive').value === '1', permissions: Object.keys(ov).length ? ov : null };
+    const updates = { name: $('euName').value.trim(), role, shift: '', active: $('euActive').value === '1', permissions: Object.keys(ov).length ? ov : null };
     if ($('euPin').value) updates.pin = $('euPin').value.trim();
     const r = await API.post('updateUser', { employeeId: editingUser.employeeId, updates });
     if (!check(r)) return;
