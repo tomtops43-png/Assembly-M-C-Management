@@ -66,6 +66,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
 
   var totals = { actual: 0, defect: 0, plan: 0, entries: rows.length };
   var byMachine = {}, byProduct = {}, byShift = {}, daily = {}, ngByReason = {}, ngByPart = {};
+  var ngDaily = {}; // date → { อาการ: qty } (กราฟ NG ตามอาการรายวันในรายงาน PDF)
   var oeeAgg = {}; // machine → {days:{}, hours:{}, actual}
 
   rows.forEach(function (r) {
@@ -87,6 +88,8 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     if (r.defectQty > 0) {
       var reason = ngReasonOf(r.remark);
       ngByReason[reason] = (ngByReason[reason] || 0) + r.defectQty;
+      var nd = ngDaily[r.date] = ngDaily[r.date] || {};
+      nd[reason] = (nd[reason] || 0) + r.defectQty;
       var det = r.defectDetails || {};
       var keys = Object.keys(det);
       var counted = 0;
@@ -117,6 +120,12 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     var cap = hourCaps.length ? hourCaps.reduce(function (a, b) { return a + b; }, 0) / hourCaps.length
       : machineCapacity(mMap[id] || { capacity: 0, assignedProducts: [] }, '', caps);
     bm.oee = null;
+    // รายวัน (กราฟยอด/OEE รายวันตามเครื่องในรายงาน PDF)
+    bm.daily = o ? Object.keys(o.days).sort().map(function (d) {
+      var hrs = Object.keys(o.hours).filter(function (h) { return h.indexOf(d + '|') === 0; }).length;
+      var capDay = cap * Math.max(netHours, hrs);
+      return { date: d, actual: o.days[d], oee: capDay > 0 && o.days[d] > 0 ? pct(o.days[d], capDay) : null };
+    }) : [];
     if (o && cap > 0) {
       var countedDays = Object.keys(o.days).filter(function (d) { return o.days[d] > 0; }).length;
       var scheduled = countedDays * netHours;
@@ -186,7 +195,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
       },
       byMachine: Object.keys(byMachine).sort().map(function (k) { return byMachine[k]; }),
       byProduct: Object.keys(byProduct).map(function (k) { var p = byProduct[k]; p.defectRate = pct(p.defect, p.actual + p.defect); p.yield = pct(p.actual, p.actual + p.defect); return p; }),
-      byShift: byShift, trend: trend, ngByReason: ngByReason, ngByPart: ngByPart,
+      byShift: byShift, trend: trend, ngByReason: ngByReason, ngByPart: ngByPart, ngDaily: ngDaily,
       defectPartGroups: LINE_CONFIG.DEFECT_PART_GROUPS, maintenance: maint, jobOrders: joList, dailyCheck: dailyCheck
     }
   };
