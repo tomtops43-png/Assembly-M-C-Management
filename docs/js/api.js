@@ -66,7 +66,7 @@ const API = (() => {
   const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 
   /** GET read — retry 3 ครั้ง (backoff + jitter), timeout แล้ว retry ได้ 1 ครั้ง */
-  async function get(action, params = {}, opts = {}) {
+  async function getRaw(action, params, opts) {
     ensureUrl();
     if (isOffline()) return OFFLINE_RESULT();
     const retries = opts.retries === undefined ? 3 : opts.retries;
@@ -94,7 +94,7 @@ const API = (() => {
   }
 
   /** เขียนผ่าน GET ?payload= — ไม่ retry โดย default (ใช้ clientRequestId กันเบิ้ล) */
-  async function post(action, data = {}, opts = {}) {
+  async function postRaw(action, data, opts) {
     ensureUrl();
     if (isOffline()) return OFFLINE_RESULT();
     const body = Object.assign({ action, token: (typeof Auth !== 'undefined' && Auth.getToken()) || '', _ts: Date.now() }, data);
@@ -111,7 +111,7 @@ const API = (() => {
   }
 
   /** ข้อมูลใหญ่ (รูป base64): POST text/plain (ไม่มี preflight) → fallback post() */
-  async function postLarge(action, data = {}, opts = {}) {
+  async function postLargeRaw(action, data, opts) {
     ensureUrl();
     if (isOffline()) return OFFLINE_RESULT();
     const body = Object.assign({ action, token: (typeof Auth !== 'undefined' && Auth.getToken()) || '', _ts: Date.now() }, data);
@@ -120,10 +120,26 @@ const API = (() => {
         method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body)
       }, opts.timeoutMs || 120000));
     } catch (err) {
-      if (JSON.stringify(body).length < 6000) return post(action, data, opts);
+      if (JSON.stringify(body).length < 6000) return postRaw(action, data, opts);
       return { success: false, message: NET_ERROR_MSG, network: true };
     }
   }
+
+  // นับ request ที่กำลังรอ → ui.js แสดงตัวโหลด (opts.silent = ไม่แสดง เช่น polling เบื้องหลัง)
+  let pending = 0;
+  function track(delta) {
+    pending = Math.max(0, pending + delta);
+    try { window.dispatchEvent(new CustomEvent('amc:net', { detail: { pending } })); } catch (e) {}
+  }
+  async function tracked(silent, fn) {
+    if (silent) return fn();
+    track(1);
+    try { return await fn(); } finally { track(-1); }
+  }
+  const get = (action, params = {}, opts = {}) => tracked(opts.silent, () => getRaw(action, params, opts));
+  const post = (action, data = {}, opts = {}) => tracked(opts.silent, () => postRaw(action, data, opts));
+  const postLarge = (action, data = {}, opts = {}) => tracked(opts.silent, () => postLargeRaw(action, data, opts));
+  const pendingCount = () => pending;
 
   function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
@@ -170,5 +186,5 @@ const API = (() => {
   }
 
   init();
-  return { init, get, post, postLarge, getUrl, setUrl, newRequestId, compressImage, prepareOcrImage, NET_ERROR_MSG };
+  return { init, get, post, postLarge, pendingCount, getUrl, setUrl, newRequestId, compressImage, prepareOcrImage, NET_ERROR_MSG };
 })();

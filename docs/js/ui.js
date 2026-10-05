@@ -58,22 +58,99 @@ const UI = (() => {
     setTimeout(() => { el.classList.add('hide'); setTimeout(() => el.remove(), 300); }, 4000);
   }
 
+  // ตัวหมุนหลัก: วงแหวน 2 ชั้นหมุนสวนกัน + แกนกลางเต้น
+  const LOADER_HTML = '<div class="loader"><span class="loader-ring"></span><span class="loader-ring r2"></span><span class="loader-core"></span></div>';
+
   function showLoading(text) {
     let el = document.getElementById('loadingOverlay');
     if (!el) {
       el = document.createElement('div');
       el.id = 'loadingOverlay';
       el.className = 'loading-overlay';
-      el.innerHTML = '<div class="spinner"></div><div class="loading-text"></div>';
+      el.innerHTML = '<div class="loading-card">' + LOADER_HTML + '<div class="loading-text"></div><div class="loading-dots"><i></i><i></i><i></i></div></div>';
       document.body.appendChild(el);
     }
-    el.querySelector('.loading-text').textContent = text || 'กำลังโหลด...';
+    el.querySelector('.loading-text').textContent = String(text || 'กำลังโหลด').replace(/\.+$/, '');
     el.classList.add('show');
+    syncNetLoader();
   }
 
   function hideLoading() {
     const el = document.getElementById('loadingOverlay');
     if (el) el.classList.remove('show');
+    syncNetLoader();
+  }
+
+  // ---------- ตัวโหลดอัตโนมัติ: ทุก API request (แถบวิ่งด้านบน + ป้ายมุมจอ) ----------
+  const NET_SHOW_DELAY = 200;   // เร็วกว่านี้ไม่ต้องโชว์ (กันกระพริบ)
+  const NET_HIDE_GRACE = 250;   // ระหว่าง retry/request ต่อกันไม่ให้หายแวบ
+  let netPending = 0, netShowTimer = null, netHideTimer = null, netTickTimer = null, netStart = 0;
+
+  function netEl() {
+    let el = document.getElementById('netLoader');
+    if (!el && document.body) {
+      el = document.createElement('div');
+      el.id = 'netLoader';
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
+      el.innerHTML = '<div class="net-bar"><span></span></div>' +
+        '<div class="net-pill">' + LOADER_HTML.replace('class="loader"', 'class="loader loader-sm"') +
+        '<span class="net-text">กำลังโหลดข้อมูล</span><span class="loading-dots"><i></i><i></i><i></i></span><span class="net-time mono"></span></div>';
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  function netTick() {
+    const el = netEl(); if (!el) return;
+    const sec = Math.floor((Date.now() - netStart) / 1000);
+    el.querySelector('.net-time').textContent = sec >= 3 ? sec + 's' : '';
+    el.querySelector('.net-text').textContent = sec >= 12 ? 'ข้อมูลเยอะ กำลังประมวลผล' : sec >= 5 ? 'รอสักครู่ กำลังดึงข้อมูล' : 'กำลังโหลดข้อมูล';
+  }
+
+  function netShow() {
+    netShowTimer = null;
+    const el = netEl(); if (!el) return;
+    netStart = Date.now();
+    netTick();
+    clearInterval(netTickTimer);
+    netTickTimer = setInterval(netTick, 1000);
+    syncNetLoader();
+    el.classList.add('show');
+    document.body.classList.add('net-busy');
+  }
+
+  function netHide() {
+    netHideTimer = null;
+    clearInterval(netTickTimer); netTickTimer = null;
+    const el = document.getElementById('netLoader');
+    if (el) el.classList.remove('show');
+    if (document.body) document.body.classList.remove('net-busy');
+  }
+
+  function syncNetLoader() {
+    const overlay = document.getElementById('loadingOverlay');
+    const el = document.getElementById('netLoader');
+    // มี overlay เต็มจออยู่แล้ว → ซ่อนป้ายมุมจอ (แถบด้านบนยังวิ่ง)
+    if (el) el.classList.toggle('overlay-on', !!(overlay && overlay.classList.contains('show')));
+  }
+
+  window.addEventListener('amc:net', (e) => {
+    netPending = (e.detail && e.detail.pending) || 0;
+    if (netPending > 0) {
+      if (netHideTimer) { clearTimeout(netHideTimer); netHideTimer = null; }
+      const shown = document.getElementById('netLoader') && document.getElementById('netLoader').classList.contains('show');
+      if (!shown && !netShowTimer) netShowTimer = setTimeout(netShow, NET_SHOW_DELAY);
+      syncNetLoader();
+    } else {
+      if (netShowTimer) { clearTimeout(netShowTimer); netShowTimer = null; }
+      if (!netHideTimer) netHideTimer = setTimeout(netHide, NET_HIDE_GRACE);
+    }
+  });
+
+  /** กล่องกำลังโหลด (ใช้แทน emptyState ระหว่างรอ) */
+  function loadingBlock(text) {
+    return '<div class="loading-block">' + LOADER_HTML + '<div>' + esc(text || 'กำลังโหลด') + '<span class="loading-dots"><i></i><i></i><i></i></span></div></div>';
   }
 
   // ---------- nav ----------
@@ -448,7 +525,7 @@ const UI = (() => {
   return {
     isDesktop, applyDeviceClass, esc, showToast, showLoading, hideLoading, renderTopNav, renderNav, initPage,
     openModal, closeModal, getBkkHour, getToday, addDays, nowLocalInput, hourToPeriod, getTimePeriods, currentPeriod,
-    isDayHour, getShiftInfo, formatNumber, formatDate, timeAgo, getLineConfig, groupMachines, machineGridHtml, machineOptions, emptyState, statusLabel, downloadText, withButton,
+    isDayHour, getShiftInfo, formatNumber, formatDate, timeAgo, getLineConfig, groupMachines, machineGridHtml, machineOptions, emptyState, loadingBlock, statusLabel, downloadText, withButton,
     requestIdKeeper, applyNumericKeyboards, BRAND_SVG,
     NG_OTHER, loadNgReasons, ngReasonList, fillNgSelect, addNgReasonPrompt, deleteNgReasonByName, bindNgControls
   };
