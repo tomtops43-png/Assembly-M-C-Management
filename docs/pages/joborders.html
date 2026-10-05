@@ -99,7 +99,6 @@
   $('joDate').addEventListener('change', syncJoType);
   $('joId').addEventListener('input', () => { $('joId').value = $('joId').value.toUpperCase(); });
 
-  $('joProduct').onchange = () => { const p = products.find((x) => x.productCode === $('joProduct').value); if (p && !$('joQty').value) $('joQty').value = p.defaultQty || ''; };
 
   $('joCreate').onclick = () => UI.withButton($('joCreate'), async () => {
     const real = $('joType').value === 'real';
