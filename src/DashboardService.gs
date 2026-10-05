@@ -67,7 +67,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
   var totals = { actual: 0, defect: 0, plan: 0, entries: rows.length };
   var byMachine = {}, byProduct = {}, byShift = {}, daily = {}, ngByReason = {}, ngByPart = {};
   var ngDaily = {}; // date → { อาการ: qty } (กราฟ NG ตามอาการรายวันในรายงาน PDF)
-  var oeeAgg = {}; // machine → {days:{}, hours:{}, actual}
+  var oeeAgg = {}; // machine → { shifts: { 'date|Day': {actual, hours, shiftPlan, hourlyRows} } }
 
   rows.forEach(function (r) {
     var m = mMap[r.machineId] || { capacity: 0, assignedProducts: [] };
@@ -102,12 +102,16 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
       if (!keys.length) ngByPart.OTHER = (ngByPart.OTHER || 0) + r.defectQty;
     }
 
-    // OEE: นับเฉพาะ (เครื่อง,วัน) ที่มียอด > 0 และไม่ใช่วันวัตถุดิบหมด
+    // OEE: เก็บรายกะ (เครื่อง, วัน, กะ) — ไม่นับวันวัตถุดิบหมด
     if (!stockout[r.machineId + '|' + r.date]) {
-      var o = oeeAgg[r.machineId] = oeeAgg[r.machineId] || { days: {}, hours: {}, actual: 0 };
-      o.actual += r.actualQty;
-      if (r.status !== 'sort-adjust' && rowCap > 0) o.hours[r.date + '|' + r.timePeriod] = rowCap;
-      o.days[r.date] = (o.days[r.date] || 0) + r.actualQty;
+      var o = oeeAgg[r.machineId] = oeeAgg[r.machineId] || { shifts: {} };
+      var sk = r.date + '|' + (r.shiftDN || '-');
+      var sh = o.shifts[sk] = o.shifts[sk] || { date: r.date, actual: 0, hours: {}, shiftPlan: 0, hourlyRows: 0 };
+      sh.actual += r.actualQty;
+      if (r.status !== 'sort-adjust') {
+        if (isShiftPeriod(r.timePeriod)) sh.shiftPlan += r.plannedQty; // ลงทั้งกะ: capacity × ชม.ที่ Leader ใส่
+        else { sh.hourlyRows++; if (rowCap > 0) sh.hours[r.timePeriod] = rowCap; }
+      }
     }
   });
 
@@ -116,27 +120,29 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     var bm = byMachine[id];
     bm.defectRate = pct(bm.defect, bm.actual + bm.defect);
     var o = oeeAgg[id];
-    // capacity เฉลี่ยของชั่วโมงที่บันทึก (เครื่องที่ผลิตหลายรุ่น เช่น GV.2)
-    var hourCaps = o ? Object.keys(o.hours).map(function (k) { return o.hours[k]; }) : [];
-    var cap = hourCaps.length ? hourCaps.reduce(function (a, b) { return a + b; }, 0) / hourCaps.length
-      : machineCapacity(mMap[id] || { capacity: 0, assignedProducts: [] }, '', caps);
+    var fallbackCap = machineCapacity(mMap[id] || { capacity: 0, assignedProducts: [] }, '', caps);
     bm.oee = null;
+    // เวลาทำงานคิดเฉพาะกะที่มีการผลิตจริง (ไม่เหมารวม 2 กะต่อวัน)
+    //  - ลงทั้งกะ: แผน = capacity × ชม.ที่ลง
+    //  - ลงรายชั่วโมง: capacity เฉลี่ยของชั่วโมงที่ลง × max(ชม.สุทธิต่อกะ, จำนวนชั่วโมงที่ลง)
+    var perDay = {}, actualSum = 0, capSum = 0;
+    if (o) Object.keys(o.shifts).forEach(function (k) {
+      var sh = o.shifts[k];
+      if (sh.actual <= 0) return;
+      var hrCaps = Object.keys(sh.hours).map(function (h) { return sh.hours[h]; });
+      var hrCap = hrCaps.length ? hrCaps.reduce(function (a, b) { return a + b; }, 0) / hrCaps.length : fallbackCap;
+      var capT = sh.shiftPlan + (sh.hourlyRows ? hrCap * Math.max(LINE_CONFIG.NET_HOURS_PER_SHIFT, hrCaps.length) : 0);
+      var d = perDay[sh.date] = perDay[sh.date] || { actual: 0, cap: 0 };
+      d.actual += sh.actual; d.cap += capT;
+      if (capT > 0) { actualSum += sh.actual; capSum += capT; }
+    });
     // รายวัน (กราฟยอด/OEE รายวันตามเครื่องในรายงาน PDF)
-    bm.daily = o ? Object.keys(o.days).sort().map(function (d) {
-      var hrs = Object.keys(o.hours).filter(function (h) { return h.indexOf(d + '|') === 0; }).length;
-      var capDay = cap * Math.max(netHours, hrs);
-      return { date: d, actual: o.days[d], oee: capDay > 0 && o.days[d] > 0 ? pct(o.days[d], capDay) : null };
-    }) : [];
-    if (o && cap > 0) {
-      var countedDays = Object.keys(o.days).filter(function (d) { return o.days[d] > 0; }).length;
-      var scheduled = countedDays * netHours;
-      var logged = Object.keys(o.hours).length;
-      var working = scheduled + Math.max(0, logged - scheduled);
-      var capTotal = cap * working;
-      if (capTotal > 0) {
-        bm.oee = pct(o.actual, capTotal);
-        oeeActualSum += o.actual; oeeCapSum += capTotal;
-      }
+    bm.daily = Object.keys(perDay).sort().map(function (d) {
+      return { date: d, actual: perDay[d].actual, oee: perDay[d].cap > 0 ? pct(perDay[d].actual, perDay[d].cap) : null };
+    });
+    if (capSum > 0) {
+      bm.oee = pct(actualSum, capSum);
+      oeeActualSum += actualSum; oeeCapSum += capSum;
     }
   });
 
