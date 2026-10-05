@@ -183,8 +183,8 @@
     const t = tickets.find((x) => x.ticketId === b.dataset.id);
     if (b.dataset.act === 'detail') return showDetail(t);
     if (b.dataset.act === 'resolve') { resolving = t; rPhotos = []; renderPreview(rPhotos, $('rPreview')); $('rText').value = ''; $('rTime').value = UI.nowLocalInput(); return UI.openModal('resolveModal'); }
-    if (b.dataset.act === 'return' && !confirm('คืนงานนี้?')) return;
-    if (b.dataset.act === 'delete' && !confirm('ลบใบแจ้งซ่อมนี้?')) return;
+    if (b.dataset.act === 'return' && !await UI.confirm({ title: 'คืนงานนี้?', okText: 'คืนงาน' })) return;
+    if (b.dataset.act === 'delete' && !await UI.confirm({ title: 'ลบใบแจ้งซ่อมนี้?', danger: true })) return;
     UI.withButton(b, async () => {
       let r;
       if (b.dataset.act === 'take') r = await API.post('updateTicketStatus', { ticketId: t.ticketId, status: 'in-progress' });

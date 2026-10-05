@@ -226,9 +226,9 @@
     if (!r.success) return UI.showToast(r.message, 'error');
     UI.closeModal('formModal'); formOpenAt = 0; UI.showToast('ยืนยันแล้ว', 'success'); load();
   });
-  $('fCancel').onclick = () => {
+  $('fCancel').onclick = async () => {
     const c = checkOf(selMachine, selDate, selShift, selFormId);
-    if (!c || !confirm('ลบรายการนี้?')) return;
+    if (!c || !await UI.confirm({ title: 'ลบรายการนี้?', danger: true })) return;
     UI.withButton($('fCancel'), async () => {
       const r = await API.post('cancelDailyCheck', { checkId: c.checkId });
       if (!r.success) return UI.showToast(r.message, 'error');

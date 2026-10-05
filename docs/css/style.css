@@ -353,6 +353,31 @@ body.is-mobile.net-busy .kpi-grid:empty::before { -webkit-mask-size: 100% 92px, 
 .spinner-sm { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.45); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ----- กล่องยืนยัน (UI.confirm / UI.prompt) ----- */
+.dlg-overlay { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(22,23,27,.45); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); opacity: 0; transition: opacity .18s; }
+.dlg-overlay.show { opacity: 1; }
+.dlg { width: min(100%, 400px); background: #fff; border-radius: 18px; padding: 26px 22px 18px; text-align: center; box-shadow: 0 24px 60px rgba(22,23,27,.35); transform: translateY(12px) scale(.96); transition: transform .26s cubic-bezier(.2,1.3,.4,1); }
+.dlg-overlay.show .dlg { transform: none; }
+.dlg-icon { width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 50%; display: grid; place-items: center; font-size: 26px; background: var(--primary-light); color: var(--primary); box-shadow: 0 0 0 7px rgba(200,16,46,.06); }
+.dlg.danger .dlg-icon { background: var(--danger-light); color: var(--danger); }
+.dlg-title { font-size: 18px; font-weight: 700; color: var(--ink); margin-bottom: 6px; word-break: break-word; }
+.dlg-msg { color: var(--gray); font-size: 14px; line-height: 1.55; margin-bottom: 6px; word-break: break-word; }
+.dlg-input { margin-top: 10px; text-align: left; }
+.dlg-shake { animation: dlgShake .35s; border-color: var(--danger) !important; }
+.dlg-rows { margin: 12px 0 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; text-align: left; }
+.dlg-rows div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 14px; font-size: 14px; }
+.dlg-rows div + div { border-top: 1px solid var(--line); }
+.dlg-rows span { color: var(--gray); } .dlg-rows b { color: var(--ink); text-align: right; }
+.dlg-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.dlg-tiles div { border-radius: 12px; padding: 10px; background: var(--bg); display: flex; flex-direction: column; align-items: center; }
+.dlg-tiles span { font-size: 12px; font-weight: 700; color: var(--gray); letter-spacing: .5px; }
+.dlg-tiles b { font-family: var(--mono); font-size: 28px; line-height: 1.2; color: var(--ink-3); }
+.dlg-tiles .ok { background: var(--success-light); } .dlg-tiles .ok b { color: #11663A; }
+.dlg-tiles .ng { background: var(--danger-light); } .dlg-tiles .ng b { color: var(--danger); }
+.dlg-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.dlg-actions .btn { justify-content: center; min-height: 46px; font-size: 15px; }
+@keyframes dlgShake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+
 /* ----- ลงยอดทั้งกะ ----- */
 .sf-line { border: 1px solid var(--gray-light); border-radius: var(--radius); padding: 12px; margin-bottom: 12px; background: #FAFAFB; }
 .sf-ng { display: grid; grid-template-columns: 1.4fr 1.2fr 110px auto; gap: 6px; margin-bottom: 6px; align-items: center; }

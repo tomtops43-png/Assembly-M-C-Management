@@ -100,7 +100,7 @@
   });
   $('manage').onclick = () => UI.openModal('typeModal');
   $('addType').onclick = () => UI.withButton($('addType'), async () => { const r = await API.post('addAlarmType', { typeName: $('newType').value }); if (!r.success) return UI.showToast(r.message, 'error'); $('newType').value = ''; await loadMasters(); });
-  $('typeList').addEventListener('click', async (e) => { const b = e.target.closest('[data-del]'); if (b && confirm('ลบชนิดนี้?')) { const r = await API.post('deleteAlarmType', { typeId: b.dataset.del }); if (!r.success) UI.showToast(r.message, 'error'); loadMasters(); } });
+  $('typeList').addEventListener('click', async (e) => { const b = e.target.closest('[data-del]'); if (b && await UI.confirm({ title: 'ลบชนิดนี้?', danger: true })) { const r = await API.post('deleteAlarmType', { typeId: b.dataset.del }); if (!r.success) UI.showToast(r.message, 'error'); loadMasters(); } });
 
   async function loadHist() {
     const r = await API.get('getAlarmHistory', { filters: { dateFrom: $('hFrom').value, dateTo: $('hTo').value, machineId: $('hMachine').value } });
