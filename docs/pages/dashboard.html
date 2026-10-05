@@ -36,6 +36,7 @@
   .rp-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .rp-chart { border: 1px solid #E3E4E8; border-radius: 6px; padding: 6px; page-break-inside: avoid; }
   .rp-chart div { font-weight: 700; margin-bottom: 4px; } .rp-chart img { width: 100%; }
+  .rp-wide { grid-column: 1 / -1; }
   .rp-foot { margin-top: 18px; color: #9A9EA9; font-size: 10px; text-align: right; }
   .rp-section { page-break-inside: avoid; }
 </style>
@@ -290,10 +291,65 @@
     } catch (e) { return ''; }
   }
 
+  // กราฟเพิ่มเติมเฉพาะในรายงาน PDF — วาดนอกจอแล้วแปลงเป็นรูป
+  const PALETTE = ['#C8102E', '#1E9E5A', '#2F6FDE', '#E8A317', '#7B3FC4', '#16A3B8', '#E8750F', '#6B6F7A'];
+  function offscreenChart(cfg, w = 340, h = 250) {
+    if (!hasChart) return '';
+    const box = document.createElement('div');
+    box.style.cssText = `position:fixed;left:-20000px;top:0;width:${w}px;height:${h}px`;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    box.appendChild(cv); document.body.appendChild(box);
+    try {
+      cfg.options = Object.assign({ responsive: false, animation: false, devicePixelRatio: 3 }, cfg.options || {});
+      const c = new Chart(cv, cfg);
+      const url = c.toBase64Image('image/png', 1);
+      c.destroy();
+      return url;
+    } catch (e) { console.error(e); return ''; } finally { box.remove(); }
+  }
+  const imgBox = (url, title, wide) => url ? `<div class="rp-chart${wide ? ' rp-wide' : ''}"><div>${title}</div><img src="${url}"></div>` : '';
+
+  function extraCharts() {
+    const out = {};
+    // 1) แยกตามกะ: FG / NG + %NG, %Yield
+    const shifts = Object.keys(data.byShift).sort();
+    if (shifts.length) {
+      out.shift = offscreenChart({ type: 'bar', data: { labels: shifts.map((x) => (x === '-' ? 'ไม่ระบุ' : 'กะ ' + x)), datasets: [
+        { label: 'FG', data: shifts.map((x) => data.byShift[x].actual), backgroundColor: '#1E9E5A', yAxisID: 'y' },
+        { label: 'NG', data: shifts.map((x) => data.byShift[x].defect), backgroundColor: '#C8102E', yAxisID: 'y' },
+        { label: '% NG', type: 'line', data: shifts.map((x) => { const b = data.byShift[x]; return b.actual + b.defect ? +(b.defect / (b.actual + b.defect) * 100).toFixed(2) : 0; }), borderColor: '#E8A317', backgroundColor: '#E8A317', yAxisID: 'y1' },
+        { label: '% Yield', type: 'line', data: shifts.map((x) => { const b = data.byShift[x]; return b.actual + b.defect ? +(b.actual / (b.actual + b.defect) * 100).toFixed(2) : 0; }), borderColor: '#2F6FDE', backgroundColor: '#2F6FDE', borderDash: [5, 4], yAxisID: 'y1' }] },
+        options: { scales: { y: { beginAtZero: true }, y1: { position: 'right', min: 0, max: 100, grid: { display: false } } } } });
+    }
+    // 2) NG ตามอาการรายวัน (stacked) — 6 อาการหลัก + อื่นๆ
+    const nd = data.ngDaily || {}, days = Object.keys(nd).sort();
+    if (days.length) {
+      const tops = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a]);
+      const main = tops.slice(0, 6), rest = tops.slice(6);
+      const sets = main.map((r, i) => ({ label: r, data: days.map((d) => nd[d][r] || 0), backgroundColor: PALETTE[i] }));
+      if (rest.length) sets.push({ label: 'อาการอื่น', data: days.map((d) => rest.reduce((a, r) => a + (nd[d][r] || 0), 0)), backgroundColor: PALETTE[7] });
+      out.ngDaily = offscreenChart({ type: 'bar', data: { labels: days.map((d) => d.slice(5)), datasets: sets },
+        options: { scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } }, 700, 250);
+    }
+    // 3) ยอดผลิต (แท่ง) + OEE (เส้น) รายวันตามเครื่อง
+    const ms = data.byMachine.filter((m) => (m.daily || []).length);
+    const mDays = [...new Set(ms.flatMap((m) => m.daily.map((x) => x.date)))].sort();
+    if (mDays.length) {
+      const at = (m, d, k) => { const x = m.daily.find((y) => y.date === d); return x ? x[k] : null; };
+      const sets = [];
+      ms.forEach((m, i) => sets.push({ label: m.machineName, data: mDays.map((d) => at(m, d, 'actual') || 0), backgroundColor: PALETTE[i % PALETTE.length], yAxisID: 'y' }));
+      ms.forEach((m, i) => sets.push({ label: 'OEE ' + m.machineName, type: 'line', data: mDays.map((d) => at(m, d, 'oee')), borderColor: PALETTE[i % PALETTE.length], backgroundColor: PALETTE[i % PALETTE.length], borderDash: [5, 4], spanGaps: true, yAxisID: 'y1' }));
+      out.machineDaily = offscreenChart({ type: 'bar', data: { labels: mDays.map((d) => d.slice(5)), datasets: sets },
+        options: { scales: { y: { beginAtZero: true }, y1: { position: 'right', min: 0, max: 120, grid: { display: false }, title: { display: true, text: '% OEE' } } } } }, 700, 270);
+    }
+    return out;
+  }
+
   function reportHtml(logoSrc) {
     const k = data.kpi, mt = data.maintenance, dc = data.dailyCheck;
     const logo = logoSrc ? `<img src="${logoSrc}" width="46" height="46">` : '';
     const reasons = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a]);
+    const ex = extraCharts();
     return `<div class="rp">
       <div class="rp-head">${logo}<div><h1>${esc(APP_CONFIG.LINE_NAME)} Production Report</h1><div>Standard Production Report Form</div></div></div>
       <div class="rp-meta">สร้างรายงานเมื่อ: ${esc(fmtStamp(reportAt || new Date()))}<br>ช่วงข้อมูล: ${esc(rangeTxt())}<br>${esc(shiftTxt())}${$('fProduct').value ? ' | รุ่น: ' + esc($('fProduct').value) : ''}</div>
@@ -321,7 +377,9 @@
         Object.keys(data.byShift).map((s) => `<tr><td>${esc(s)}</td><td class="n">${n(data.byShift[s].actual)}</td><td class="n">${n(data.byShift[s].defect)}</td></tr>`).join(''), 3)}
       <div style="page-break-before: always"></div>
       <h2>Charts</h2>
-      <div class="rp-charts">${chartImg('cMachine', 'Output by machine')}${chartImg('cTrend', 'Production trend')}${chartImg('cProduct', 'Product mix')}${chartImg('cReason', 'NG Pareto (main defect causes)')}</div>
+      <div class="rp-charts">${chartImg('cMachine', 'Output by machine')}${chartImg('cProduct', 'Product mix')}${imgBox(ex.shift, 'Shift breakdown')}${chartImg('cTrend', 'Production trend')}</div>
+      <div style="page-break-before: always"></div>
+      <div class="rp-charts">${imgBox(ex.ngDaily, 'NG by defect type (daily history)', true)}${chartImg('cReason', 'NG Pareto (main defect causes)')}<div></div>${imgBox(ex.machineDaily, 'Daily output &amp; OEE by machine', true)}</div>
       <div class="rp-foot">${esc(APP_CONFIG.SYSTEM_TITLE)}</div>
     </div>`;
   }
