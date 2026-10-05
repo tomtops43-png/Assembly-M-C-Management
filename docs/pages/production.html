@@ -26,7 +26,7 @@
         <input type="date" class="date-input" id="workDate">
       </div>
     </div>
-    <div class="tabs mt-2 mb-0" id="modeTabs">
+    <div class="tabs mt-2 mb-0 hidden" id="modeTabs">
       <button class="tab-btn active" data-mode="hourly"><i class="bi bi-clock"></i> ลงรายชั่วโมง</button>
       <button class="tab-btn" data-mode="shift"><i class="bi bi-calendar2-check"></i> ลงยอดทั้งกะ</button>
     </div>
@@ -362,8 +362,13 @@
 
   // ---------- โหมด: ลงรายชั่วโมง / ลงยอดทั้งกะ ----------
   const MODE_KEY = P + 'production_mode_' + user.employeeId;
+  // ลงยอดทั้งกะ: เฉพาะ Admin (คนอื่นไม่เห็นแท็บ และ server ปฏิเสธ)
+  const CAN_SHIFT = user.role === 'admin';
   let mode = 'hourly';
-  try { mode = localStorage.getItem(MODE_KEY) === 'shift' ? 'shift' : 'hourly'; } catch (e) {}
+  if (CAN_SHIFT) {
+    $('modeTabs').classList.remove('hidden');
+    try { mode = localStorage.getItem(MODE_KEY) === 'shift' ? 'shift' : 'hourly'; } catch (e) {}
+  }
   function applyMode() {
     document.querySelectorAll('#modeTabs [data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
     $('hourlyForm').classList.toggle('hidden', mode !== 'hourly');
@@ -371,7 +376,7 @@
     if (mode === 'shift') { applyDefaultShift(); if (selMachine) resetShiftForm(); }
   }
   $('modeTabs').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-mode]'); if (!b || b.dataset.mode === mode) return;
+    const b = e.target.closest('[data-mode]'); if (!b || b.dataset.mode === mode || !CAN_SHIFT) return;
     mode = b.dataset.mode;
     try { localStorage.setItem(MODE_KEY, mode); } catch (err) {}
     applyMode();
