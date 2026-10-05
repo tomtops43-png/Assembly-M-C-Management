@@ -27,7 +27,7 @@
 | B7 | ✅ Daily Check Arc chute (JRTLQR713/714-13-1, 10 หัวข้อ, ตรวจกะเช้า/กะดึก √/X) — ✅ GV.2 — ยังขาด Daily Check ของ Arc Stack + Check Witness (JRTL-AI-003: Arc chute + Arc Stack 10 Fixture, Beta 12 Fixture, GV2 6 Plate / 9 Plate) | ใส่แล้วใน `DAILY_CHECK.FORMS` |
 | B8 | ชนิดขยะเริ่มต้น | ว่าง (เพิ่มเองในหน้าได้) |
 | B9 | ชนิด Alarm เริ่มต้น | ว่าง (เพิ่มเองในหน้าได้) |
-| B10 | ✅ ชั่วโมงสุทธิ 10.5 ชม./กะ (ตามป้าย) — ยังขาดชั่วโมง OT | OT ใช้แบบ H1: Day 18-19, Night 6-7 |
+| B10 | ✅ ชม.ปกติ 8 ชม./กะ + OT 2.5 ชม. (รวม 10.5 ตามป้าย) | ✅ OT: เช้า 17:30-20:00, ดึก 05:30-08:00 |
 | B11 | ต้องการข้อความ "AM Check Sheet ประจำวัน" ใน Inbox ของ operator ไหม | ปิด |
 
 ## C. ระบบ / การ Deploy (ทำครั้งเดียว — ดู `DEPLOYMENT.md`)

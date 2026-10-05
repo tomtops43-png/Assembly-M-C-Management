@@ -13,6 +13,16 @@ function resolveDateRange(dateRange) {
   }
 }
 
+/** ชั่วโมงนี้อยู่ในช่วง OT ของกะหรือไม่ (LINE_CONFIG.OT_HOURS) */
+function isOtPeriod(shiftDN, period) {
+  return (LINE_CONFIG.OT_HOURS[shiftDN] || []).indexOf(periodHour(period)) >= 0;
+}
+
+/** ชม.ที่ใช้คิดแผน/OEE ต่อกะ: ชม.ปกติ (+ OT ถ้ากะนั้นมี OT) */
+function planHoursPerShift(hasOt) {
+  return LINE_CONFIG.NORMAL_HOURS_PER_SHIFT + (hasOt ? LINE_CONFIG.OT_HOURS_PER_SHIFT : 0);
+}
+
 function round1(n) { return Math.round(n * 10) / 10; }
 
 function pct(a, b) { return b > 0 ? round1(a / b * 100) : 0; }
@@ -78,8 +88,9 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     var plan = r.status !== 'sort-adjust' && isShiftPeriod(r.timePeriod) ? r.plannedQty : 0;
     if (r.status !== 'sort-adjust' && !isShiftPeriod(r.timePeriod)) {
       var hk = r.machineId + '|' + r.date + '|' + (r.shiftDN || '-');
-      var hp = hourlyPlan[hk] = hourlyPlan[hk] || { machineId: r.machineId, hours: {} };
+      var hp = hourlyPlan[hk] = hourlyPlan[hk] || { machineId: r.machineId, hours: {}, ot: false };
       hp.hours[r.timePeriod] = { cap: rowCap, productCode: r.productCode };
+      if (isOtPeriod(r.shiftDN, r.timePeriod)) hp.ot = true;
     }
     totals.actual += r.actualQty; totals.defect += r.defectQty; totals.plan += plan;
 
@@ -113,16 +124,20 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     if (!stockout[r.machineId + '|' + r.date]) {
       var o = oeeAgg[r.machineId] = oeeAgg[r.machineId] || { shifts: {} };
       var sk = r.date + '|' + (r.shiftDN || '-');
-      var sh = o.shifts[sk] = o.shifts[sk] || { date: r.date, actual: 0, hours: {}, shiftPlan: 0, hourlyRows: 0 };
+      var sh = o.shifts[sk] = o.shifts[sk] || { date: r.date, actual: 0, hours: {}, shiftPlan: 0, hourlyRows: 0, ot: false, otActual: 0 };
       sh.actual += r.actualQty;
       if (r.status !== 'sort-adjust') {
-        if (isShiftPeriod(r.timePeriod)) sh.shiftPlan += r.plannedQty; // ลงทั้งกะ: capacity × ชม.ที่ Leader ใส่
-        else { sh.hourlyRows++; if (rowCap > 0) sh.hours[r.timePeriod] = rowCap; }
+        if (isShiftPeriod(r.timePeriod)) { sh.shiftPlan += r.plannedQty; if (r.ot) sh.ot = true; } // ลงทั้งกะ: capacity × ชม.ที่ใส่
+        else {
+          sh.hourlyRows++;
+          if (rowCap > 0) sh.hours[r.timePeriod] = rowCap;
+          if (isOtPeriod(r.shiftDN, r.timePeriod)) { sh.ot = true; sh.otActual += r.actualQty; }
+        }
       }
     }
   });
 
-  // แผนของการลงรายชั่วโมง = รายวัน/รายกะ: capacity × max(ชม.สุทธิต่อกะ, ชม.ที่ลงจริง)
+  // แผนของการลงรายชั่วโมง = รายวัน/รายกะ: capacity × (ชม.ปกติ 8 + OT 2.5 ถ้ามีการลงยอดในช่วง OT)
   // นับครั้งเดียวต่อ (เครื่อง, วัน, กะ) ไม่ว่าจะลงกี่ครั้ง/กี่แถว (FG+NG แยกแถว, ลงซ้ำชั่วโมงเดิม)
   // ถ้ากะนั้นผลิตหลายรุ่น แบ่งแผนให้แต่ละรุ่นตามจำนวนชั่วโมงที่ผลิต
   Object.keys(hourlyPlan).forEach(function (k) {
@@ -130,15 +145,19 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     var periods = Object.keys(hp.hours);
     if (!periods.length) return;
     var fallback = machineCapacity(mMap[hp.machineId] || { capacity: 0, assignedProducts: [] }, '', caps);
-    var hrsTotal = Math.max(LINE_CONFIG.NET_HOURS_PER_SHIFT, periods.length);
+    var hrsTotal = planHoursPerShift(hp.ot);
     periods.forEach(function (p) {
       var h = hp.hours[p];
-      var share = Math.round((h.cap || fallback) * hrsTotal / periods.length);
+      var share = (h.cap || fallback) * hrsTotal / periods.length;
       totals.plan += share;
       if (byMachine[hp.machineId]) byMachine[hp.machineId].plan += share;
       if (byProduct[h.productCode]) byProduct[h.productCode].plan += share;
     });
   });
+
+  totals.plan = Math.round(totals.plan);
+  Object.keys(byMachine).forEach(function (id) { byMachine[id].plan = Math.round(byMachine[id].plan); });
+  Object.keys(byProduct).forEach(function (pc) { byProduct[pc].plan = Math.round(byProduct[pc].plan); });
 
   var oeeActualSum = 0, oeeCapSum = 0;
   Object.keys(byMachine).forEach(function (id) {
@@ -149,14 +168,16 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     bm.oee = null;
     // เวลาทำงานคิดเฉพาะกะที่มีการผลิตจริง (ไม่เหมารวม 2 กะต่อวัน)
     //  - ลงทั้งกะ: แผน = capacity × ชม.ที่ลง
-    //  - ลงรายชั่วโมง: capacity เฉลี่ยของชั่วโมงที่ลง × max(ชม.สุทธิต่อกะ, จำนวนชั่วโมงที่ลง)
+    //  - ลงรายชั่วโมง: capacity เฉลี่ยของชั่วโมงที่ลง × (ชม.ปกติ + OT ถ้ามี)
     var perDay = {}, actualSum = 0, capSum = 0;
+    bm.otShifts = 0; bm.otActual = 0;
     if (o) Object.keys(o.shifts).forEach(function (k) {
       var sh = o.shifts[k];
+      if (sh.ot) { bm.otShifts++; bm.otActual += sh.otActual; }
       if (sh.actual <= 0) return;
       var hrCaps = Object.keys(sh.hours).map(function (h) { return sh.hours[h]; });
       var hrCap = hrCaps.length ? hrCaps.reduce(function (a, b) { return a + b; }, 0) / hrCaps.length : fallbackCap;
-      var capT = sh.shiftPlan + (sh.hourlyRows ? hrCap * Math.max(LINE_CONFIG.NET_HOURS_PER_SHIFT, hrCaps.length) : 0);
+      var capT = sh.shiftPlan + (sh.hourlyRows ? hrCap * planHoursPerShift(sh.ot) : 0);
       var d = perDay[sh.date] = perDay[sh.date] || { actual: 0, cap: 0 };
       d.actual += sh.actual; d.cap += capT;
       if (capT > 0) { actualSum += sh.actual; capSum += capT; }
@@ -223,6 +244,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
         defectRate: pct(totals.defect, totals.actual + totals.defect),
         oee: oeeCapSum > 0 ? pct(oeeActualSum, oeeCapSum) : null,
         openTickets: maint.open,
+        otShifts: Object.keys(byMachine).reduce(function (s, id) { return s + (byMachine[id].otShifts || 0); }, 0),
         machineUtilization: machines.length ? pct(machines.filter(function (m) { return m.status === 'running'; }).length, machines.length) : 0
       },
       byMachine: Object.keys(byMachine).sort().map(function (k) { return byMachine[k]; }),

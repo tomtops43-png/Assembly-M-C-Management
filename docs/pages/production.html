@@ -90,7 +90,14 @@
       </div>
       <div class="form-hint" id="sfShiftHint"></div>
     </div>
-    <label class="form-label">3. ยอดแยกตามรุ่น / Job Order</label>
+    <div class="form-group">
+      <label class="form-label">3. OT</label>
+      <div class="choice-grid" id="sfOt">
+        <button class="choice-btn" type="button" data-ot="0"><i class="bi bi-clock"></i>ไม่มี OT<small class="text-gray">8 ชม.</small></button>
+        <button class="choice-btn" type="button" data-ot="1"><i class="bi bi-clock-history"></i>มี OT<small class="text-gray" id="sfOtHint">8 + 2.5 ชม.</small></button>
+      </div>
+    </div>
+    <label class="form-label">4. ยอดแยกตามรุ่น / Job Order</label>
     <div id="sfLines"></div>
     <button class="btn btn-outline btn-full mb-3" type="button" id="sfAddLine"><i class="bi bi-plus-lg"></i> เพิ่มรุ่น / Job Order (กรณีเปลี่ยนรุ่นกลางกะ)</button>
     <div class="sf-summary" id="sfSummary"></div>
@@ -373,7 +380,7 @@
     document.querySelectorAll('#modeTabs [data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
     $('hourlyForm').classList.toggle('hidden', mode !== 'hourly');
     $('shiftForm').classList.toggle('hidden', mode !== 'shift');
-    if (mode === 'shift') { applyDefaultShift(); if (selMachine) resetShiftForm(); }
+    if (mode === 'shift') { applyDefaultShift(); renderOtPick(); if (selMachine) resetShiftForm(); }
   }
   $('modeTabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-mode]'); if (!b || b.dataset.mode === mode || !CAN_SHIFT) return;
@@ -385,7 +392,20 @@
   // ---------- ลงยอดทั้งกะ ----------
   let sfShift = 'Day', sfMachineId = '', sfLines = [];
   const joCache = {};
-  const netHours = () => Number(cfg.netHoursPerShift) || 10.5;
+  // ชม.ทำงานของกะ: ปกติ 8 ชม. + OT 2.5 ชม. (ถ้ามี)
+  let sfOt = false;
+  const normalHours = () => Number(cfg.normalHoursPerShift) || 8;
+  const otHours = () => Number(cfg.otHoursPerShift) || 2.5;
+  const netHours = () => normalHours() + (sfOt ? otHours() : 0);
+  function renderOtPick() {
+    document.querySelectorAll('#sfOt [data-ot]').forEach((b) => b.classList.toggle('active', (b.dataset.ot === '1') === sfOt));
+    $('sfOt').querySelector('[data-ot="0"] small').textContent = normalHours() + ' ชม.';
+    $('sfOtHint').textContent = `${normalHours()} + ${otHours()} ชม. (${sfShift === 'Night' ? '05:30–08:00' : '17:30–20:00'})`;
+  }
+  $('sfOt').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ot]'); if (!b) return;
+    sfOt = b.dataset.ot === '1'; spreadHours(); renderOtPick(); renderLines();
+  });
 
   /** กะที่เพิ่งจบ/กำลังจะจบ: 08–11 น. = กะดึกของเมื่อวาน, 12–19 น. = กะเช้าวันนี้, 20–07 น. = กะเช้า (เพิ่งเลิก) / กะดึก */
   function applyDefaultShift() {
@@ -403,7 +423,7 @@
       ? `กะเช้า วันที่ ${UI.formatDate(d)} (08:00–19:59)`
       : `กะดึก เริ่ม ${UI.formatDate(d)} 20:00 – ${UI.formatDate(UI.addDays(d, 1))} 07:59`;
   }
-  $('sfShift').addEventListener('click', (e) => { const b = e.target.closest('[data-s]'); if (b) { sfShift = b.dataset.s; renderShiftPick(); } });
+  $('sfShift').addEventListener('click', (e) => { const b = e.target.closest('[data-s]'); if (b) { sfShift = b.dataset.s; renderShiftPick(); renderOtPick(); } });
   $('workDate').addEventListener('change', () => { if (mode === 'shift') renderShiftPick(); });
 
   const sfProducts = () => (selMachine && master.machineProducts[selMachine.machineId]) || [];
@@ -415,8 +435,9 @@
     if (!selMachine) return;
     sfMachineId = selMachine.machineId;
     $('sfMachine').textContent = selMachine.machineName;
+    sfOt = false;
     sfLines = [newLine(selMachine.currentProduct, selMachine.currentJobOrder)];
-    renderShiftPick();
+    renderShiftPick(); renderOtPick();
     renderLines();
   }
 
@@ -542,11 +563,11 @@
       if (!(Number(l.actual) > 0) && !ngItems.length) return UI.showToast('ยังไม่ได้ใส่ยอด FG/NG' + no, 'warning');
       lines.push({ productCode: l.productCode, jobOrderId: l.jobOrderId, hours: Number(l.hours) || 0, actualQty: Number(l.actual) || 0, ngItems });
     }
-    const data = { machineId: selMachine.machineId, workDate: $('workDate').value, shiftDN: sfShift, lines };
+    const data = { machineId: selMachine.machineId, workDate: $('workDate').value, shiftDN: sfShift, ot: sfOt, lines };
     data.clientRequestId = sfReq.get(data);
     const fg = lines.reduce((s, l) => s + l.actualQty, 0), ng = lines.reduce((s, l) => s + l.ngItems.reduce((a, n) => a + n.qty, 0), 0);
     if (!await UI.confirm({ title: 'ยืนยันลงยอดทั้งกะ', icon: 'bi-calendar2-check', okText: 'บันทึก',
-      html: confirmSummary([['เครื่อง', selMachine.machineName], ['กะ', UI.shiftLabel(sfShift) + ' · ' + UI.formatDate(data.workDate)]].concat(lines.length > 1 ? [['รุ่น/JO', lines.length + ' รายการ']] : []), fg, ng) })) return;
+      html: confirmSummary([['เครื่อง', selMachine.machineName], ['กะ', UI.shiftLabel(sfShift) + ' · ' + UI.formatDate(data.workDate)], ['OT', sfOt ? 'มี OT' : 'ไม่มี OT']].concat(lines.length > 1 ? [['รุ่น/JO', lines.length + ' รายการ']] : []), fg, ng) })) return;
     const res = await API.post('submitProductionShift', { data });
     if (!res.success) return UI.showToast(res.message, 'error');
     sfReq.reset();

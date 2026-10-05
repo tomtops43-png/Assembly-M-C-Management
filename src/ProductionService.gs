@@ -64,7 +64,8 @@ function productionRowToObj(r) {
     shiftDN: shiftFromPeriod(r.TimePeriod), employeeId: String(r.EmployeeID), employeeName: r.EmployeeName,
     machineId: String(r.MachineID), productCode: String(r.ProductCode), plannedQty: toNumber(r.PlannedQty),
     actualQty: toNumber(r.ActualQty), defectQty: toNumber(r.DefectQty), defectDetails: safeJson(r.DefectDetails, {}),
-    remark: r.Remark || '', status: r.Status || 'completed', jobOrderId: String(r.JobOrderID || '')
+    remark: r.Remark || '', status: r.Status || 'completed', jobOrderId: String(r.JobOrderID || ''),
+    ot: String(r.OT || '') === 'Y'
   };
 }
 
@@ -310,7 +311,8 @@ function submitProductionShift(token, data) {
     var base = {
       Timestamp: now, Date: workDate, Shift: shiftDN, TimePeriod: shiftDN,
       EmployeeID: u.employeeId, EmployeeName: u.name, MachineID: m.machineId, ProductCode: p.productCode,
-      Status: 'completed', ClientRequestID: data.clientRequestId || '', JobOrderID: p.joId
+      Status: 'completed', ClientRequestID: data.clientRequestId || '', JobOrderID: p.joId,
+      OT: data.ot ? 'Y' : ''
     };
     var fgId = generateUUID(); ids.push(fgId);
     appendRow('ProductionLog', Object.assign({}, base, { LogID: fgId, PlannedQty: p.planned, ActualQty: p.actual, DefectQty: 0, DefectDetails: '', Remark: '' }));
@@ -324,7 +326,7 @@ function submitProductionShift(token, data) {
     });
     if (p.jo.Status === 'open') { updateRow('JobOrders', 'JobOrderID', p.joId, { Status: 'in-progress' }); p.jo.Status = 'in-progress'; }
   });
-  logAction(u, 'submitProductionShift', { machineId: m.machineId, workDate: workDate, shiftDN: shiftDN, rows: ids.length });
+  logAction(u, 'submitProductionShift', { machineId: m.machineId, workDate: workDate, shiftDN: shiftDN, ot: !!data.ot, rows: ids.length });
   return { success: true, rows: ids.length };
 }
 
