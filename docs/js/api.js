@@ -62,9 +62,13 @@ const API = (() => {
     if (!baseUrl) throw new Error('ยังไม่ได้ตั้งค่า API URL (แตะโลโก้หน้า Login 5 ครั้ง หรือแก้ docs/js/config.js)');
   }
 
+  const OFFLINE_RESULT = () => ({ success: false, message: 'ไม่มีสัญญาณอินเทอร์เน็ต — ตรวจสอบ Wi-Fi/เน็ตมือถือ แล้วลองใหม่', network: true });
+  const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+
   /** GET read — retry 3 ครั้ง (backoff + jitter), timeout แล้ว retry ได้ 1 ครั้ง */
   async function get(action, params = {}, opts = {}) {
     ensureUrl();
+    if (isOffline()) return OFFLINE_RESULT();
     const retries = opts.retries === undefined ? 3 : opts.retries;
     const timeoutMs = opts.timeoutMs || (opts.long ? LONG_READ_TIMEOUT_MS : READ_TIMEOUT_MS);
     const q = new URLSearchParams({ action, token: (typeof Auth !== 'undefined' && Auth.getToken()) || '', _ts: Date.now() });
@@ -92,6 +96,7 @@ const API = (() => {
   /** เขียนผ่าน GET ?payload= — ไม่ retry โดย default (ใช้ clientRequestId กันเบิ้ล) */
   async function post(action, data = {}, opts = {}) {
     ensureUrl();
+    if (isOffline()) return OFFLINE_RESULT();
     const body = Object.assign({ action, token: (typeof Auth !== 'undefined' && Auth.getToken()) || '', _ts: Date.now() }, data);
     const retries = opts.retries || 0;
     for (let n = 0; ; n++) {
@@ -108,6 +113,7 @@ const API = (() => {
   /** ข้อมูลใหญ่ (รูป base64): POST text/plain (ไม่มี preflight) → fallback post() */
   async function postLarge(action, data = {}, opts = {}) {
     ensureUrl();
+    if (isOffline()) return OFFLINE_RESULT();
     const body = Object.assign({ action, token: (typeof Auth !== 'undefined' && Auth.getToken()) || '', _ts: Date.now() }, data);
     try {
       return handleSessionExpiry(await fetchJson(baseUrl, {

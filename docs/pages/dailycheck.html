@@ -199,7 +199,9 @@
     results = c ? c.results.slice() : f.items.map(() => '');
     $('fTitle').textContent = `${machineName(selMachine)} · ${f.tab || f.name} · ${SHIFT_LABEL[s]}`;
     $('fInfo').textContent = UI.formatDate(d) + (c ? ` · บันทึกโดย ${c.recorderName} ${hhmm(c.timestamp)}` + (c.verifiedBy ? ` · ยืนยันโดย ${c.verifiedBy}` : '') : '');
-    $('fShift').value = c ? c.shift : (user.shift || localStorage.getItem(SHIFT_KEY) || '');
+    let savedShift = '';
+    try { savedShift = localStorage.getItem(SHIFT_KEY) || ''; } catch (e) {}
+    $('fShift').value = c ? c.shift : (user.shift || savedShift);
     $('fShift').disabled = !!user.shift || !!c;
     $('fRemark').value = c ? c.remark : '';
     $('fAllOkLabel').textContent = okLabel(f) + 'ทุกข้อ';
@@ -231,14 +233,16 @@
     if (!r.success) return UI.showToast(r.message, 'error');
     UI.closeModal('formModal'); formOpenAt = 0; UI.showToast('ยืนยันแล้ว', 'success'); load();
   });
-  $('fCancel').onclick = async () => {
+  $('fCancel').onclick = () => {
     const c = checkOf(selMachine, selDate, selShift, selFormId);
     if (!c || !confirm('ลบรายการนี้?')) return;
-    const r = await API.post('cancelDailyCheck', { checkId: c.checkId });
-    if (!r.success) return UI.showToast(r.message, 'error');
-    UI.closeModal('formModal'); formOpenAt = 0; load();
+    UI.withButton($('fCancel'), async () => {
+      const r = await API.post('cancelDailyCheck', { checkId: c.checkId });
+      if (!r.success) return UI.showToast(r.message, 'error');
+      UI.closeModal('formModal'); formOpenAt = 0; UI.showToast('ลบแล้ว', 'success'); await load();
+    });
   };
-  $('date').onchange = () => { if (!data || $('date').value.slice(0, 7) !== data.monthFrom.slice(0, 7)) load(); else render(); };
+  $('date').onchange = () => { if (!$('date').value) $('date').value = UI.getToday(); if (!data || $('date').value.slice(0, 7) !== data.monthFrom.slice(0, 7)) load(); else render(); };
 
   // เปลี่ยนเป็นวันทำงานใหม่ตอน 08:00 / กะดึกเปิดตอน 20:00 (ถ้าฟอร์มค้างรอได้สูงสุด 30 นาที)
   let lastToday = UI.getToday(), lastDay = UI.isDayHour(UI.getBkkHour());

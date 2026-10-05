@@ -118,7 +118,7 @@
 
   let cfg = { ngReasons: [OTHER], defaultQty: 0 };
   let master = null;            // {machines, machineProducts, bom, version}
-  let selMachine = null, selPeriod = UI.currentPeriod();
+  let selMachine = null, selPeriod = UI.currentPeriod(), periodPicked = false;
   let entries = [];
   let pendingReqId = null, pendingSig = '';
 
@@ -145,8 +145,10 @@
     if (t !== lastToday) { lastToday = t; $('workDate').max = t; $('workDate').value = defaultWorkDate(); }
     const s = UI.getShiftInfo();
     $('shiftBadge').textContent = `กะ ${s.shiftAB || '-'} · ${s.shiftDN} · ${s.timePeriod}`;
+    // ช่วงเวลาเลื่อนตามชั่วโมงปัจจุบัน (เปิดหน้าค้างไว้ข้ามชั่วโมง) — ยกเว้นผู้ใช้เลือกช่วงเองแล้ว
+    if (!periodPicked && selPeriod !== UI.currentPeriod()) { selPeriod = UI.currentPeriod(); renderPeriods(); }
   }
-  setInterval(rollover, 5 * 60000);
+  setInterval(rollover, 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { rollover(); checkVersion(); } });
 
   // ---------- master cache + version ----------
@@ -167,7 +169,21 @@
     try { localStorage.setItem(MASTER_KEY, JSON.stringify({ at: Date.now(), data: master })); } catch (e) {}
     entries = res.data.entries || [];
     renderMachines(); renderEntries();
-    if (selMachine) selectMachine(selMachine.machineId);
+    if (selMachine) {
+      // โหลดข้อมูลเครื่องใหม่ (เช่น ทุก 1 นาที) — ถ้าสินค้า/JO ของเครื่องไม่เปลี่ยน คงตัวเลขที่กรอกค้างไว้
+      const prev = selMachine;
+      const typed = { actual: $('actualQty').value, comps: [...$('componentInputs').querySelectorAll('input[data-comp]')].map((i) => [i.dataset.comp, i.value]),
+        reason: $('ngReason').value, other: $('ngReasonOther').value };
+      selectMachine(prev.machineId);
+      if (selMachine && selMachine.currentProduct === prev.currentProduct && selMachine.currentJobOrder === prev.currentJobOrder) {
+        $('actualQty').value = typed.actual;
+        typed.comps.forEach(([c, v]) => { const i = $('componentInputs').querySelector(`input[data-comp="${CSS.escape(c)}"]`); if (i) i.value = v; });
+        if ([...$('ngReason').options].some((o) => o.value === typed.reason)) $('ngReason').value = typed.reason;
+        $('ngReasonOther').value = typed.other;
+        $('ngReasonOther').classList.toggle('hidden', $('ngReason').value !== OTHER);
+        recalcNg();
+      }
+    }
   }
   async function checkVersion() {
     if (document.hidden || !master) return;
@@ -241,7 +257,7 @@
   }
   $('periodGrid').addEventListener('click', (e) => {
     const b = e.target.closest('[data-p]');
-    if (b) { selPeriod = b.dataset.p; renderPeriods(); }
+    if (b) { selPeriod = b.dataset.p; periodPicked = selPeriod !== UI.currentPeriod(); renderPeriods(); }
   });
 
   // ---------- NG ราย component ----------
@@ -250,7 +266,7 @@
     container.innerHTML = bom.length ? `<div class="form-row">${bom.map((c) => `
       <div class="form-group"><label class="form-label">NG ${UI.esc(c.componentName || c.componentCode)}</label>
       <input type="number" min="0" inputmode="numeric" class="form-input" data-comp="${UI.esc(c.componentCode)}" data-name="${UI.esc(c.componentName)}" value="${(values[c.componentCode] || {}).qty || ''}"></div>`).join('')}</div>`
-      : `<div class="form-group"><label class="form-label">NG (ยังไม่มี BOM)</label><input type="number" min="0" class="form-input" data-comp="" value="${values.__total || ''}"></div>`;
+      : `<div class="form-group"><label class="form-label">NG (ยังไม่มี BOM)</label><input type="number" min="0" inputmode="numeric" class="form-input" data-comp="" value="${values.__total || ''}"></div>`;
     container.querySelectorAll('input').forEach((i) => i.addEventListener('input', onChange));
   }
   function readComponents(container) {
@@ -302,12 +318,12 @@
     const res = await API.post('submitProduction', { data });
     if (res.settingsChanged) { UI.showToast(res.message, 'warning'); await loadAll(true); return; }
     if (!res.success) return UI.showToast(res.message, 'error');
-    pendingSig = ''; pendingReqId = null;
+    pendingSig = ''; pendingReqId = null; periodPicked = false; rollover();
     UI.showToast(res.duplicate ? 'รายการนี้บันทึกไว้แล้ว' : res.split ? 'บันทึกสำเร็จ (แยกเป็น FG 1 รายการ + NG 1 รายการ)' : 'บันทึกสำเร็จ', 'success');
     $('componentInputs').querySelectorAll('input').forEach((i) => { i.value = ''; });
     $('ngReason').value = ''; $('ngReasonOther').value = ''; recalcNg();
     loadEntries(); loadJoProgress();
-  });
+  }).finally(() => { if (selMachine) $('submitBtn').disabled = !selMachine.currentProduct; });
 
   function machineName(id) { const m = master && master.machines.find((x) => x.machineId === id); return m ? m.machineName : id; }
 
@@ -363,13 +379,13 @@
     if (!res.success) return UI.showToast(res.message, 'error');
     UI.closeModal('editModal'); UI.showToast('แก้ไขแล้ว', 'success'); loadEntries();
   });
-  $('eDelete').onclick = async () => {
-    const reason = prompt('เหตุผลที่ลบรายการนี้');
+  $('eDelete').onclick = () => UI.withButton($('eDelete'), async () => {
+    const reason = (prompt('เหตุผลที่ลบรายการนี้') || '').trim();
     if (!reason) return;
     const res = await API.post('requestDeleteProduction', { logId: editing.logId, reason });
     if (!res.success) return UI.showToast(res.message, 'error');
     UI.closeModal('editModal'); UI.showToast('ลบรายการแล้ว', 'success'); loadEntries();
-  };
+  });
 
   // ---------- start ----------
   initWorkDate(); rollover(); renderPeriods();

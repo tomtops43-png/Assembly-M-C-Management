@@ -77,6 +77,7 @@
   const $ = (id) => document.getElementById(id);
   const user = Auth.getUser(), OTHER = 'อื่นๆ';
   let cfg, machines = [], products = [], jobs = [], proc = '', current = null;
+  const reqIds = UI.requestIdKeeper(), resultIds = UI.requestIdKeeper();
 
   $('tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]'); if (!b) return;
@@ -112,9 +113,13 @@
     const remark = $('reason').value === OTHER ? ($('reasonOther').value.trim() ? OTHER + ': ' + $('reasonOther').value.trim() : '') : $('reason').value;
     if (!proc) return UI.showToast('กรุณาเลือกกระบวนการที่พบ', 'warning');
     if (!remark) return UI.showToast('กรุณาระบุหมายเหตุ', 'warning');
-    const r = await API.post('submitSortingJob', { data: { date: $('date').value, machineId: $('machine').value, productCode: $('product').value, jobOrderId: $('jo').value,
-      foundProcess: proc, shift: $('shift').value, totalQty: Number($('qty').value) || 0, remark } });
+    const data = { date: $('date').value, machineId: $('machine').value, productCode: $('product').value, jobOrderId: $('jo').value,
+      foundProcess: proc, shift: $('shift').value, totalQty: Number($('qty').value) || 0, remark };
+    if (data.totalQty <= 0) return UI.showToast('กรุณากรอกจำนวนที่ต้อง Sort', 'warning');
+    data.clientRequestId = reqIds.get(data);
+    const r = await API.post('submitSortingJob', { data });
     if (!r.success) return UI.showToast(r.message, 'error');
+    reqIds.reset();
     UI.showToast('ลงทะเบียน ' + r.jobId, 'success'); $('qty').value = ''; proc = ''; renderProc(); loadJobs();
   });
 
@@ -142,13 +147,15 @@
         </div></div>`;
     }).join('') : UI.emptyState('bi-funnel', 'ไม่มีงานคัดแยก');
   }
-  $('list').addEventListener('click', async (e) => {
+  $('list').addEventListener('click', (e) => {
     const b = e.target.closest('[data-act]'); if (!b) return;
     const id = b.dataset.id;
     if (b.dataset.act === 'result') return openResult(jobs.find((j) => j.jobId === id));
-    const r = await API.post(b.dataset.act === 'pull' ? 'pullSortingJob' : 'returnSortingJob', { jobId: id });
-    if (!r.success) return UI.showToast(r.message, 'error');
-    loadJobs();
+    UI.withButton(b, async () => {
+      const r = await API.post(b.dataset.act === 'pull' ? 'pullSortingJob' : 'returnSortingJob', { jobId: id });
+      if (!r.success) return UI.showToast(r.message, 'error');
+      await loadJobs();
+    });
   });
   $('fRange').onchange = loadJobs; $('fSearch').oninput = renderJobs;
 
@@ -157,14 +164,19 @@
     $('rTitle').textContent = 'บันทึกผล ' + j.jobId;
     $('rInfo').textContent = `คงเหลือ ${UI.formatNumber(j.totalQty - j.goodQty - j.defectQty)} ชิ้น · กระบวนการ ${j.foundProcess}`;
     $('rGood').value = '';
-    $('rParts').innerHTML = parts().map((p) => `<div class="form-group"><label class="form-label">เสีย ${UI.esc(p.label)}</label><input type="number" class="form-input" data-part="${UI.esc(p.code)}"></div>`).join('');
+    $('rParts').innerHTML = parts().map((p) => `<div class="form-group"><label class="form-label">เสีย ${UI.esc(p.label)}</label><input type="number" min="0" inputmode="numeric" class="form-input" data-part="${UI.esc(p.code)}"></div>`).join('');
     UI.openModal('resultModal');
   }
   $('rSave').onclick = () => UI.withButton($('rSave'), async () => {
     const defectByPart = {};
     $('rParts').querySelectorAll('[data-part]').forEach((i) => { defectByPart[i.dataset.part] = Number(i.value) || 0; });
-    const r = await API.post('recordSortingResult', { jobId: current.jobId, result: { goodQty: Number($('rGood').value) || 0, defectByPart } });
+    const result = { goodQty: Number($('rGood').value) || 0, defectByPart };
+    if (!result.goodQty && !Object.keys(defectByPart).some((k) => defectByPart[k] > 0)) return UI.showToast('กรุณากรอกจำนวนงานดี หรืองานเสีย', 'warning');
+    // ผลแบบบวกสะสม → ส่งซ้ำ (เน็ตหลุด) ต้องไม่บวกเบิ้ล
+    const clientRequestId = resultIds.get({ jobId: current.jobId, result });
+    const r = await API.post('recordSortingResult', { jobId: current.jobId, result, clientRequestId });
     if (!r.success) return UI.showToast(r.message, 'error');
+    resultIds.reset();
     UI.closeModal('resultModal'); UI.showToast(r.completed ? 'คัดแยกครบแล้ว' : 'บันทึกผลแล้ว', 'success'); loadJobs();
   });
 

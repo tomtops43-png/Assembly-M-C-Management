@@ -68,6 +68,7 @@
   if (!UI.initPage('rawmaterial', 'รับวัตถุดิบ', 'bi-box-seam')) return;
   const $ = (id) => document.getElementById(id);
   let machines = [], bom = [], selMachine = '', photos = [], rawFiles = [];
+  const reqIds = UI.requestIdKeeper();
 
   function renderMachines() {
     $('machineGrid').innerHTML = UI.machineGridHtml(machines, (m) => `<button class="machine-btn ${selMachine === m.machineId ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.machineName)}<small>${UI.esc(m.assignedProducts.join(', ') || '-')}</small></button>`) || UI.emptyState('bi-gear', 'ยังไม่มีเครื่องจักร');
@@ -76,7 +77,9 @@
     const b = e.target.closest('[data-m]'); if (!b) return;
     selMachine = b.dataset.m; renderMachines();
     const m = machines.find((x) => x.machineId === selMachine);
-    const lists = await Promise.all(m.assignedProducts.map((p) => API.get('getProductBOM', { productCode: p })));
+    $('validateMsg').innerHTML = '';
+    const lists = await Promise.all((m.assignedProducts || []).map((p) => API.get('getProductBOM', { productCode: p })));
+    if (selMachine !== m.machineId) return; // แตะเครื่องอื่นระหว่างโหลด
     bom = [].concat(...lists.filter((r) => r.success).map((r) => r.data));
     $('bomSel').innerHTML = '<option value="">— เลือก —</option>' + bom.map((c, i) => `<option value="${i}">${UI.esc(c.componentCode)} — ${UI.esc(c.componentName)} (${UI.esc(c.productCode)})</option>`).join('');
     $('bomBox').classList.remove('hidden');
@@ -94,7 +97,11 @@
   }
 
   $('photoInput').addEventListener('change', async () => {
-    for (const f of $('photoInput').files) { rawFiles.push(f); photos.push(await API.compressImage(f, 1200, 1200, 0.7)); }
+    for (const f of [...$('photoInput').files]) {
+      if (photos.length >= 5) { UI.showToast('แนบรูปได้สูงสุด 5 รูป', 'warning'); break; }
+      try { photos.push(await API.compressImage(f, 1200, 1200, 0.7)); rawFiles.push(f); }
+      catch (e) { UI.showToast('อ่านรูป ' + f.name + ' ไม่ได้ — ลองถ่ายใหม่', 'error'); }
+    }
     $('photoInput').value = ''; renderPreview();
   });
   function renderPreview() { $('preview').innerHTML = photos.map((p, i) => `<div class="photo-thumb"><img src="${p.dataUrl}"><button data-rp="${i}">&times;</button></div>`).join(''); }
@@ -116,8 +123,11 @@
       quantity: Number($('qty').value) || 0, unit: $('unit').value.trim(), lotNumber: $('lot').value.trim(), inspector: $('inspector').value.trim(),
       customer: $('customer').value.trim(), cartonNo: $('carton').value.trim(), netWeight: $('nw').value.trim(), grossWeight: $('gw').value.trim(),
       packingDate: $('packDate').value.trim(), refNo: $('ref').value.trim(), remark: $('remark').value.trim(), photos };
+    if (data.quantity <= 0) return UI.showToast('กรุณากรอกจำนวน', 'warning');
+    data.clientRequestId = reqIds.get(Object.assign({}, data, { photos: photos.length }));
     const r = await API.postLarge('submitRawMaterial', { data });
     if (!r.success) return UI.showToast(r.message, 'error');
+    reqIds.reset();
     UI.showToast('บันทึก ' + r.receiveId + (r.warning ? ' (' + r.warning + ')' : ''), r.warning ? 'warning' : 'success');
     ['partCode', 'partName', 'spec', 'qty', 'lot', 'inspector', 'customer', 'carton', 'nw', 'gw', 'packDate', 'ref', 'remark'].forEach((id) => { $(id).value = ''; });
     photos = []; rawFiles = []; renderPreview(); $('ocrText').classList.add('hidden'); $('validateMsg').innerHTML = '';

@@ -6,19 +6,39 @@ const UI = (() => {
   const DESKTOP_MIN = 768;
   const LINE_CFG_KEY = C.STORAGE_PREFIX + 'line_config_v1';
 
-  function isDesktop() { return window.innerWidth >= DESKTOP_MIN; }
+  // มือถือ (จอสัมผัส ด้านสั้น < 768px) = layout มือถือเสมอ แม้หมุนจอแนวนอน
+  const IS_PHONE = (() => {
+    try { return window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < DESKTOP_MIN; }
+    catch (e) { return false; }
+  })();
+
+  function isDesktop() { return !IS_PHONE && window.innerWidth >= DESKTOP_MIN; }
 
   function applyDeviceClass() {
     document.body.classList.toggle('is-desktop', isDesktop());
     document.body.classList.toggle('is-mobile', !isDesktop());
   }
 
-  // เปลี่ยนข้าม 768px → reload เพื่อสลับ layout
+  // คอมพิวเตอร์: ย่อ/ขยายหน้าต่างข้าม 768px → reload เพื่อสลับ layout (ไม่ reload ถ้ามีฟอร์มเปิดอยู่ — กันข้อมูลที่กรอกหาย)
+  // มือถือ: ไม่ reload เลย (หมุนจอ/คีย์บอร์ดเด้งแล้วข้อมูลไม่หาย)
   let lastDesktop = null;
   window.addEventListener('resize', () => {
     const d = isDesktop();
-    if (lastDesktop !== null && d !== lastDesktop && document.body.dataset.page) location.reload();
+    if (lastDesktop !== null && d !== lastDesktop && document.body.dataset.page && !document.querySelector('.modal-overlay.show')) location.reload();
     lastDesktop = d;
+  });
+
+  // เน็ตหลุด/กลับมา → แจ้งผู้ใช้
+  window.addEventListener('offline', () => showToast('ไม่มีสัญญาณอินเทอร์เน็ต — ข้อมูลจะยังไม่ถูกบันทึกจนกว่าเน็ตจะกลับมา', 'warning'));
+  window.addEventListener('online', () => showToast('เชื่อมต่ออินเทอร์เน็ตแล้ว', 'success'));
+
+  // error ที่ไม่ได้ดักไว้ → ปิดหน้าจอโหลดค้าง + แจ้งเตือน (กันหน้าค้าง)
+  window.addEventListener('unhandledrejection', (e) => {
+    const err = e.reason || {};
+    if (err.cancelled) return;
+    console.error(err);
+    hideLoading();
+    showToast('เกิดข้อผิดพลาด: ' + (err.message || err) + ' — ลองใหม่อีกครั้ง', 'error');
   });
 
   function esc(s) {
@@ -182,8 +202,19 @@ const UI = (() => {
     drawer.querySelector('#moreLogout').onclick = confirmLogout;
   }
 
+  /** input type=number ที่ไม่ได้ระบุ inputmode → ให้มือถือเปิดแป้นตัวเลข (step ทศนิยม = มีจุด) */
+  function applyNumericKeyboards(root) {
+    (root || document).querySelectorAll('input[type=number]:not([inputmode])').forEach((i) => {
+      i.setAttribute('inputmode', /\./.test(i.getAttribute('step') || '') ? 'decimal' : 'numeric');
+    });
+  }
+  new MutationObserver((muts) => {
+    muts.forEach((m) => m.addedNodes.forEach((n) => { if (n.nodeType === 1) applyNumericKeyboards(n.matches && n.matches('input') ? n.parentNode : n); }));
+  }).observe(document.documentElement, { childList: true, subtree: true });
+
   /** เรียกต้นทุกหน้า: ตรวจสิทธิ์ + วาด nav  → คืน false ถ้าไม่มีสิทธิ์ */
   function initPage(key, title, icon) {
+    applyNumericKeyboards();
     applyDeviceClass();
     lastDesktop = isDesktop();
     document.body.dataset.page = key;
@@ -194,12 +225,17 @@ const UI = (() => {
   }
 
   // ---------- modal ----------
-  function openModal(id) { const m = document.getElementById(id); if (m) m.classList.add('show'); }
-  function closeModal(id) { const m = document.getElementById(id); if (m) m.classList.remove('show'); }
+  // เปิด modal → ล็อกการเลื่อนหน้าหลัง (มือถือเลื่อนแล้วหน้าหลังไม่ไหลตาม)
+  function syncModalLock() { document.body.classList.toggle('modal-open', !!document.querySelector('.modal-overlay.show')); }
+  function openModal(id) { const m = document.getElementById(id); if (m) { m.classList.add('show'); m.scrollTop = 0; syncModalLock(); } }
+  function closeModal(id) { const m = document.getElementById(id); if (m) m.classList.remove('show'); syncModalLock(); }
+  // แตะพื้นหลังเพื่อปิด: เฉพาะเมื่อกดและปล่อยบนพื้นหลังจริง (กันปิดเองตอนลากเลือกข้อความ/เลื่อนแล้วข้อมูลที่กรอกหาย)
+  let downOnOverlay = null;
+  document.addEventListener('pointerdown', (e) => { downOnOverlay = e.target.classList && e.target.classList.contains('modal-overlay') ? e.target : null; });
   document.addEventListener('click', (e) => {
     const close = e.target.closest('[data-close-modal]');
-    if (close) close.closest('.modal-overlay').classList.remove('show');
-    else if (e.target.classList && e.target.classList.contains('modal-overlay')) e.target.classList.remove('show');
+    if (close) { close.closest('.modal-overlay').classList.remove('show'); syncModalLock(); }
+    else if (e.target.classList && e.target.classList.contains('modal-overlay') && downOnOverlay === e.target) { e.target.classList.remove('show'); syncModalLock(); }
   });
 
   // ---------- เวลา / วันที่ (Asia/Bangkok, คำนวณ UTC+7 เอง) ----------
@@ -400,10 +436,20 @@ const UI = (() => {
     try { return await fn(); } finally { btn.dataset.busy = ''; btn.disabled = false; btn.innerHTML = html; }
   }
 
+  /** clientRequestId ที่คงเดิมตราบใดที่ข้อมูลเหมือนเดิม (กดซ้ำหลังเน็ตหลุด = id เดิม → server ไม่บันทึกเบิ้ล) */
+  function requestIdKeeper() {
+    let sig = '', id = null;
+    return {
+      get(data) { const s = JSON.stringify(data); if (s !== sig || !id) { sig = s; id = API.newRequestId(); } return id; },
+      reset() { sig = ''; id = null; }
+    };
+  }
+
   return {
     isDesktop, applyDeviceClass, esc, showToast, showLoading, hideLoading, renderTopNav, renderNav, initPage,
     openModal, closeModal, getBkkHour, getToday, addDays, nowLocalInput, hourToPeriod, getTimePeriods, currentPeriod,
     isDayHour, getShiftInfo, formatNumber, formatDate, timeAgo, getLineConfig, groupMachines, machineGridHtml, machineOptions, emptyState, statusLabel, downloadText, withButton,
+    requestIdKeeper, applyNumericKeyboards,
     NG_OTHER, loadNgReasons, ngReasonList, fillNgSelect, addNgReasonPrompt, deleteNgReasonByName, bindNgControls
   };
 })();

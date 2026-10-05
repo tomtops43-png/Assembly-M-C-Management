@@ -113,9 +113,10 @@
 
   // รูป
   async function addFiles(files, list, max, previewEl) {
-    for (const f of files) {
+    for (const f of [...files]) {
       if (list.length >= max) { UI.showToast('แนบได้สูงสุด ' + max + ' ไฟล์', 'warning'); break; }
-      list.push(await API.compressImage(f, 1024, 1024, 0.7));
+      try { list.push(await API.compressImage(f, 1024, 1024, 0.7)); }
+      catch (e) { UI.showToast('อ่านไฟล์ ' + f.name + ' ไม่ได้ — ลองถ่าย/เลือกใหม่', 'error'); }
     }
     renderPreview(list, previewEl);
   }
@@ -182,13 +183,17 @@
     const t = tickets.find((x) => x.ticketId === b.dataset.id);
     if (b.dataset.act === 'detail') return showDetail(t);
     if (b.dataset.act === 'resolve') { resolving = t; rPhotos = []; renderPreview(rPhotos, $('rPreview')); $('rText').value = ''; $('rTime').value = UI.nowLocalInput(); return UI.openModal('resolveModal'); }
-    let r;
-    if (b.dataset.act === 'take') r = await API.post('updateTicketStatus', { ticketId: t.ticketId, status: 'in-progress' });
-    if (b.dataset.act === 'return' && confirm('คืนงานนี้?')) r = await API.post('updateTicketStatus', { ticketId: t.ticketId, status: 'returned' });
-    if (b.dataset.act === 'delete' && confirm('ลบใบแจ้งซ่อมนี้?')) r = await API.post('deleteMaintenanceTicket', { ticketId: t.ticketId });
-    if (!r) return;
-    if (!r.success) return UI.showToast(r.message, 'error');
-    UI.showToast('อัปเดตแล้ว', 'success'); loadMachines(); loadTickets();
+    if (b.dataset.act === 'return' && !confirm('คืนงานนี้?')) return;
+    if (b.dataset.act === 'delete' && !confirm('ลบใบแจ้งซ่อมนี้?')) return;
+    UI.withButton(b, async () => {
+      let r;
+      if (b.dataset.act === 'take') r = await API.post('updateTicketStatus', { ticketId: t.ticketId, status: 'in-progress' });
+      if (b.dataset.act === 'return') r = await API.post('updateTicketStatus', { ticketId: t.ticketId, status: 'returned' });
+      if (b.dataset.act === 'delete') r = await API.post('deleteMaintenanceTicket', { ticketId: t.ticketId });
+      if (!r) return;
+      if (!r.success) return UI.showToast(r.message, 'error');
+      UI.showToast('อัปเดตแล้ว', 'success'); loadMachines(); await loadTickets();
+    });
   });
   $('rSave').onclick = () => UI.withButton($('rSave'), async () => {
     if (!$('rText').value.trim()) return UI.showToast('กรุณากรอกผลการซ่อม', 'warning');
@@ -205,7 +210,7 @@
       <tr><th>ผู้แจ้ง</th><td>${UI.esc(t.reporterName)}</td></tr><tr><th>รายละเอียด</th><td style="white-space:normal">${UI.esc(t.description)}</td></tr>
       <tr><th>ผลการซ่อม</th><td style="white-space:normal">${UI.esc(t.resolution || '-')}</td></tr>
       ${t.mmsJobNo ? `<tr><th>ระบบซ่อมกลาง</th><td>${UI.esc(t.mmsJobNo)} · ${UI.esc(t.mmsStatus || '-')}</td></tr>` : ''}</tbody></table>
-      ${t.photos.length ? '<div class="form-label mt-3">รูปตอนแจ้ง</div><div class="photo-previews">' + t.photos.map(img).join('') + '</div>' : ''}`;
+      ${(t.photos || []).length ? '<div class="form-label mt-3">รูปตอนแจ้ง</div><div class="photo-previews">' + t.photos.map(img).join('') + '</div>' : ''}`;
     UI.openModal('detailModal');
   }
 

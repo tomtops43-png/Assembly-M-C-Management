@@ -71,6 +71,7 @@
 (async function () {
   if (!UI.initPage('alarm', 'สถิติ Alarm', 'bi-bell')) return;
   const $ = (id) => document.getElementById(id);
+  const reqIds = UI.requestIdKeeper();
   $('tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]'); if (!b) return;
     document.querySelectorAll('.tab-btn').forEach((x) => x.classList.toggle('active', x === b));
@@ -87,14 +88,19 @@
     $('typeList').innerHTML = ts.map((x) => `<div class="entry-card d-flex justify-between align-center">${UI.esc(x.typeName)}<button class="btn btn-outline btn-sm" data-del="${UI.esc(x.typeId)}"><i class="bi bi-trash"></i></button></div>`).join('');
   }
   $('save').onclick = () => UI.withButton($('save'), async () => {
-    const r = await API.post('submitAlarm', { data: { machineId: $('machine').value, alarmType: $('type').value, count: Number($('count').value) || 1, durationMinutes: Number($('dur').value) || 0, recordedAt: $('at').value, remark: $('remark').value.trim() } });
+    const data = { machineId: $('machine').value, alarmType: $('type').value, count: Number($('count').value) || 1, durationMinutes: Number($('dur').value) || 0, recordedAt: $('at').value, remark: $('remark').value.trim() };
+    if (!data.machineId) return UI.showToast('กรุณาเลือกเครื่องจักร', 'warning');
+    if (!data.alarmType) return UI.showToast('กรุณาเลือกชนิด Alarm', 'warning');
+    data.clientRequestId = reqIds.get(data);
+    const r = await API.post('submitAlarm', { data });
     if (!r.success) return UI.showToast(r.message, 'error');
+    reqIds.reset();
     $('count').value = 1; $('dur').value = ''; $('remark').value = ''; $('at').value = UI.nowLocalInput();
     UI.showToast('บันทึกแล้ว', 'success');
   });
   $('manage').onclick = () => UI.openModal('typeModal');
-  $('addType').onclick = async () => { const r = await API.post('addAlarmType', { typeName: $('newType').value }); if (!r.success) return UI.showToast(r.message, 'error'); $('newType').value = ''; loadMasters(); };
-  $('typeList').addEventListener('click', async (e) => { const b = e.target.closest('[data-del]'); if (b && confirm('ลบชนิดนี้?')) { await API.post('deleteAlarmType', { typeId: b.dataset.del }); loadMasters(); } });
+  $('addType').onclick = () => UI.withButton($('addType'), async () => { const r = await API.post('addAlarmType', { typeName: $('newType').value }); if (!r.success) return UI.showToast(r.message, 'error'); $('newType').value = ''; await loadMasters(); });
+  $('typeList').addEventListener('click', async (e) => { const b = e.target.closest('[data-del]'); if (b && confirm('ลบชนิดนี้?')) { const r = await API.post('deleteAlarmType', { typeId: b.dataset.del }); if (!r.success) UI.showToast(r.message, 'error'); loadMasters(); } });
 
   async function loadHist() {
     const r = await API.get('getAlarmHistory', { filters: { dateFrom: $('hFrom').value, dateTo: $('hTo').value, machineId: $('hMachine').value } });
