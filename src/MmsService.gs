@@ -76,6 +76,7 @@ function syncMmsStatuses(force) {
     open.filter(function (r) { return !r.MmsJobNo && r.MmsError; }).forEach(function (r) {
       if (forwardTicketToMms(String(r.TicketID))) out.resent++;
     });
+    out.detailed = backfillMmsRepairDetails();
     var linked = getAllRows('MaintenanceLog').filter(function (r) { return r.MmsJobNo && (r.Status === 'open' || r.Status === 'in-progress'); });
     if (!linked.length) return out;
     var jobs = {};
@@ -92,6 +93,8 @@ function syncMmsStatuses(force) {
         upd.ResolvedAt = formatDate(fin);
         upd.DowntimeMinutes = minutesBetween(r.Timestamp, fin);
         upd.Resolution = (r.Resolution ? r.Resolution + ' | ' : '') + 'ปิดงานในระบบซ่อมกลาง (' + r.MmsJobNo + ')';
+        var rep = mmsRepairDetail(r.MmsJobNo);
+        if (rep) { upd.Resolution += ' | ' + rep.text; if (rep.by) upd.AssignedTo = rep.by; }
         out.closed++;
       } else if (MMS_ST_ACTIVE.indexOf(j.status) >= 0 && r.Status === 'open') {
         upd.Status = 'in-progress';
@@ -109,6 +112,43 @@ function syncMmsStatuses(force) {
     out.error = String(err && err.message || err);
   }
   return out;
+}
+
+var MMS_DETAIL_TAG = '[ซ่อม] ';
+
+/** รายละเอียดการซ่อมจาก MMS (getRepairDetail) → { text, by } ; ช่างยังไม่บันทึก/เรียกไม่ได้ = null */
+function mmsRepairDetail(mtJob) {
+  try {
+    var d = mmsCall('getRepairDetail', { mtJob: String(mtJob) });
+    var parts = [
+      [d.mainIssue, d.issue].filter(Boolean).join(' / ') ? 'ปัญหา: ' + [d.mainIssue, d.issue].filter(Boolean).join(' / ') : '',
+      d.detail ? 'รายละเอียด: ' + d.detail : '',
+      d.improvements ? 'แก้ไข: ' + d.improvements : '',
+      d.spareParts ? 'อะไหล่: ' + d.spareParts : '',
+      d.timeMin !== '' && d.timeMin !== undefined ? 'เวลาซ่อม ' + d.timeMin + ' นาที' : ''
+    ].filter(Boolean);
+    if (!parts.length) return null;
+    return { text: MMS_DETAIL_TAG + parts.join(' · '), by: String(d.by || '') };
+  } catch (err) {
+    return null;
+  }
+}
+
+/** ใบที่ปิดจาก MMS แล้วแต่ยังไม่มีรายละเอียดการซ่อม (ช่างบันทึกทีหลัง / ปิดก่อนมีฟีเจอร์นี้) — เติมทีละไม่เกิน 3 ใบ ย้อนหลัง 7 วัน */
+function backfillMmsRepairDetails() {
+  var since = addDays(getWorkDate(), -7), n = 0;
+  getAllRows('MaintenanceLog').filter(function (r) {
+    return r.MmsJobNo && r.Status === 'resolved' && String(r.Resolution || '').indexOf('ปิดงานในระบบซ่อมกลาง') >= 0 &&
+      String(r.Resolution).indexOf(MMS_DETAIL_TAG) < 0 && String(r.Date) >= since;
+  }).slice(-3).forEach(function (r) {
+    var rep = mmsRepairDetail(r.MmsJobNo);
+    if (!rep) return;
+    var upd = { Resolution: r.Resolution + ' | ' + rep.text };
+    if (rep.by && (!r.AssignedTo || r.AssignedTo === 'ช่าง (ระบบซ่อมกลาง)')) upd.AssignedTo = rep.by;
+    updateRow('MaintenanceLog', 'TicketID', r.TicketID, upd);
+    n++;
+  });
+  return n;
 }
 
 /** ปุ่ม "ดึงสถานะจากระบบซ่อมกลาง" (หัวหน้าขึ้นไป) */
