@@ -12,6 +12,20 @@ const UI = (() => {
     catch (e) { return false; }
   })();
 
+  // ล็อกการซูมบนมือถือ — iOS Safari ไม่สน user-scalable=no ใน viewport
+  (() => {
+    const stop = (e) => e.preventDefault();
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach((t) => document.addEventListener(t, stop, { passive: false }));
+    document.addEventListener('touchmove', (e) => { if (e.touches.length > 1 || (e.scale && e.scale !== 1)) e.preventDefault(); }, { passive: false });
+    // กันแตะสองครั้งบนพื้นที่ว่าง (ปุ่ม/ช่องกรอกใช้ touch-action: manipulation ใน CSS แล้ว ไม่ต้องกัน click)
+    let lastTouch = 0;
+    document.addEventListener('touchend', (e) => {
+      const now = Date.now();
+      if (now - lastTouch < 350 && !e.target.closest('button, a, input, select, textarea, label, [role="button"], [onclick], [data-key]')) e.preventDefault();
+      lastTouch = now;
+    }, { passive: false });
+  })();
+
   function isDesktop() { return !IS_PHONE && window.innerWidth >= DESKTOP_MIN; }
 
   function applyDeviceClass() {

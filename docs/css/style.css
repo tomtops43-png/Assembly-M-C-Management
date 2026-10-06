@@ -20,6 +20,9 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
+/* ล็อกการซูม: ปิด double-tap zoom (กดปุ่มรัวๆ เช่น PIN) — pinch zoom บล็อกใน ui.js */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+*, *::before, *::after { touch-action: manipulation; }
 body { font-family: var(--font); font-size: 15px; color: var(--dark); background: var(--bg); -webkit-tap-highlight-color: transparent; }
 a { color: var(--primary); text-decoration: none; }
 button { font-family: inherit; }
