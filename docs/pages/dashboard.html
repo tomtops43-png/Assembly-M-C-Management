@@ -227,6 +227,7 @@
   UI.getLineConfig().then((c) => ((c && c.issueTypes) || []).forEach((i) => { issueLabels[i.key] = i.label; })).catch(() => {});
   const issueLbl = (k) => issueLabels[k] || k || '';
   const issueTxt = (t) => [issueLbl(t.issueType), t.description].filter(Boolean).join(' · ') || '-';
+  const fixTxt = (t) => [t.resolution, t.assignedTo ? `โดย ${t.assignedTo}` : ''].filter(Boolean).join(' · ') || '-';
   const joCount = () => data.jobOrders.filter((j) => j.jobOrderId !== '__unassigned__').length;
 
   function generateReport(mode) {
@@ -277,8 +278,8 @@
     L.push('', 'Unclosed Maintenance Jobs (ยังไม่ปิด / อาจทำให้ยอดตก)');
     if (unclosed.length) unclosed.forEach((t, i) => L.push(`${i + 1}) ${t.ticketId} | ${mNameOf(t.machineId)} | ${t.status}${t.carried ? ' | ค้างจากวันก่อน' : ''} | ปัญหา: ${issueTxt(t)}`));
     else L.push('- ไม่มีงานค้าง');
-    L.push('', 'Completed Maintenance Jobs (เสร็จแล้วในช่วงรายงาน / ล่าสุด 5 รายการ)');
-    if (done.length) done.slice(0, 5).forEach((t, i) => L.push(`${i + 1}) ${t.ticketId} | ${mNameOf(t.machineId)} | ${issueLbl(t.issueType) || '-'} | Downtime ${n(t.downtimeMinutes)} นาที`));
+    L.push('', 'Completed Maintenance Jobs (เสร็จแล้วในช่วงรายงาน)');
+    if (done.length) done.forEach((t, i) => L.push(`${i + 1}) ${t.ticketId} | ${mNameOf(t.machineId)} | ปิด ${t.resolvedAt || '-'} | Downtime ${n(t.downtimeMinutes)} นาที`, `    ปัญหา: ${issueTxt(t)}`, `    การแก้ไข: ${fixTxt(t)}`));
     else L.push('- ไม่มีรายการเสร็จแล้ว');
     if (dc) {
       L.push('', 'Daily Check');
@@ -393,8 +394,8 @@
       ${tbl('rp-red', '<th>Ticket</th><th>Machine</th><th>Status</th><th>Issue / Problem</th><th>Carry</th>',
         (mt.unclosedList || []).map((t) => `<tr><td>${esc(t.ticketId)}</td><td>${esc(mNameOf(t.machineId))}</td><td>${esc(t.status)}</td><td>${esc(issueTxt(t))}</td><td>${t.carried ? 'Y' : ''}</td></tr>`).join(''), 5)}
       <h2>Completed maintenance jobs</h2>
-      ${tbl('', '<th>Ticket</th><th>Machine</th><th>Type</th><th>Resolved</th><th class="n">DT(m)</th>',
-        (mt.completedList || []).map((t) => `<tr><td>${esc(t.ticketId)}</td><td>${esc(mNameOf(t.machineId))}</td><td>${esc(issueLbl(t.issueType) || '-')}</td><td>${esc(t.resolvedAt || '-')}</td><td class="n">${n(t.downtimeMinutes)}</td></tr>`).join(''), 5)}
+      ${tbl('', '<th>Ticket</th><th>Machine</th><th>Issue / Problem</th><th>Resolution</th><th>Resolved</th><th class="n">DT(m)</th>',
+        (mt.completedList || []).map((t) => `<tr><td>${esc(t.ticketId)}</td><td>${esc(mNameOf(t.machineId))}</td><td>${esc(issueTxt(t))}</td><td>${esc(fixTxt(t))}</td><td>${esc(t.resolvedAt || '-')}</td><td class="n">${n(t.downtimeMinutes)}</td></tr>`).join(''), 6)}
       ${dc ? `<h2>Daily Check</h2><div>Compliance <b>${pctTxt(dc.compliance)}</b> (${dc.checked}/${dc.expected}) · Accept ${dc.accept} · Reject ${dc.reject}</div>` : ''}
       <h2>Shift breakdown</h2>
       ${tbl('', '<th>Shift</th><th>Product</th><th class="n">FG</th><th class="n">NG</th>',

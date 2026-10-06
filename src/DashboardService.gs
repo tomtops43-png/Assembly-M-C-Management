@@ -216,8 +216,9 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     if (isOpen) maint.open++; else maint.resolved++;
     if (carried) maint.carriedOver++;
     maint.downtime += t.downtimeMinutes;
-    var brief = { ticketId: t.ticketId, machineId: t.machineId, status: t.status, issueType: t.issueType, description: String(t.description || '').substring(0, 120),
-      date: t.date, resolvedAt: t.resolvedAt, downtimeMinutes: t.downtimeMinutes, carried: !!carried };
+    var brief = { ticketId: t.ticketId, machineId: t.machineId, status: t.status, issueType: t.issueType, description: String(t.description || '').substring(0, 200),
+      resolution: String(t.resolution || '').substring(0, 200), reporterName: t.reporterName || '', assignedTo: t.assignedTo, mmsJobNo: t.mmsJobNo,
+      date: t.date, timestamp: t.timestamp, resolvedAt: t.resolvedAt, downtimeMinutes: t.downtimeMinutes, carried: !!carried };
     if (isOpen) maint.unclosedList.push(brief); else maint.completedList.push(brief);
     var bm = maint.byMachine[t.machineId] = maint.byMachine[t.machineId] || { tickets: 0, downtime: 0 };
     bm.tickets++; bm.downtime += t.downtimeMinutes;
