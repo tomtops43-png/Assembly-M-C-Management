@@ -30,11 +30,11 @@
       <div class="form-group"><label class="form-label">วันที่แผน</label><input type="date" class="form-input" id="joDate"></div>
       <div class="form-group"><label class="form-label">รุ่นสินค้า <span class="req">*</span></label><select class="form-input" id="joProduct"></select></div>
       <div class="form-group"><label class="form-label">จำนวนเป้าหมาย <span class="req">*</span></label><input type="number" class="form-input" id="joQty"></div>
-      <div class="form-group"><label class="form-label">เครื่องจักร <span class="req">*</span></label><select class="form-input" id="joMachine"></select></div>
       <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="joShift"><option value="ALL">ทุกกะ</option><option value="Day">กะเช้า</option><option value="Night">กะดึก</option></select></div>
       <div class="form-group"><label class="form-label">กำหนดส่ง</label><input type="date" class="form-input" id="joDue"></div>
       <div class="form-group"><label class="form-label">ความสำคัญ</label><select class="form-input" id="joPrio"><option value="normal">ปกติ</option><option value="low">ต่ำ</option><option value="high">สูง</option><option value="urgent">เร่งด่วน</option></select></div>
     </div>
+    <div class="form-group"><label class="form-label">เครื่องจักร <span class="req">*</span> <span class="form-hint">(เลือกได้หลายเครื่อง)</span></label><div class="mc-pick" id="joMachine"></div></div>
     <div class="form-group"><label class="form-label">หมายเหตุ</label><input class="form-input" id="joRemark"></div>
     <button class="btn btn-primary" id="joCreate"><i class="bi bi-plus-lg"></i> สร้าง Job Order</button>
   </div>
@@ -57,6 +57,7 @@
     <div class="form-group"><label class="form-label">ความสำคัญ</label><select class="form-input" id="ePrio"><option value="normal">ปกติ</option><option value="low">ต่ำ</option><option value="high">สูง</option><option value="urgent">เร่งด่วน</option></select></div>
     <div class="form-group"><label class="form-label">จำนวนเป้าหมาย</label><input type="number" class="form-input" id="eQty"></div>
   </div>
+  <div class="form-group"><label class="form-label">เครื่องจักร</label><div class="mc-pick" id="eMachine"></div></div>
   <div class="form-group"><label class="form-label">หมายเหตุ</label><input class="form-input" id="eRemark"></div>
   <button class="btn btn-primary btn-full" id="eSave">บันทึก</button>
   <div class="notice mt-3 hidden" id="eRenameBox">
@@ -76,14 +77,32 @@
   if (!UI.initPage('joborders', 'วางแผนการผลิต', 'bi-calendar2-week')) return;
   const $ = (id) => document.getElementById(id);
   const PRIO = { urgent: 'เร่งด่วน', high: 'สูง', normal: 'ปกติ', low: 'ต่ำ' };
-  let products = [], list = [], editing = null;
+  let products = [], list = [], editing = null, machines = [];
+  const mName = (id) => (machines.find((m) => m.machineId === id) || {}).machineName || id;
+  const machineTxt = (j) => !j.machineIds.length || j.machineIds.includes('ALL') ? 'ทุกเครื่อง' : j.machineIds.map(mName).join(', ');
+  // กล่องเลือกเครื่อง (checkbox) — "ทุกเครื่อง" ติ๊กแล้วปิดตัวเลือกรายเครื่อง
+  function renderMachinePick(box, selected) {
+    const sel = selected || [];
+    const all = sel.includes('ALL');
+    box.innerHTML = `<label class="perm-item mc-all"><input type="checkbox" value="ALL" ${all ? 'checked' : ''}> ทุกเครื่อง</label>` +
+      UI.groupMachines(machines).map((g) => `<div class="mc-group"><div class="small text-gray">${UI.esc(g.group)}</div>` +
+        g.machines.map((m) => `<label class="perm-item"><input type="checkbox" value="${UI.esc(m.machineId)}" ${!all && sel.includes(m.machineId) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${UI.esc(m.machineName)}</label>`).join('') + '</div>').join('');
+  }
+  function pickedMachines(box) {
+    if (box.querySelector('input[value="ALL"]').checked) return ['ALL'];
+    return [...box.querySelectorAll('input:checked')].map((x) => x.value);
+  }
+  ['joMachine', 'eMachine'].forEach((id) => $(id).addEventListener('change', (e) => {
+    if (e.target.value !== 'ALL') return;
+    $(id).querySelectorAll('input:not([value="ALL"])').forEach((x) => { x.disabled = e.target.checked; if (e.target.checked) x.checked = false; });
+  }));
 
   async function loadMasters() {
     const [m, p] = await Promise.all([API.get('getMachines'), API.get('getProducts')]);
     products = p.success ? p.data : [];
     $('joProduct').innerHTML = '<option value="">— เลือก —</option>' + products.map((x) => `<option value="${UI.esc(x.productCode)}">${UI.esc(x.productCode)} — ${UI.esc(x.productName)}</option>`).join('');
-    $('joMachine').innerHTML = '<option value="">— เลือก —</option><option value="ALL">ทุกเครื่อง</option>' +
-      (m.success ? UI.machineOptions(m.data.filter((x) => x.installed)) : '');
+    machines = m.success ? m.data.filter((x) => x.installed) : [];
+    renderMachinePick($('joMachine'), []);
   }
   // ประเภทเลข JO: ชั่วคราว (TMO-) / จริง (MO)
   const tempPreview = () => `TMO-${($('joDate').value || UI.getToday()).replace(/-/g, '')}-xxx (ชั่วคราว)`;
@@ -105,7 +124,8 @@
     if (real && !$('joId').value.trim()) return UI.showToast('กรุณากรอกเลข JO จริง หรือเลือกแบบ Manual ชั่วคราว', 'warning');
     if (real && /^TMO-/i.test($('joId').value.trim())) return UI.showToast('เลขขึ้นต้น TMO- สงวนไว้สำหรับ JO ชั่วคราว', 'warning');
     const data = { jobOrderId: real ? $('joId').value.trim().toUpperCase() : '', workDate: $('joDate').value, productCode: $('joProduct').value, plannedQty: Number($('joQty').value) || 0,
-      machineId: $('joMachine').value, shift: $('joShift').value, dueDate: $('joDue').value, priority: $('joPrio').value, remark: $('joRemark').value.trim() };
+      machineIds: pickedMachines($('joMachine')), shift: $('joShift').value, dueDate: $('joDue').value, priority: $('joPrio').value, remark: $('joRemark').value.trim() };
+    if (!data.machineIds.length) return UI.showToast('กรุณาเลือกเครื่องจักรอย่างน้อย 1 เครื่อง', 'warning');
     if (data.dueDate && data.dueDate < data.workDate) return UI.showToast('กำหนดส่งต้องไม่ก่อนวันที่แผน', 'warning');
     const r = await API.post('createJobOrder', { data });
     if (!r.success) return UI.showToast(r.message, 'error');
@@ -123,13 +143,13 @@
   }
   function render() {
     const q = $('fSearch').value.trim().toLowerCase();
-    const rows = list.filter((j) => !q || [j.jobOrderId, j.productCode, j.machineId, j.remark, j.isTemp ? 'ชั่วคราว temp' : ''].join(' ').toLowerCase().includes(q));
+    const rows = list.filter((j) => !q || [j.jobOrderId, j.productCode, j.machineId, machineTxt(j), j.remark, j.isTemp ? 'ชั่วคราว temp' : ''].join(' ').toLowerCase().includes(q));
     $('list').innerHTML = rows.length ? rows.map((j) => {
       const pct = j.plannedQty ? Math.min(100, j.actualQty / j.plannedQty * 100) : 0;
       return `<div class="entry-card priority-${j.priority}">
         <div class="entry-head"><span>${j.queueNo ? `<span class="badge badge-info">คิว ${j.queueNo}</span> ` : ''}${UI.esc(j.jobOrderId)}${j.isTemp ? ' <span class="badge badge-pending"><i class="bi bi-hourglass-split"></i> ชั่วคราว</span>' : ''}</span>
           <span class="badge badge-${j.status}">${UI.esc(j.status)}</span></div>
-        <div class="entry-meta">${UI.esc(j.productCode)} · เครื่อง ${j.machineId === 'ALL' ? 'ทุกเครื่อง' : UI.esc(j.machineId)} · ${UI.esc(UI.shiftLabel(j.shift))} · วันที่ ${UI.formatDate(j.workDate)}
+        <div class="entry-meta">${UI.esc(j.productCode)} · เครื่อง ${UI.esc(machineTxt(j))} · ${UI.esc(UI.shiftLabel(j.shift))} · วันที่ ${UI.formatDate(j.workDate)}
           ${j.dueDate ? '· ส่ง ' + UI.formatDate(j.dueDate) : ''} · ${PRIO[j.priority] || j.priority}${j.remark ? ' · ' + UI.esc(j.remark) : ''}</div>
         <div class="d-flex justify-between small mt-2"><span>แผน <b>${UI.formatNumber(j.plannedQty)}</b></span><span>ผลิตได้ <b class="text-success">${UI.formatNumber(j.actualQty)}</b></span>
           <span>NG <b class="text-danger">${UI.formatNumber(j.defectQty)}</b></span><span>คงเหลือ <b>${UI.formatNumber(j.remaining)}</b></span><span><b>${j.completionRate}%</b></span></div>
@@ -156,13 +176,15 @@
     $('eTitle').textContent = editing.jobOrderId;
     $('eStatus').value = editing.status; $('eDue').value = editing.dueDate || ''; $('ePrio').value = editing.priority;
     $('eQty').value = editing.plannedQty; $('eRemark').value = editing.remark;
+    renderMachinePick($('eMachine'), editing.machineIds);
     $('eRenameBox').classList.toggle('hidden', !editing.isTemp);
     $('eNewId').value = '';
     UI.openModal('editModal');
   });
   $('eSave').onclick = () => UI.withButton($('eSave'), async () => {
+    if (!pickedMachines($('eMachine')).length) return UI.showToast('กรุณาเลือกเครื่องจักรอย่างน้อย 1 เครื่อง', 'warning');
     const r = await API.post('updateJobOrder', { jobOrderId: editing.jobOrderId, updates: {
-      status: $('eStatus').value, dueDate: $('eDue').value, priority: $('ePrio').value, plannedQty: Number($('eQty').value) || 0, remark: $('eRemark').value.trim() } });
+      status: $('eStatus').value, dueDate: $('eDue').value, priority: $('ePrio').value, plannedQty: Number($('eQty').value) || 0, remark: $('eRemark').value.trim(), machineIds: pickedMachines($('eMachine')) } });
     if (!r.success) return UI.showToast(r.message, 'error');
     UI.closeModal('editModal'); UI.showToast('บันทึกแล้ว', 'success'); load();
   });
@@ -183,6 +205,7 @@
   syncJoType();
   UI.showLoading();
   await Promise.all([loadMasters(), load()]);
+  render(); // ชื่อเครื่องพร้อมแล้ว
   UI.hideLoading();
 })();
 </script>

@@ -414,6 +414,10 @@ body.is-mobile .sf-ng select[data-f="comp"] { grid-column: 1 / -1; grid-row: 2; 
 .perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .perm-item { display: flex; align-items: center; gap: 6px; font-size: 14px; }
 .perm-item input { accent-color: var(--primary); }
+.mc-pick { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 10px 12px; border: 1px solid var(--gray-light); border-radius: 8px; background: #fff; }
+.mc-pick .mc-all { flex-basis: 100%; font-weight: 600; }
+.mc-pick .mc-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; flex-basis: 100%; }
+.mc-pick .mc-group > .small { min-width: 90px; }
 .lock-field { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--bg); border: 1px dashed var(--gray-light); border-radius: 8px; font-weight: 700; color: var(--ink); }
 .lock-field i { color: var(--primary); }
 .bar-row { display: grid; grid-template-columns: 140px 1fr 80px; gap: 8px; align-items: center; font-size: 13px; margin-bottom: 4px; }
