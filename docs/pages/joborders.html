@@ -135,11 +135,21 @@
           <span>NG <b class="text-danger">${UI.formatNumber(j.defectQty)}</b></span><span>คงเหลือ <b>${UI.formatNumber(j.remaining)}</b></span><span><b>${j.completionRate}%</b></span></div>
         <div class="progress-bar-container mt-1"><div class="progress-bar-fill ${pct >= 100 ? 'over' : pct >= 90 ? 'near' : ''}" style="width:${pct}%"></div></div>
         ${j.sortedGood || j.sortedDefect ? `<div class="small text-gray mt-1">คัดแยก: ดี ${UI.formatNumber(j.sortedGood)} · เสีย ${UI.formatNumber(j.sortedDefect)}</div>` : ''}
-        <div class="entry-actions"><button class="btn btn-outline btn-sm" data-edit="${UI.esc(j.jobOrderId)}"><i class="bi bi-pencil"></i> แก้ไข</button></div>
+        <div class="entry-actions"><button class="btn btn-outline btn-sm" data-edit="${UI.esc(j.jobOrderId)}"><i class="bi bi-pencil"></i> แก้ไข</button>${j.status === 'open' || j.status === 'in-progress' ? `<button class="btn btn-success btn-sm" data-close="${UI.esc(j.jobOrderId)}"><i class="bi bi-check2-circle"></i> ปิด Job Order</button>` : ''}</div>
       </div>`;
     }).join('') : UI.emptyState('bi-calendar2-x', 'ไม่มี Job Order');
   }
-  $('list').addEventListener('click', (e) => {
+  $('list').addEventListener('click', async (e) => {
+    const c = e.target.closest('[data-close]');
+    if (c) {
+      const j = list.find((x) => x.jobOrderId === c.dataset.close);
+      if (!j || !await UI.confirm({ title: `ปิด Job Order ${j.jobOrderId}`, message: `ผลิตได้ ${UI.formatNumber(j.actualQty)} / แผน ${UI.formatNumber(j.plannedQty)} (${j.completionRate}%) — เปลี่ยนสถานะเป็น completed และถอดออกจากเครื่องที่ผูกอยู่`, okText: 'ปิด Job Order' })) return;
+      return UI.withButton(c, async () => {
+        const r = await API.post('updateJobOrder', { jobOrderId: j.jobOrderId, updates: { status: 'completed' } });
+        if (!r.success) return UI.showToast(r.message, 'error');
+        UI.showToast(`ปิด ${j.jobOrderId} แล้ว`, 'success'); load();
+      });
+    }
     const b = e.target.closest('[data-edit]');
     if (!b) return;
     editing = list.find((j) => j.jobOrderId === b.dataset.edit);
