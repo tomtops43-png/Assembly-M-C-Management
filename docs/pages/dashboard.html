@@ -46,7 +46,7 @@
 <main class="main"><div class="container">
   <div class="card">
     <div class="date-selector" id="rangeSel">
-      <button class="date-btn active" data-range="today">วันนี้</button><button class="date-btn" data-range="week">สัปดาห์</button>
+      <button class="date-btn active" data-range="today">วันนี้</button><button class="date-btn" data-range="yesterday">เมื่อวาน</button><button class="date-btn" data-range="week">สัปดาห์</button>
       <button class="date-btn" data-range="month">เดือน</button><button class="date-btn" data-range="all">ทั้งหมด</button>
       <button class="date-btn" data-range="custom">ช่วงวันที่</button>
       <span id="customBox" class="hidden"><input type="date" class="date-input" id="from"> – <input type="date" class="date-input" id="to"></span>
@@ -118,7 +118,11 @@
   if (hasChart) Chart.defaults.font.family = "'IBM Plex Sans Thai', sans-serif";
   else UI.showToast('โหลดไลบรารีกราฟไม่ได้ — แสดงเฉพาะตัวเลข/ตาราง', 'warning');
 
-  function rangeParam() { return range === 'custom' ? JSON.stringify({ from: $('from').value, to: $('to').value }) : range; }
+  function rangeParam() {
+    if (range === 'custom') return JSON.stringify({ from: $('from').value, to: $('to').value });
+    if (range === 'yesterday') { const y = UI.addDays(UI.getToday(), -1); return JSON.stringify({ from: y, to: y }); }
+    return range;
+  }
   $('rangeSel').addEventListener('click', (e) => {
     const b = e.target.closest('[data-range]'); if (!b) return;
     range = b.dataset.range;
