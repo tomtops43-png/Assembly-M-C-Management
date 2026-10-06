@@ -118,6 +118,8 @@
   if (hasChart) Chart.defaults.font.family = "'IBM Plex Sans Thai', sans-serif";
   else UI.showToast('โหลดไลบรารีกราฟไม่ได้ — แสดงเฉพาะตัวเลข/ตาราง', 'warning');
 
+  /** รุ่นที่ผลิตในกะ เรียง FG มาก→น้อย: [[productCode, {actual, defect}], ...] */
+  const shiftProducts = (s) => Object.entries((data.byShift[s] && data.byShift[s].products) || {}).sort((a, b) => b[1].actual - a[1].actual);
   function rangeParam() {
     if (range === 'custom') return JSON.stringify({ from: $('from').value, to: $('to').value });
     if (range === 'yesterday') { const y = UI.addDays(UI.getToday(), -1); return JSON.stringify({ from: y, to: y }); }
@@ -208,8 +210,9 @@
     $('tDc').innerHTML = dc ? `<div class="kpi-grid"><div class="kpi-card"><div class="kpi-value">${dc.compliance === null ? '-' : dc.compliance + '%'}</div><div class="kpi-label">Compliance (${dc.checked}/${dc.expected})</div></div>
       <div class="kpi-card success"><div class="kpi-value">${dc.accept}</div><div class="kpi-label">Accept</div></div><div class="kpi-card danger"><div class="kpi-value">${dc.reject}</div><div class="kpi-label">Reject</div></div></div>
       ${dc.missing.length ? '<div class="small text-gray">ช่องที่ขาด: ' + dc.missing.slice(0, 20).map((m) => `${m.machineId} ${m.shiftDN === 'Night' ? 'กะดึก' : 'กะเช้า'}${m.formTab ? ' (' + m.formTab + ')' : ''}`).join(', ') + (dc.missing.length > 20 ? ' …' : '') + '</div>' : ''}` : '<div class="small text-gray">เลือกช่วงวันที่เพื่อดู</div>';
-    $('tShift').innerHTML = '<thead><tr><th>กะ</th><th class="num">FG</th><th class="num">NG</th></tr></thead><tbody>' +
-      Object.keys(data.byShift).map((s) => `<tr><td>${UI.esc(UI.shiftLabel(s))}</td><td class="num">${n(data.byShift[s].actual)}</td><td class="num">${n(data.byShift[s].defect)}</td></tr>`).join('') + '</tbody>';
+    $('tShift').innerHTML = '<thead><tr><th>กะ</th><th>รุ่น</th><th class="num">FG</th><th class="num">NG</th></tr></thead><tbody>' +
+      Object.keys(data.byShift).map((s) => `<tr><td><b>${UI.esc(UI.shiftLabel(s))}</b></td><td><b>รวม</b></td><td class="num"><b>${n(data.byShift[s].actual)}</b></td><td class="num"><b>${n(data.byShift[s].defect)}</b></td></tr>` +
+        shiftProducts(s).map(([pc, v]) => `<tr><td></td><td>${UI.esc(pc)}</td><td class="num">${n(v.actual)}</td><td class="num">${n(v.defect)}</td></tr>`).join('')).join('') + '</tbody>';
     renderTable();
   }
 
@@ -257,6 +260,13 @@
     L.push('', 'Production by product');
     if (data.byProduct.length) data.byProduct.forEach((p) => L.push(`- ${p.productCode}: แผน ${n(p.plan)} | FG ${n(p.actual)} | NG ${n(p.defect)} | %Yield ${p.yield}% | %NG ${p.defectRate}%`));
     else L.push('- ไม่มีข้อมูล');
+    if (Object.keys(data.byShift).length) {
+      L.push('', 'Production by shift');
+      Object.keys(data.byShift).forEach((s) => {
+        L.push(`- ${UI.shiftLabel(s)}: FG ${n(data.byShift[s].actual)} | NG ${n(data.byShift[s].defect)}`);
+        shiftProducts(s).forEach(([pc, v]) => L.push(`    · ${pc}: FG ${n(v.actual)} | NG ${n(v.defect)}`));
+      });
+    }
     if (reasons.length) { L.push('', 'NG by defect (Pareto)'); reasons.slice(0, 10).forEach((r, i) => L.push(`${i + 1}) ${r}: ${n(data.ngByReason[r])} ชิ้น`)); }
     L.push('', 'Maintenance');
     L.push(`- Tickets ทั้งหมด: ${mt.total}`);
@@ -387,8 +397,9 @@
         (mt.completedList || []).map((t) => `<tr><td>${esc(t.ticketId)}</td><td>${esc(mNameOf(t.machineId))}</td><td>${esc(issueLbl(t.issueType) || '-')}</td><td>${esc(t.resolvedAt || '-')}</td><td class="n">${n(t.downtimeMinutes)}</td></tr>`).join(''), 5)}
       ${dc ? `<h2>Daily Check</h2><div>Compliance <b>${pctTxt(dc.compliance)}</b> (${dc.checked}/${dc.expected}) · Accept ${dc.accept} · Reject ${dc.reject}</div>` : ''}
       <h2>Shift breakdown</h2>
-      ${tbl('', '<th>Shift</th><th class="n">FG</th><th class="n">NG</th>',
-        Object.keys(data.byShift).map((s) => `<tr><td>${esc(s)}</td><td class="n">${n(data.byShift[s].actual)}</td><td class="n">${n(data.byShift[s].defect)}</td></tr>`).join(''), 3)}
+      ${tbl('', '<th>Shift</th><th>Product</th><th class="n">FG</th><th class="n">NG</th>',
+        Object.keys(data.byShift).map((s) => `<tr><td><b>${esc(s)}</b></td><td><b>Total</b></td><td class="n"><b>${n(data.byShift[s].actual)}</b></td><td class="n"><b>${n(data.byShift[s].defect)}</b></td></tr>` +
+          shiftProducts(s).map(([pc, v]) => `<tr><td></td><td>${esc(pc)}</td><td class="n">${n(v.actual)}</td><td class="n">${n(v.defect)}</td></tr>`).join('')).join(''), 4)}
       <div style="page-break-before: always"></div>
       <h2>Charts</h2>
       <div class="rp-charts">${chartImg('cMachine', 'Output by machine')}${chartImg('cProduct', 'Product mix')}${imgBox(ex.shift, 'Shift breakdown')}${chartImg('cTrend', 'Production trend')}</div>
