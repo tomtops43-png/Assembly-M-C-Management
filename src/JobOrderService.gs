@@ -5,6 +5,24 @@ var JO_PRIORITY_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
 var JO_ACTIVE = ['open', 'in-progress'];
 var JO_TEMP_PREFIX = 'TMO-'; // JO ชั่วคราว (Manual) ระหว่างรอเลข MO จริง — TMO-yyyyMMdd-NNN
 
+/** MachineID ของ JO: 'ALL' หรือหลายเครื่องคั่นด้วย , (เช่น AC-06,AC-07) */
+function joMachineList(v) {
+  return String(v || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+}
+function joAllowsMachine(joMachineId, machineId) {
+  var ids = joMachineList(joMachineId);
+  return !ids.length || ids.indexOf('ALL') >= 0 || ids.indexOf(String(machineId)) >= 0;
+}
+/** รับ string / array → ค่าที่เก็บในชีต ('ALL' หรือ 'A,B,C') ; ตรวจว่าเครื่องมีจริง */
+function normalizeJoMachines(v) {
+  var ids = Array.isArray(v) ? v.map(String) : joMachineList(v);
+  ids = ids.map(function (x) { return x.trim(); }).filter(function (x, i, a) { return x && a.indexOf(x) === i; });
+  if (!ids.length) throw new Error('กรุณาเลือกเครื่องจักร');
+  if (ids.indexOf('ALL') >= 0) return 'ALL';
+  ids.forEach(function (id) { if (!getMachine(id)) throw new Error('ไม่พบเครื่องจักร ' + id); });
+  return ids.join(',');
+}
+
 function isTempJobOrderId(id) { return String(id || '').indexOf(JO_TEMP_PREFIX) === 0; }
 
 /** TMO-yyyyMMdd-NNN (เลขวิ่งต่อวัน) */
@@ -21,7 +39,7 @@ function nextTempJobOrderId(workDate) {
 function jobOrderToObj(r) {
   return {
     jobOrderId: String(r.JobOrderID), createdAt: r.CreatedAt, createdBy: r.CreatedBy, createdByName: r.CreatedByName,
-    workDate: r.WorkDate, dueDate: r.DueDate, machineId: String(r.MachineID), productCode: String(r.ProductCode),
+    workDate: r.WorkDate, dueDate: r.DueDate, machineId: String(r.MachineID), machineIds: joMachineList(r.MachineID), productCode: String(r.ProductCode),
     shift: r.Shift || 'ALL', plannedQty: toNumber(r.PlannedQty), priority: r.Priority || 'normal',
     status: r.Status || 'open', remark: r.Remark || '', isTemp: isTempJobOrderId(r.JobOrderID)
   };
@@ -73,7 +91,7 @@ function getJobOrders(token, filters) {
   assignQueueNumbers(list);
   list = list.filter(function (j) {
     if (f.status && f.status !== 'all' && j.status !== f.status) return false;
-    if (f.machineId && j.machineId !== f.machineId && j.machineId !== 'ALL') return false;
+    if (f.machineId && !joAllowsMachine(j.machineId, f.machineId)) return false;
     if (f.productCode && j.productCode !== f.productCode) return false;
     if (f.dateFrom && j.workDate < f.dateFrom) return false;
     if (f.dateTo && j.workDate > f.dateTo) return false;
@@ -91,7 +109,7 @@ function getJobOrderOptions(token, filters) {
   assignQueueNumbers(list);
   list = list.filter(function (j) {
     if (!f.includeAll && JO_ACTIVE.indexOf(j.status) < 0) return false;
-    if (f.machineId && j.machineId !== 'ALL' && j.machineId !== String(f.machineId)) return false;
+    if (f.machineId && !joAllowsMachine(j.machineId, f.machineId)) return false;
     if (f.productCode && j.productCode !== String(f.productCode)) return false;
     if (f.shift && j.shift !== 'ALL' && j.shift !== f.shift) return false;
     return true;
@@ -125,7 +143,7 @@ function createJobOrder(token, d) {
   if (!isValidDateStr(workDate)) throw new Error('วันที่แผนไม่ถูกต้อง');
   if (!d.productCode) throw new Error('กรุณาเลือกรุ่นสินค้า');
   if (toNumber(d.plannedQty) <= 0) throw new Error('กรุณากรอกจำนวนเป้าหมาย');
-  if (!d.machineId) throw new Error('กรุณาเลือกเครื่องจักร');
+  var machineIds = normalizeJoMachines(d.machineIds || d.machineId);
   if (d.dueDate && d.dueDate < workDate) throw new Error('กำหนดส่งต้องไม่ก่อนวันที่แผน');
   var id = String(d.jobOrderId || '').trim().toUpperCase();
   if (id) {
@@ -135,7 +153,7 @@ function createJobOrder(token, d) {
   }
   appendRow('JobOrders', {
     JobOrderID: id, CreatedAt: formatDate(), CreatedBy: u.employeeId, CreatedByName: u.name, WorkDate: workDate,
-    DueDate: d.dueDate || '', MachineID: d.machineId, ProductCode: d.productCode, Shift: d.shift || 'ALL',
+    DueDate: d.dueDate || '', MachineID: machineIds, ProductCode: d.productCode, Shift: d.shift || 'ALL',
     PlannedQty: toNumber(d.plannedQty), Priority: JO_PRIORITY_RANK[d.priority] !== undefined ? d.priority : 'normal',
     Status: 'open', Remark: d.remark || ''
   });
@@ -196,11 +214,14 @@ function updateJobOrder(token, jobOrderId, updates) {
   if (updates.priority) upd.Priority = updates.priority;
   if (updates.remark !== undefined) upd.Remark = updates.remark;
   if (updates.plannedQty !== undefined) upd.PlannedQty = toNumber(updates.plannedQty);
+  if (updates.machineIds !== undefined) upd.MachineID = normalizeJoMachines(updates.machineIds);
   if (!updateRow('JobOrders', 'JobOrderID', jobOrderId, upd)) throw new Error('ไม่พบ Job Order');
-  // JO ที่ปิด/ยกเลิก → ล้างออกจากเครื่อง
-  if (upd.Status === 'completed' || upd.Status === 'cancelled') {
+  // JO ที่ปิด/ยกเลิก → ล้างออกจากเครื่อง ; เอาเครื่องออกจาก JO → ล้างจากเครื่องนั้น
+  var closed = upd.Status === 'completed' || upd.Status === 'cancelled';
+  if (closed || upd.MachineID) {
     getMachines().forEach(function (m) {
-      if (m.currentJobOrder === jobOrderId) updateRow('Machines', 'MachineID', m.machineId, { CurrentJobOrder: '' });
+      if (m.currentJobOrder !== jobOrderId) return;
+      if (closed || !joAllowsMachine(upd.MachineID, m.machineId)) updateRow('Machines', 'MachineID', m.machineId, { CurrentJobOrder: '' });
     });
   }
   logAction(u, 'updateJobOrder', { jobOrderId: jobOrderId, updates: upd });

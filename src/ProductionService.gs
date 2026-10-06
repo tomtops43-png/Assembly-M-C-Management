@@ -273,7 +273,7 @@ function submitProductionShift(token, data) {
     var jo = joRows[joId];
     if (!jo) throw new Error('ไม่พบ Job Order ' + joId + no);
     if (String(jo.ProductCode) !== productCode) throw new Error('Job Order ' + joId + ' เป็นของรุ่น ' + jo.ProductCode + no);
-    if (jo.MachineID && jo.MachineID !== 'ALL' && String(jo.MachineID) !== m.machineId) throw new Error('Job Order ' + joId + ' ไม่ได้กำหนดให้เครื่องนี้' + no);
+    if (!joAllowsMachine(jo.MachineID, m.machineId)) throw new Error('Job Order ' + joId + ' ไม่ได้กำหนดให้เครื่องนี้' + no);
     if (JO_ACTIVE.indexOf(jo.Status || 'open') < 0 && joId !== m.currentJobOrder) throw new Error('Job Order ' + joId + ' ปิดไปแล้ว' + no);
     var hours = toNumber(l.hours);
     if (hours < 0 || hours > 12) throw new Error('ชั่วโมงทำงานต้องอยู่ระหว่าง 0–12' + no);
