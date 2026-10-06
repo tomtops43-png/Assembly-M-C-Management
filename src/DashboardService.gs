@@ -99,8 +99,10 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     if (rowCap > 0) bm.capacity = rowCap; // ชิ้น/ชม. (ใช้ในรายงาน)
     var bp = byProduct[r.productCode] = byProduct[r.productCode] || { productCode: r.productCode, actual: 0, defect: 0, plan: 0 };
     bp.actual += r.actualQty; bp.defect += r.defectQty; bp.plan += plan;
-    var bs = byShift[r.shiftDN || '-'] = byShift[r.shiftDN || '-'] || { actual: 0, defect: 0 };
+    var bs = byShift[r.shiftDN || '-'] = byShift[r.shiftDN || '-'] || { actual: 0, defect: 0, products: {} };
     bs.actual += r.actualQty; bs.defect += r.defectQty;
+    var bsp = bs.products[r.productCode] = bs.products[r.productCode] || { actual: 0, defect: 0 };
+    bsp.actual += r.actualQty; bsp.defect += r.defectQty;
     var dd = daily[r.date] = daily[r.date] || { date: r.date, actual: 0, defect: 0 };
     dd.actual += r.actualQty; dd.defect += r.defectQty;
 
