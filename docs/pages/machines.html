@@ -142,10 +142,12 @@
   async function loadJoOptions(productCode, selected) {
     $('mJo').innerHTML = '<option value="">ไม่ระบุ</option>';
     if (!productCode) return;
-    const r = await API.get('getJobOrderOptions', { filters: { machineId: current.machineId, productCode } });
+    // JO ของรุ่นนี้ทุกใบ (ไม่จำกัดเครื่อง) — เลือก JO ที่เครื่องอื่นใช้อยู่ได้ ระบบเพิ่มเครื่องนี้เข้า JO ให้
+    const r = await API.get('getJobOrderOptions', { filters: { productCode } });
     if (!r.success) return;
+    const mine = (j) => !j.machineIds || !j.machineIds.length || j.machineIds.includes('ALL') || j.machineIds.includes(current.machineId);
     $('mJo').innerHTML = '<option value="">ไม่ระบุ</option>' + r.data.map((j) =>
-      `<option value="${UI.esc(j.jobOrderId)}" ${j.jobOrderId === selected ? 'selected' : ''}>คิว ${j.queueNo || '-'} · ${UI.esc(j.jobOrderId)} · ${UI.formatNumber(j.plannedQty)} ชิ้น · ${UI.esc(j.priority)}${j.isTemp ? ' · ชั่วคราว' : ''}</option>`).join('');
+      `<option value="${UI.esc(j.jobOrderId)}" ${j.jobOrderId === selected ? 'selected' : ''}>คิว ${j.queueNo || '-'} · ${UI.esc(j.jobOrderId)} · ${UI.formatNumber(j.plannedQty)} ชิ้น · ${UI.esc(j.priority)}${j.isTemp ? ' · ชั่วคราว' : ''}${mine(j) ? '' : ' · ใช้ร่วมกับ ' + UI.esc(j.machineIds.join(', '))}</option>`).join('');
   }
 
   function renderAssigned() {

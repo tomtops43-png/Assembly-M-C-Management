@@ -176,7 +176,10 @@ function setCurrentJobOrder(token, machineId, jobOrderId) {
     if (!jo) throw new Error('ไม่พบ Job Order');
     if (['open', 'in-progress'].indexOf(jo.Status) < 0) throw new Error('Job Order ไม่อยู่ในสถานะใช้งาน');
     if (String(jo.ProductCode) !== m.currentProduct) throw new Error('สินค้าของ Job Order ไม่ตรงกับเครื่อง');
-    if (!joAllowsMachine(jo.MachineID, m.machineId)) throw new Error('Job Order นี้ไม่ใช่ของเครื่องนี้');
+    // JO ยังไม่มีเครื่องนี้ → เพิ่มเครื่องนี้เข้า JO (1 JO ผลิตได้หลายเครื่อง)
+    if (!joAllowsMachine(jo.MachineID, m.machineId)) {
+      updateRow('JobOrders', 'JobOrderID', jobOrderId, { MachineID: joMachineList(jo.MachineID).concat([m.machineId]).join(',') });
+    }
   }
   updateRow('Machines', 'MachineID', machineId, { CurrentJobOrder: jobOrderId || '' });
   logAction(u, 'setCurrentJobOrder', { machineId: machineId, jobOrderId: jobOrderId });
