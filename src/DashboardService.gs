@@ -203,7 +203,8 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     return x;
   });
 
-  // Maintenance summary
+  // Maintenance summary (ดึงสถานะ + รายละเอียดการซ่อมจาก MMS ก่อน — เว้นช่วงตาม MMS.SYNC_SECONDS, ไม่ throw)
+  syncMmsStatuses(false);
   var tickets = getAllRows('MaintenanceLog').map(ticketToObj);
   var maint = { total: 0, open: 0, resolved: 0, carriedOver: 0, downtime: 0, byMachine: {}, byType: {}, unclosedList: [], completedList: [] };
   tickets.forEach(function (t) {
@@ -217,7 +218,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     if (carried) maint.carriedOver++;
     maint.downtime += t.downtimeMinutes;
     var brief = { ticketId: t.ticketId, machineId: t.machineId, status: t.status, issueType: t.issueType, description: String(t.description || '').substring(0, 200),
-      resolution: String(t.resolution || '').substring(0, 200), reporterName: t.reporterName || '', assignedTo: t.assignedTo, mmsJobNo: t.mmsJobNo,
+      resolution: String(t.resolution || '').substring(0, 500), reporterName: t.reporterName || '', assignedTo: t.assignedTo, mmsJobNo: t.mmsJobNo,
       date: t.date, timestamp: t.timestamp, resolvedAt: t.resolvedAt, downtimeMinutes: t.downtimeMinutes, carried: !!carried };
     if (isOpen) maint.unclosedList.push(brief); else maint.completedList.push(brief);
     var bm = maint.byMachine[t.machineId] = maint.byMachine[t.machineId] || { tickets: 0, downtime: 0 };
