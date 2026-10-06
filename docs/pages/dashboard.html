@@ -32,6 +32,8 @@
   .rp th { background: #EEF0F4; text-align: left; font-weight: 700; padding: 5px 6px; border: 1px solid #DADCE2; }
   .rp td { padding: 4px 6px; border: 1px solid #E3E4E8; vertical-align: top; }
   .rp td.n, .rp th.n { text-align: right; }
+  .rp table.rp-fixed { table-layout: fixed; }
+  .rp table.rp-fixed td, .rp table.rp-fixed th { overflow-wrap: anywhere; word-break: break-word; }
   .rp tr { page-break-inside: avoid; }
   .rp-red th { background: #FDECEE; }
   .rp-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -227,7 +229,13 @@
   UI.getLineConfig().then((c) => ((c && c.issueTypes) || []).forEach((i) => { issueLabels[i.key] = i.label; })).catch(() => {});
   const issueLbl = (k) => issueLabels[k] || k || '';
   const issueTxt = (t) => [issueLbl(t.issueType), t.description].filter(Boolean).join(' · ') || '-';
-  const fixTxt = (t) => [t.resolution, t.assignedTo ? `โดย ${t.assignedTo}` : ''].filter(Boolean).join(' · ') || '-';
+  // มีรายละเอียดจาก MMS ([ซ่อม] ...) → แสดงเฉพาะรายละเอียด + เลขใบ MMS ท้าย ; ไม่มี → ข้อความเดิม
+  const fixTxt = (t) => {
+    let r = String(t.resolution || '');
+    const i = r.indexOf('[ซ่อม] ');
+    if (i >= 0) r = r.slice(i + 7) + (t.mmsJobNo ? ` (MMS ${t.mmsJobNo})` : '');
+    return [r, t.assignedTo ? `โดย ${t.assignedTo}` : ''].filter(Boolean).join(' · ') || '-';
+  };
   const joCount = () => data.jobOrders.filter((j) => j.jobOrderId !== '__unassigned__').length;
 
   function generateReport(mode) {
@@ -391,10 +399,10 @@
       ${reasons.length ? `<h2>NG by defect (Pareto)</h2>${tbl('', '<th>#</th><th>อาการ</th><th class="n">NG</th><th class="n">%</th>',
         reasons.slice(0, 10).map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r)}</td><td class="n">${n(data.ngByReason[r])}</td><td class="n">${k.defect ? (data.ngByReason[r] / k.defect * 100).toFixed(1) : 0}%</td></tr>`).join(''), 4)}` : ''}
       <h2>Unclosed maintenance jobs (may impact output)</h2>
-      ${tbl('rp-red', '<th>Ticket</th><th>Machine</th><th>Status</th><th>Issue / Problem</th><th>Carry</th>',
+      ${tbl('rp-red rp-fixed', '<th style="width:22%">Ticket</th><th style="width:13%">Machine</th><th style="width:12%">Status</th><th>Issue / Problem</th><th style="width:7%">Carry</th>',
         (mt.unclosedList || []).map((t) => `<tr><td>${esc(t.ticketId)}</td><td>${esc(mNameOf(t.machineId))}</td><td>${esc(t.status)}</td><td>${esc(issueTxt(t))}</td><td>${t.carried ? 'Y' : ''}</td></tr>`).join(''), 5)}
       <h2>Completed maintenance jobs</h2>
-      ${tbl('', '<th>Ticket</th><th>Machine</th><th>Issue / Problem</th><th>Resolution</th><th>Resolved</th><th class="n">DT(m)</th>',
+      ${tbl('rp-fixed', '<th style="width:17%">Ticket</th><th style="width:9%">Machine</th><th style="width:17%">Issue / Problem</th><th>Resolution</th><th style="width:11%">Resolved</th><th class="n" style="width:6%">DT(m)</th>',
         (mt.completedList || []).map((t) => `<tr><td>${esc(t.ticketId)}</td><td>${esc(mNameOf(t.machineId))}</td><td>${esc(issueTxt(t))}</td><td>${esc(fixTxt(t))}</td><td>${esc(t.resolvedAt || '-')}</td><td class="n">${n(t.downtimeMinutes)}</td></tr>`).join(''), 6)}
       ${dc ? `<h2>Daily Check</h2><div>Compliance <b>${pctTxt(dc.compliance)}</b> (${dc.checked}/${dc.expected}) · Accept ${dc.accept} · Reject ${dc.reject}</div>` : ''}
       <h2>Shift breakdown</h2>
