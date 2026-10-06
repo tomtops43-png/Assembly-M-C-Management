@@ -1,5 +1,7 @@
 name: Deploy Apps Script
 
+# push เข้า claude/** = ตรวจ syntax อย่างเดียว ; push/merge เข้า main = ตรวจ + deploy ขึ้น Apps Script
+
 on:
   push:
     branches: [main, 'claude/**']
@@ -20,11 +22,36 @@ jobs:
         with:
           node-version: 20
 
+      # ทุก branch: ตรวจ syntax ของ .gs (ไม่ deploy)
+      - name: Syntax check (src/*.gs)
+        run: |
+          node -e '
+            const fs = require("fs"); let bad = 0;
+            for (const f of fs.readdirSync("src").filter((f) => f.endsWith(".gs"))) {
+              try { new Function(fs.readFileSync("src/" + f, "utf8")); }
+              catch (e) { console.error("src/" + f + ": " + e.message); bad++; }
+            }
+            if (bad) process.exit(1);
+            console.log("syntax OK");'
+
+      # deploy ขึ้น Apps Script จริงเฉพาะ main (merge เข้า main หรือกด Run workflow บน main)
+      - name: Deploy only on main
+        id: target
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "branch $GITHUB_REF_NAME — ตรวจ syntax อย่างเดียว ไม่ deploy (deploy เมื่อ merge เข้า main)"
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install clasp
+        if: steps.target.outputs.deploy == 'true'
         run: npm i -g @google/clasp@3
 
       - name: Check secrets
         id: secrets
+        if: steps.target.outputs.deploy == 'true'
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           SCRIPT_ID: ${{ secrets.SCRIPT_ID }}

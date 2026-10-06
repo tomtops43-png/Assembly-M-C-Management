@@ -37,7 +37,10 @@ https://docs.google.com/spreadsheets/d/1tz5Unlu2W5Zz5AUCfD1vBTdyj-FPLzOpEaUibOyh
 5. แก้ค่าเฉพาะไลน์ใน `src/Config.gs` (อาการ NG, Daily Check ฯลฯ) ตาม `LINE_DATA_REQUEST.md`
 
 ## 4. (ทางเลือก) Auto deploy ด้วย GitHub Actions
-ไฟล์ `.github/workflows/deploy-appsscript.yml` จะ `clasp push` ทุกครั้งที่ push ไป `main` หรือ `claude/**`
+ไฟล์ `.github/workflows/deploy-appsscript.yml`:
+- push ไป `claude/**` → ตรวจ syntax ของ `src/*.gs` อย่างเดียว (ไม่ขึ้นระบบจริง)
+- push / merge เข้า `main` → ตรวจ syntax แล้ว `clasp push` + อัปเดต deployment เดิม (URL `/exec` ไม่เปลี่ยน)
+- สั่งเองได้ที่ Actions → Deploy Apps Script → Run workflow (เลือก `main`)
 1. เปิด https://script.google.com/home/usersettings → Google Apps Script API = **ON**
 2. บนเครื่องตัวเอง: `npm i -g @google/clasp@3 && clasp login` → คัดลอกเนื้อหา `~/.clasprc.json`
 3. GitHub → Settings → Secrets and variables → Actions
