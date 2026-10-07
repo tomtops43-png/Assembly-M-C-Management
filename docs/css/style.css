@@ -195,8 +195,8 @@ body.is-mobile .top-clock { display: none; }
 .choice-btn.active { border: 2px solid var(--primary); background: var(--primary-light); color: var(--primary-dark); padding: 11px 7px; }
 .choice-btn.active i { color: var(--primary); }
 .period-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-body.is-mobile .period-grid { grid-template-columns: repeat(4, 1fr); }
-.period-btn { padding: 8px 4px; font-size: 13px; font-family: var(--mono); border-radius: 8px; border: 1px solid var(--gray-light); background: #fff; cursor: pointer; color: var(--ink); }
+body.is-mobile .period-grid { grid-template-columns: repeat(3, 1fr); }
+.period-btn { padding: 8px 4px; white-space: nowrap; font-size: 13px; font-family: var(--mono); border-radius: 8px; border: 1px solid var(--gray-light); background: #fff; cursor: pointer; color: var(--ink); }
 .period-btn i { font-size: 11px; color: var(--gray); }
 .period-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 .period-btn.active i { color: #fff; }
@@ -439,7 +439,8 @@ body.is-mobile .modal-overlay { padding: 10px; }
 body.is-mobile .modal-content { max-height: calc(100vh - 20px); max-height: calc(100dvh - 20px); padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border-radius: 16px; }
 body.is-mobile .modal-close { width: 40px; height: 40px; top: 8px; right: 8px; }
 body.is-mobile .btn-sm { padding: 8px 12px; min-height: 36px; }
-body.is-mobile .period-btn { padding: 11px 4px; font-size: 14px; }
+body.is-mobile .period-btn { padding: 11px 2px; font-size: 13px; }
+body.is-mobile .period-btn i { display: none; }
 body.is-mobile .machine-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
 body.is-mobile .machine-btn { min-height: 64px; }
 body.is-mobile .date-input { min-height: 38px; font-size: 16px; }
