@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ปัญหา NG</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%23fff%22/%3E%3Crect x=%229%22 y=%2211%22 width=%227%22 height=%2242%22 rx=%222%22 fill=%22%23C8102E%22/%3E%3Crect x=%2248%22 y=%2211%22 width=%227%22 height=%2242%22 rx=%222%22 fill=%22%23C8102E%22/%3E%3Crect x=%2217.5%22 y=%2215%22 width=%223.2%22 height=%2235%22 rx=%221%22 fill=%22%237C818B%22/%3E%3Crect x=%2222%22 y=%2215%22 width=%223.2%22 height=%2235%22 rx=%221%22 fill=%22%237C818B%22/%3E%3Crect x=%2226.5%22 y=%2215%22 width=%223.2%22 height=%2235%22 rx=%221%22 fill=%22%237C818B%22/%3E%3Crect x=%2231%22 y=%2215%22 width=%223.2%22 height=%2235%22 rx=%221%22 fill=%22%237C818B%22/%3E%3Crect x=%2235.5%22 y=%2215%22 width=%223.2%22 height=%2235%22 rx=%221%22 fill=%22%237C818B%22/%3E%3Crect x=%2240%22 y=%2215%22 width=%223.2%22 height=%2235%22 rx=%221%22 fill=%22%237C818B%22/%3E%3Crect x=%2244.5%22 y=%2215%22 width=%223.2%22 height=%2235%22 rx=%221%22 fill=%22%237C818B%22/%3E%3Crect x=%2218.4%22 y=%2215%22 width=%221%22 height=%2235%22 fill=%22%23C9CDD4%22/%3E%3Crect x=%2222.9%22 y=%2215%22 width=%221%22 height=%2235%22 fill=%22%23C9CDD4%22/%3E%3Crect x=%2227.4%22 y=%2215%22 width=%221%22 height=%2235%22 fill=%22%23C9CDD4%22/%3E%3Crect x=%2231.9%22 y=%2215%22 width=%221%22 height=%2235%22 fill=%22%23C9CDD4%22/%3E%3Crect x=%2236.4%22 y=%2215%22 width=%221%22 height=%2235%22 fill=%22%23C9CDD4%22/%3E%3Crect x=%2240.9%22 y=%2215%22 width=%221%22 height=%2235%22 fill=%22%23C9CDD4%22/%3E%3Crect x=%2245.4%22 y=%2215%22 width=%221%22 height=%2235%22 fill=%22%23C9CDD4%22/%3E%3Crect x=%2215%22 y=%2221.5%22 width=%2234%22 height=%224%22 rx=%221%22 fill=%22%23C8102E%22/%3E%3Ccircle cx=%2219.1%22 cy=%2223.5%22 r=%221.1%22 fill=%22%237A0A1C%22/%3E%3Ccircle cx=%2223.6%22 cy=%2223.5%22 r=%221.1%22 fill=%22%237A0A1C%22/%3E%3Ccircle cx=%2228.1%22 cy=%2223.5%22 r=%221.1%22 fill=%22%237A0A1C%22/%3E%3Ccircle cx=%2232.6%22 cy=%2223.5%22 r=%221.1%22 fill=%22%237A0A1C%22/%3E%3Ccircle cx=%2237.1%22 cy=%2223.5%22 r=%221.1%22 fill=%22%237A0A1C%22/%3E%3Ccircle cx=%2241.6%22 cy=%2223.5%22 r=%221.1%22 fill=%22%237A0A1C%22/%3E%3Ccircle cx=%2246.1%22 cy=%2223.5%22 r=%221.1%22 fill=%22%237A0A1C%22/%3E%3Cpath d=%22M21 51 L32 31 L43 51 Z%22 fill=%22%23fff%22/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#141518">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Assembly M/C">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<main class="main"><div class="container">
+  <div class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="entry">แจ้งปัญหา</button>
+    <button class="tab-btn" data-tab="list">รายการปัญหา</button>
+    <button class="tab-btn" data-tab="stats">สรุป</button>
+  </div>
+
+  <section data-panel="entry">
+    <div class="card">
+      <div class="notice info"><i class="bi bi-info-circle"></i> ถ้าเป็นปัญหา <b>เดิม</b> ที่เคยแจ้งแล้ว ให้กด <b>"เจออีกครั้ง"</b> ที่ปัญหานั้น (ระบบจะนับจำนวนครั้งและวันที่พบให้) — แจ้งใหม่เฉพาะปัญหาที่ยังไม่เคยมี</div>
+      <div class="form-group">
+        <label class="form-label">1. สาเหตุเกิดจาก</label>
+        <div class="choice-grid" id="catGrid"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">2. หัวข้อปัญหา</label>
+        <input class="form-input" id="title" maxlength="200" placeholder="เช่น ชิ้นงานเป็นรอยขีดข่วน, Mat ขนาดไม่ได้, ประกอบสลับด้าน">
+        <div id="similar" class="mt-2"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">3. เครื่องจักร</label><select class="form-input" id="machine"></select></div>
+        <div class="form-group"><label class="form-label">ผลิตภัณฑ์</label><select class="form-input" id="product"></select></div>
+        <div class="form-group"><label class="form-label">4. วันเวลาที่พบ</label><input type="datetime-local" class="form-input" id="at"></div>
+        <div class="form-group"><label class="form-label">จำนวน NG (ชิ้น)</label><input type="number" min="0" inputmode="numeric" class="form-input" id="qty" placeholder="0"></div>
+      </div>
+      <div class="form-group"><label class="form-label">5. รายละเอียด</label><textarea class="form-input" id="desc" rows="3" placeholder="อาการ / จุดที่พบ / สิ่งที่ทำไปแล้ว"></textarea></div>
+      <div class="form-group">
+        <label class="form-label">6. รูปหลักฐาน (สูงสุด 5 รูป)</label>
+        <div class="photo-upload-area">
+          <label class="photo-add-btn"><i class="bi bi-camera"></i>ถ่ายรูป<input type="file" accept="image/*" capture="environment" class="hidden" data-photo="photos"></label>
+          <label class="photo-add-btn"><i class="bi bi-images"></i>เลือกรูป<input type="file" accept="image/*" multiple class="hidden" data-photo="photos"></label>
+          <div class="photo-previews" id="photosPreview"></div>
+        </div>
+      </div>
+      <button class="btn btn-success btn-full btn-lg" id="save"><i class="bi bi-send"></i> แจ้งปัญหาใหม่</button>
+    </div>
+  </section>
+
+  <section data-panel="list" class="hidden">
+    <div class="card">
+      <div class="date-selector mb-2">
+        <input class="date-input" id="lQ" placeholder="ค้นหาหัวข้อ">
+        <select class="date-input" id="lStatus"><option value="active">ยังไม่ปิด</option><option value="">ทุกสถานะ</option><option value="open">เปิดอยู่</option><option value="monitoring">ติดตามผล</option><option value="closed">ปิดแล้ว</option></select>
+        <select class="date-input" id="lCat"></select>
+        <select class="date-input" id="lMachine"></select>
+        <button class="btn btn-outline btn-sm" id="lSearch"><i class="bi bi-search"></i> ค้นหา</button>
+      </div>
+      <div id="issueList" data-skeleton="list"></div>
+    </div>
+  </section>
+
+  <section data-panel="stats" class="hidden">
+    <div class="card">
+      <div class="date-selector mb-2"><input type="date" class="date-input" id="sFrom"> – <input type="date" class="date-input" id="sTo">
+        <button class="btn btn-outline btn-sm" id="sSearch">ดูสรุป</button></div>
+      <div class="kpi-grid" id="sKpi"></div>
+      <div class="grid-2"><div><div class="form-label">ตามสาเหตุ (ครั้ง)</div><div id="sCat"></div></div><div><div class="form-label">ปัญหาที่เกิดบ่อย (ครั้ง)</div><div id="sTop"></div></div></div>
+    </div>
+  </section>
+</div></main>
+
+<!-- เจออีกครั้ง -->
+<div class="modal-overlay" id="occModal"><div class="modal-content">
+  <button class="modal-close" data-close-modal>&times;</button>
+  <h3 class="modal-title">เจอปัญหานี้อีกครั้ง</h3>
+  <div class="fw-bold mb-2" id="oTitle"></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">วันเวลาที่พบ</label><input type="datetime-local" class="form-input" id="oAt"></div>
+    <div class="form-group"><label class="form-label">เครื่องจักร</label><select class="form-input" id="oMachine"></select></div>
+    <div class="form-group"><label class="form-label">ผลิตภัณฑ์</label><select class="form-input" id="oProduct"></select></div>
+    <div class="form-group"><label class="form-label">จำนวน NG (ชิ้น)</label><input type="number" min="0" inputmode="numeric" class="form-input" id="oQty" placeholder="0"></div>
+  </div>
+  <div class="form-group"><label class="form-label">รายละเอียดครั้งนี้</label><textarea class="form-input" id="oDetail" rows="2"></textarea></div>
+  <div class="form-group"><label class="form-label">รูปหลักฐาน</label>
+    <div class="photo-upload-area">
+      <label class="photo-add-btn"><i class="bi bi-camera"></i>ถ่ายรูป<input type="file" accept="image/*" capture="environment" class="hidden" data-photo="oPhotos"></label>
+      <label class="photo-add-btn"><i class="bi bi-images"></i>เลือกรูป<input type="file" accept="image/*" multiple class="hidden" data-photo="oPhotos"></label>
+      <div class="photo-previews" id="oPhotosPreview"></div>
+    </div>
+  </div>
+  <button class="btn btn-success btn-full btn-lg" id="oSave"><i class="bi bi-plus-circle"></i> บันทึกการพบ</button>
+</div></div>
+
+<!-- รายละเอียด -->
+<div class="modal-overlay" id="detailModal"><div class="modal-content">
+  <button class="modal-close" data-close-modal>&times;</button>
+  <h3 class="modal-title" id="dTitle"></h3>
+  <div id="dBody"></div>
+</div></div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async function () {
+  if (!UI.initPage('ngissue', 'ปัญหา NG', 'bi-exclamation-triangle')) return;
+  const $ = (id) => document.getElementById(id);
+  const isSup = Auth.hasRole('supervisor');
+  const reqIds = UI.requestIdKeeper(), oReqIds = UI.requestIdKeeper();
+  const DEFAULT_CATS = [
+    { key: 'machine', label: 'เครื่องจักร (Machine)' }, { key: 'material', label: 'วัตถุดิบ (Material)' },
+    { key: 'man', label: 'คน (Man)' }, { key: 'method', label: 'วิธีการ (Method)' },
+    { key: 'measurement', label: 'การวัด/ตรวจสอบ (Measurement)' }, { key: 'environment', label: 'สภาพแวดล้อม (Environment)' },
+    { key: 'other', label: 'อื่นๆ' }
+  ];
+  const CAT_ICONS = { machine: 'bi-gear-wide-connected', material: 'bi-box-seam', man: 'bi-person', method: 'bi-list-check', measurement: 'bi-rulers', environment: 'bi-thermometer-half', other: 'bi-three-dots' };
+  const STATUS = { open: ['เปิดอยู่', 'badge-open'], monitoring: ['ติดตามผล', 'badge-pending'], closed: ['ปิดแล้ว', 'badge-resolved'] };
+  let cats = DEFAULT_CATS, machines = [], products = [], issues = [], selCat = '', occIssue = null, detail = null;
+  const files = { photos: [], oPhotos: [] };
+
+  const catLabel = (k) => (cats.find((c) => c.key === k) || { label: k || '-' }).label;
+  const catShort = (k) => catLabel(k).replace(/\s*\(.*\)$/, '');
+  const mName = (id) => { const m = machines.find((x) => x.machineId === id); return m ? m.machineName : (id || '-'); };
+  const statusBadge = (s) => { const v = STATUS[s] || [s, '']; return `<span class="badge ${v[1]}">${UI.esc(v[0])}</span>`; };
+  const fmtDate = (d) => (d ? UI.formatDate(d) : '-');
+
+  // ---------- tabs ----------
+  function showTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach((x) => x.classList.toggle('active', x.dataset.tab === tab));
+    document.querySelectorAll('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== tab));
+    if (tab === 'list') loadList(); if (tab === 'stats') loadStats();
+  }
+  $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
+
+  // ---------- master ----------
+  async function loadMasters() {
+    const [cfg, m, p] = await Promise.all([UI.getLineConfig(), API.get('getMachines'), API.get('getProducts')]);
+    if (cfg && Array.isArray(cfg.ngIssueCategories) && cfg.ngIssueCategories.length) cats = cfg.ngIssueCategories;
+    machines = m.success ? m.data.filter((x) => x.installed) : [];
+    products = p.success ? p.data : [];
+    const mOpts = '<option value="">— ไม่ระบุ —</option>' + UI.machineOptions(machines);
+    const pOpts = '<option value="">— ไม่ระบุ —</option>' + products.map((x) => `<option value="${UI.esc(x.productCode)}">${UI.esc(x.productCode)} — ${UI.esc(x.productName || '')}</option>`).join('');
+    $('machine').innerHTML = mOpts; $('oMachine').innerHTML = mOpts;
+    $('product').innerHTML = pOpts; $('oProduct').innerHTML = pOpts;
+    $('lMachine').innerHTML = '<option value="">ทุกเครื่อง</option>' + UI.machineOptions(machines);
+    $('lCat').innerHTML = '<option value="">ทุกสาเหตุ</option>' + cats.map((c) => `<option value="${UI.esc(c.key)}">${UI.esc(catShort(c.key))}</option>`).join('');
+    renderCats();
+  }
+  function renderCats() {
+    $('catGrid').innerHTML = cats.map((c) => `<button type="button" class="choice-btn ${c.key === selCat ? 'active' : ''}" data-cat="${UI.esc(c.key)}"><i class="bi ${CAT_ICONS[c.key] || 'bi-tag'}"></i>${UI.esc(catShort(c.key))}</button>`).join('');
+  }
+  $('catGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (b) { selCat = b.dataset.cat; renderCats(); } });
+
+  // ---------- รูป ----------
+  async function addFiles(fileList, key) {
+    for (const f of [...fileList]) {
+      if (files[key].length >= 5) { UI.showToast('แนบได้สูงสุด 5 รูป', 'warning'); break; }
+      try { files[key].push(await API.compressImage(f, 1280, 1280, 0.72)); }
+      catch (e) { UI.showToast('อ่านไฟล์ ' + f.name + ' ไม่ได้ — ลองถ่าย/เลือกใหม่', 'error'); }
+    }
+    renderPreview(key);
+  }
+  function renderPreview(key) {
+    $(key + 'Preview').innerHTML = files[key].map((p, i) => `<div class="photo-thumb"><img src="${p.dataUrl}"><button data-rp="${i}">&times;</button></div>`).join('');
+  }
+  document.querySelectorAll('[data-photo]').forEach((inp) => inp.addEventListener('change', async () => { await addFiles(inp.files, inp.dataset.photo); inp.value = ''; }));
+  ['photos', 'oPhotos'].forEach((key) => $(key + 'Preview').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rp]'); if (b) { files[key].splice(Number(b.dataset.rp), 1); renderPreview(key); }
+  }));
+
+  // ---------- แจ้งปัญหาใหม่ ----------
+  // พิมพ์หัวข้อ → แสดงปัญหาเดิมที่คล้ายกัน (กันแจ้งซ้ำ)
+  let similarTimer = null;
+  $('title').addEventListener('input', () => { clearTimeout(similarTimer); similarTimer = setTimeout(renderSimilar, 250); });
+  function renderSimilar() {
+    const q = $('title').value.trim().toLowerCase();
+    const words = q.split(/\s+/).filter((w) => w.length >= 2);
+    const hits = words.length ? issues.filter((i) => words.some((w) => i.title.toLowerCase().includes(w))).slice(0, 5) : [];
+    $('similar').innerHTML = hits.length ? `<div class="small text-gray mb-1">ปัญหาที่คล้ายกัน — ถ้าใช่ กด "เจออีกครั้ง"</div>` + hits.map((i) => `
+      <div class="entry-card d-flex justify-between align-center gap-2"><div><div class="fw-bold">${UI.esc(i.title)}</div>
+      <div class="entry-meta">${UI.esc(catShort(i.category))} · พบ ${i.count} ครั้ง · ล่าสุด ${UI.esc(fmtDate(i.lastSeen))}</div></div>
+      <button class="btn btn-primary btn-sm" data-again="${UI.esc(i.issueId)}">เจออีกครั้ง</button></div>`).join('') : '';
+  }
+  $('similar').addEventListener('click', (e) => { const b = e.target.closest('[data-again]'); if (b) openOcc(b.dataset.again); });
+
+  $('save').onclick = () => UI.withButton($('save'), async () => {
+    const data = { category: selCat, title: $('title').value.trim(), machineId: $('machine').value, productCode: $('product').value,
+      occurredAt: $('at').value, ngQty: Number($('qty').value) || 0, description: $('desc').value.trim(), detail: $('desc').value.trim() };
+    if (!data.category) return UI.showToast('กรุณาเลือกสาเหตุ (ข้อ 1)', 'warning');
+    if (!data.title) return UI.showToast('กรุณากรอกหัวข้อปัญหา (ข้อ 2)', 'warning');
+    data.clientRequestId = reqIds.get(Object.assign({ n: files.photos.length }, data));
+    data.photos = files.photos;
+    const r = await API.postLarge('createNgIssue', { data });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    reqIds.reset();
+    selCat = ''; renderCats();
+    ['title', 'qty', 'desc'].forEach((id) => { $(id).value = ''; });
+    $('at').value = UI.nowLocalInput(); files.photos = []; renderPreview('photos'); $('similar').innerHTML = '';
+    UI.showToast('แจ้งปัญหาแล้ว', 'success');
+    await refreshIssues();
+  });
+
+  // ---------- เจออีกครั้ง ----------
+  function openOcc(issueId) {
+    occIssue = issues.find((i) => i.issueId === issueId) || (detail && detail.issueId === issueId ? detail : null);
+    if (!occIssue) return;
+    $('oTitle').innerHTML = `${UI.esc(occIssue.title)} <span class="small text-gray">(พบแล้ว ${occIssue.count} ครั้ง)</span>`;
+    $('oAt').value = UI.nowLocalInput(); $('oMachine').value = occIssue.machineId || ''; $('oProduct').value = occIssue.productCode || '';
+    $('oQty').value = ''; $('oDetail').value = ''; files.oPhotos = []; renderPreview('oPhotos'); oReqIds.reset();
+    UI.closeModal('detailModal');
+    UI.openModal('occModal');
+  }
+  $('oSave').onclick = () => UI.withButton($('oSave'), async () => {
+    const data = { issueId: occIssue.issueId, occurredAt: $('oAt').value, machineId: $('oMachine').value, productCode: $('oProduct').value,
+      ngQty: Number($('oQty').value) || 0, detail: $('oDetail').value.trim() };
+    data.clientRequestId = oReqIds.get(Object.assign({ n: files.oPhotos.length }, data));
+    data.photos = files.oPhotos;
+    const r = await API.postLarge('addNgOccurrence', { data });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    oReqIds.reset();
+    UI.closeModal('occModal');
+    UI.showToast(r.reopened ? 'บันทึกแล้ว — ปัญหานี้ถูกเปิดใหม่ (เคยปิดไปแล้ว)' : 'บันทึกการพบแล้ว', 'success');
+    $('title').value = ''; $('similar').innerHTML = '';
+    await refreshIssues();
+    if (!$('detailModal').classList.contains('show') && document.querySelector('.tab-btn.active').dataset.tab === 'list') renderList();
+  });
+
+  // ---------- รายการ ----------
+  async function refreshIssues() {
+    const r = await API.get('getNgIssues', { filters: {} }, { silent: true });
+    if (r.success) issues = r.data;
+    return r;
+  }
+  async function loadList() {
+    $('issueList').innerHTML = UI.loadingBlock();
+    const r = await refreshIssues();
+    if (!r.success) { $('issueList').innerHTML = ''; return UI.showToast(r.message, 'error'); }
+    renderList();
+  }
+  function renderList() {
+    const q = $('lQ').value.trim().toLowerCase(), st = $('lStatus').value, cat = $('lCat').value, mc = $('lMachine').value;
+    const list = issues.filter((i) => {
+      if (st === 'active' ? i.status === 'closed' : st && i.status !== st) return false;
+      if (cat && i.category !== cat) return false;
+      if (mc && i.machineId !== mc) return false;
+      if (q && !(i.title + ' ' + i.description).toLowerCase().includes(q)) return false;
+      return true;
+    });
+    $('issueList').innerHTML = list.map((i) => `
+      <div class="entry-card">
+        <div class="d-flex gap-2">
+          ${i.coverPhoto ? `<a class="photo-thumb" style="flex:none;width:64px;height:64px" href="${UI.esc(i.coverPhoto)}" target="_blank" rel="noopener"><img src="${UI.esc(i.coverPhoto)}" loading="lazy"></a>` : ''}
+          <div class="flex-1" style="min-width:0">
+            <div class="entry-head"><span>${UI.esc(i.title)}</span>${statusBadge(i.status)}</div>
+            <div class="entry-meta"><span class="badge">${UI.esc(catShort(i.category))}</span> ${i.machineId ? UI.esc(mName(i.machineId)) + ' · ' : ''}
+              <b class="text-danger">พบ ${i.count} ครั้ง</b> (${i.dayCount} วัน) · ล่าสุด ${UI.esc(fmtDate(i.lastSeen))}${i.totalNgQty ? ' · NG รวม ' + UI.formatNumber(i.totalNgQty) + ' ชิ้น' : ''}</div>
+          </div>
+        </div>
+        <div class="entry-actions">
+          <button class="btn btn-primary btn-sm" data-again="${UI.esc(i.issueId)}"><i class="bi bi-plus-circle"></i> เจออีกครั้ง</button>
+          <button class="btn btn-outline btn-sm" data-detail="${UI.esc(i.issueId)}"><i class="bi bi-card-list"></i> รายละเอียด / วันที่พบ</button>
+        </div>
+      </div>`).join('') || UI.emptyState('bi-check2-circle', 'ไม่มีปัญหาตามเงื่อนไขนี้');
+  }
+  $('lSearch').onclick = loadList;
+  ['lStatus', 'lCat', 'lMachine'].forEach((id) => $(id).addEventListener('change', renderList));
+  $('lQ').addEventListener('input', renderList);
+  $('issueList').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-again]'); if (a) return openOcc(a.dataset.again);
+    const d = e.target.closest('[data-detail]'); if (d) openDetail(d.dataset.detail);
+  });
+
+  // ---------- รายละเอียด ----------
+  async function openDetail(issueId) {
+    const r = await API.get('getNgIssueDetail', { issueId });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    detail = r.data; renderDetail(); UI.openModal('detailModal');
+  }
+  function renderDetail() {
+    const i = detail;
+    const img = (u) => `<a href="${UI.esc(u)}" target="_blank" rel="noopener" class="photo-thumb"><img src="${UI.esc(u)}" loading="lazy"></a>`;
+    $('dTitle').textContent = i.title;
+    const catOpts = cats.map((c) => `<option value="${UI.esc(c.key)}" ${c.key === i.category ? 'selected' : ''}>${UI.esc(c.label)}</option>`).join('');
+    const stOpts = Object.keys(STATUS).filter((s) => isSup || s !== 'closed' || i.status === 'closed')
+      .map((s) => `<option value="${s}" ${s === i.status ? 'selected' : ''}>${STATUS[s][0]}</option>`).join('');
+    $('dBody').innerHTML = `
+      <div class="kpi-grid mb-2">
+        <div class="kpi-card danger"><div class="kpi-value">${i.count}</div><div class="kpi-label">พบทั้งหมด (ครั้ง)</div></div>
+        <div class="kpi-card warning"><div class="kpi-value">${i.dayCount}</div><div class="kpi-label">จำนวนวันที่พบ</div></div>
+        <div class="kpi-card"><div class="kpi-value">${UI.formatNumber(i.totalNgQty)}</div><div class="kpi-label">NG รวม (ชิ้น)</div></div>
+      </div>
+      <div class="small mb-2">${statusBadge(i.status)} <span class="badge">${UI.esc(catLabel(i.category))}</span>
+        ${i.machineId ? ' · ' + UI.esc(mName(i.machineId)) : ''}${i.productCode ? ' · ' + UI.esc(i.productCode) : ''}
+        <div class="text-gray mt-1">แจ้งครั้งแรก ${UI.esc(fmtDate(i.firstSeen))} โดย ${UI.esc(i.creatorName)} · ${UI.esc(i.issueId)}</div></div>
+      <div class="form-label">วันที่พบปัญหา (${i.dayCount} วัน)</div>
+      <div class="chips mb-3">${i.dates.map((d) => `<span class="chip">${UI.esc(UI.formatDate(d))}</span>`).join('')}</div>
+      <button class="btn btn-primary btn-full mb-3" data-again="${UI.esc(i.issueId)}"><i class="bi bi-plus-circle"></i> เจออีกครั้ง</button>
+
+      <div class="form-label">ประวัติการพบ (ล่าสุดก่อน)</div>
+      ${i.occurrences.map((o, n) => `
+        <div class="entry-card">
+          <div class="entry-head"><span>ครั้งที่ ${i.count - n} · ${UI.esc(o.timestamp.slice(0, 16))}</span>
+            ${isSup && i.count > 1 ? `<button class="btn btn-outline btn-sm" data-delocc="${UI.esc(o.occurrenceId)}" title="ลบรายการที่บันทึกผิด"><i class="bi bi-trash"></i></button>` : ''}</div>
+          <div class="entry-meta">${UI.esc(UI.shiftLabel(o.shift))}${o.machineId ? ' · ' + UI.esc(mName(o.machineId)) : ''}${o.productCode ? ' · ' + UI.esc(o.productCode) : ''}${o.ngQty ? ' · NG ' + UI.formatNumber(o.ngQty) + ' ชิ้น' : ''} · ${UI.esc(o.recorderName)}</div>
+          ${o.detail ? `<div class="small mt-1" style="white-space:pre-wrap">${UI.esc(o.detail)}</div>` : ''}
+          ${o.photos.length ? `<div class="photo-previews mt-2">${o.photos.map(img).join('')}</div>` : ''}
+        </div>`).join('')}
+
+      <div class="form-label mt-3">วิเคราะห์ / แก้ไขปัญหา</div>
+      <div class="form-group"><label class="form-label">หัวข้อ</label><input class="form-input" id="eTitle" maxlength="200" value="${UI.esc(i.title)}"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">สาเหตุเกิดจาก</label><select class="form-input" id="eCat">${catOpts}</select></div>
+        <div class="form-group"><label class="form-label">สถานะ</label><select class="form-input" id="eStatus">${stOpts}</select></div>
+      </div>
+      <div class="form-group"><label class="form-label">สาเหตุที่แท้จริง (Root cause)</label><textarea class="form-input" id="eRoot" rows="2">${UI.esc(i.rootCause)}</textarea></div>
+      <div class="form-group"><label class="form-label">การแก้ไข / ป้องกัน (Countermeasure)</label><textarea class="form-input" id="eCm" rows="2">${UI.esc(i.countermeasure)}</textarea></div>
+      ${!isSup ? '<div class="small text-gray mb-2">ปิดปัญหาได้เฉพาะหัวหน้าขึ้นไป</div>' : ''}
+      ${i.closedAt ? `<div class="small text-gray mb-2">ปิดเมื่อ ${UI.esc(i.closedAt)} โดย ${UI.esc(i.closedBy)}</div>` : ''}
+      <button class="btn btn-success btn-full" id="eSave"><i class="bi bi-save"></i> บันทึกการวิเคราะห์</button>`;
+  }
+  $('dBody').addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-again]'); if (a) return openOcc(a.dataset.again);
+    const del = e.target.closest('[data-delocc]');
+    if (del) {
+      if (!await UI.confirm({ title: 'ลบการพบครั้งนี้?', message: 'ใช้เมื่อบันทึกผิดเท่านั้น', danger: true })) return;
+      const r = await API.post('deleteNgOccurrence', { occurrenceId: del.dataset.delocc });
+      if (!r.success) return UI.showToast(r.message, 'error');
+      UI.showToast('ลบแล้ว', 'success'); await refreshIssues(); return openDetail(detail.issueId);
+    }
+    if (e.target.closest('#eSave')) {
+      const btn = $('eSave');
+      UI.withButton(btn, async () => {
+        const updates = { title: $('eTitle').value.trim(), category: $('eCat').value, status: $('eStatus').value, rootCause: $('eRoot').value.trim(), countermeasure: $('eCm').value.trim() };
+        if (!updates.title) return UI.showToast('กรุณากรอกหัวข้อปัญหา', 'warning');
+        const r = await API.post('updateNgIssue', { issueId: detail.issueId, updates });
+        if (!r.success) return UI.showToast(r.message, 'error');
+        UI.showToast('บันทึกแล้ว', 'success'); UI.closeModal('detailModal');
+        await refreshIssues(); renderList();
+      });
+    }
+  });
+
+  // ---------- สรุป ----------
+  function bars(rows) {
+    const max = Math.max(1, ...rows.map((r) => r.value));
+    return rows.map((r) => `<div class="bar-row"><span title="${UI.esc(r.label)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${UI.esc(r.label)}</span><div class="bar" style="width:${r.value / max * 100}%"></div><span>${r.value}</span></div>`).join('') || '<div class="small text-gray">ไม่มีข้อมูล</div>';
+  }
+  async function loadStats() {
+    const r = await API.get('getNgIssues', { filters: { dateFrom: $('sFrom').value, dateTo: $('sTo').value } });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    const list = r.data;
+    const times = list.reduce((s, i) => s + i.count, 0), qty = list.reduce((s, i) => s + i.totalNgQty, 0);
+    const open = list.filter((i) => i.status !== 'closed').length;
+    $('sKpi').innerHTML = `<div class="kpi-card danger"><div class="kpi-value">${list.length}</div><div class="kpi-label">ปัญหาที่พบในช่วงนี้</div></div>
+      <div class="kpi-card warning"><div class="kpi-value">${times}</div><div class="kpi-label">จำนวนครั้งที่พบ</div></div>
+      <div class="kpi-card"><div class="kpi-value">${UI.formatNumber(qty)}</div><div class="kpi-label">NG รวม (ชิ้น)</div></div>
+      <div class="kpi-card success"><div class="kpi-value">${open}</div><div class="kpi-label">ยังไม่ปิด</div></div>`;
+    const byCat = {};
+    list.forEach((i) => { byCat[i.category] = (byCat[i.category] || 0) + i.count; });
+    $('sCat').innerHTML = bars(Object.keys(byCat).map((k) => ({ label: catShort(k), value: byCat[k] })).sort((a, b) => b.value - a.value));
+    $('sTop').innerHTML = bars(list.slice().sort((a, b) => b.count - a.count).slice(0, 10).map((i) => ({ label: i.title, value: i.count })));
+  }
+  $('sSearch').onclick = loadStats;
+
+  const today = UI.getToday();
+  $('at').value = UI.nowLocalInput();
+  $('sTo').value = today; $('sFrom').value = UI.addDays(today, -29);
+  UI.showLoading(); await loadMasters(); await refreshIssues(); UI.hideLoading();
+})();
+</script>
+</body>
+</html>

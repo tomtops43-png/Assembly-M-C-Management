@@ -229,7 +229,7 @@ const UI = (() => {
 
   // หมวดเมนูใน sidebar
   const NAV_SECTIONS = [
-    { label: 'งานประจำวัน', keys: ['production', 'dailycheck', 'maintenance', 'sorting', 'rawmaterial', 'waste', 'alarm', 'inbox'] },
+    { label: 'งานประจำวัน', keys: ['production', 'dailycheck', 'maintenance', 'sorting', 'rawmaterial', 'waste', 'ngissue', 'alarm', 'inbox'] },
     { label: 'วางแผน & วิเคราะห์', keys: ['joborders', 'machines', 'dashboard', 'cost', 'labor'] },
     { label: 'ระบบ', keys: ['admin'] }
   ];

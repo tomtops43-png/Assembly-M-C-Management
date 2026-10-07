@@ -22,6 +22,7 @@ window.APP_CONFIG = {
     { key: 'rawmaterial', label: 'รับวัตถุดิบ', icon: 'bi-box-seam', file: 'rawmaterial.html' },
     { key: 'sorting', label: 'คัดแยก', icon: 'bi-funnel', file: 'sorting.html' },
     { key: 'waste', label: 'ทิ้งขยะ', icon: 'bi-trash3', file: 'waste.html' },
+    { key: 'ngissue', label: 'ปัญหา NG', icon: 'bi-exclamation-triangle', file: 'ngissue.html' },
     { key: 'alarm', label: 'Alarm', icon: 'bi-bell', file: 'alarm.html' },
     { key: 'machines', label: 'เครื่องจักร', icon: 'bi-gear', file: 'machines.html' },
     { key: 'dashboard', label: 'Dashboard', icon: 'bi-graph-up', file: 'dashboard.html' },
