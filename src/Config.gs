@@ -23,6 +23,14 @@ var LINE_CONFIG = {
   DRIVE_FOLDER: 'Assembly_MC_Photos', // ใช้เมื่อเปิดโฟลเดอร์ตาม ID ไม่ได้ (สร้างใหม่ตามชื่อ)
   PHOTO_CATEGORIES: { maintenance: 'แจ้งซ่อม', rawmaterial: 'รับวัตถุดิบ', ngissue: 'ปัญหา NG' },
 
+  // ประเภทของเสีย (ตรงกับช่องติ๊กในใบนำส่งขยะ Scrap List) — หน้า "ทิ้งขยะ"
+  WASTE_CATEGORIES: [
+    { key: 'hazardous', label: 'ขยะอันตราย' },
+    { key: 'recycle', label: 'ขยะรีไซเคิล' },
+    { key: 'industrial', label: 'ขยะอุตสาหกรรมที่ไม่เป็นอันตราย (เศษเหลือใช้จากการผลิต)' },
+    { key: 'other', label: 'อื่น ๆ' }
+  ],
+
   NG_TARGET_PCT: 0.5, // เป้า NG% เริ่มต้น (แก้ได้จากหน้า ปัญหา NG > วิเคราะห์ — เก็บใน Script Properties)
 
   // หมวดสาเหตุปัญหา NG (6M) — หน้า "ปัญหา NG"
@@ -246,7 +254,7 @@ var SHEET_SCHEMAS = {
   Machines: ['MachineID', 'MachineName', 'Line', 'Status', 'AssignedProducts', 'CurrentProduct', 'Capacity', 'CurrentJobOrder', 'Installed', 'MachineGroup'],
   JobOrders: ['JobOrderID', 'CreatedAt', 'CreatedBy', 'CreatedByName', 'WorkDate', 'DueDate', 'MachineID', 'ProductCode', 'Shift', 'PlannedQty', 'Priority', 'Status', 'Remark'],
   NgReasons: ['ReasonID', 'ReasonName', 'MachineGroup', 'Active', 'CreatedAt', 'CreatedBy'],
-  WasteTypes: ['TypeID', 'TypeName', 'Active', 'CreatedAt', 'CreatedBy'],
+  WasteTypes: ['TypeID', 'TypeName', 'Active', 'CreatedAt', 'CreatedBy', 'Category'],
   AlarmTypes: ['TypeID', 'TypeName', 'Active', 'CreatedAt', 'CreatedBy'],
   Positions: ['PositionID', 'PositionName', 'Category', 'Active', 'CreatedAt', 'CreatedBy'],
 
@@ -256,7 +264,7 @@ var SHEET_SCHEMAS = {
   MaintenanceLog: ['TicketID', 'Timestamp', 'Date', 'ShiftAB', 'ShiftDN', 'ReportedBy', 'ReporterName', 'MachineID', 'IssueType', 'Description', 'Priority', 'Status', 'AssignedTo', 'ResolvedAt', 'DowntimeMinutes', 'Resolution', 'Photos', 'ResolutionPhotos', 'ClientRequestID', 'MmsJobNo', 'MmsStatus', 'MmsError'],
   RawMaterialLog: ['ReceiveID', 'Timestamp', 'Date', 'ReceivedBy', 'ReceiverName', 'MachineID', 'PartCode', 'SupplierCode', 'PartName', 'Specification', 'Quantity', 'Unit', 'LotNumber', 'Inspector', 'Customer', 'NetWeight', 'GrossWeight', 'CartonNo', 'PackingDate', 'RefNo', 'Remark', 'Photos', 'Status'],
   SortingLog: ['JobID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'MachineID', 'ProductCode', 'FoundProcess', 'TotalQty', 'GoodQty', 'DefectQty', 'DefectDetails', 'Status', 'RegisteredBy', 'RegisteredByName', 'SortedBy', 'SortedByName', 'PulledAt', 'CompletedAt', 'Remark', 'JobOrderID'],
-  WasteLog: ['WasteID', 'Timestamp', 'Date', 'RecordedBy', 'RecorderName', 'WasteType', 'WeightKg', 'Remark'],
+  WasteLog: ['WasteID', 'Timestamp', 'Date', 'RecordedBy', 'RecorderName', 'WasteType', 'WeightKg', 'Remark', 'Category'],
   NgIssues: ['IssueID', 'Title', 'Category', 'MachineID', 'ProductCode', 'Description', 'RootCause', 'Countermeasure', 'Status', 'CreatedAt', 'CreatedBy', 'CreatorName', 'UpdatedAt', 'UpdatedBy', 'ClosedAt', 'ClosedBy'],
   NgIssueLog: ['OccurrenceID', 'IssueID', 'Timestamp', 'Date', 'Shift', 'MachineID', 'ProductCode', 'NgQty', 'Detail', 'Photos', 'RecordedBy', 'RecorderName', 'ClientRequestID'],
   AlarmLog: ['AlarmID', 'Timestamp', 'Date', 'Shift', 'MachineID', 'AlarmType', 'Count', 'DurationMinutes', 'RecordedBy', 'RecorderName', 'Remark'],
@@ -275,7 +283,7 @@ function getPublicLineConfig() {
     defaultQty: c.DEFAULT_QTY, defectAggregate: c.DEFECT_AGGREGATE, ngRowSeparate: c.NG_ROW_SEPARATE,
     ngReasons: c.NG_REASONS, defectPartGroups: c.DEFECT_PART_GROUPS,
     sortingProcesses: c.SORTING_PROCESSES, sortingFgProcesses: c.SORTING_FG_PROCESSES,
-    issueTypes: c.ISSUE_TYPES, machineGroups: c.MACHINE_GROUPS, dailyCheck: c.DAILY_CHECK, modules: c.MODULES, ngIssueCategories: c.NG_ISSUE_CATEGORIES,
+    issueTypes: c.ISSUE_TYPES, machineGroups: c.MACHINE_GROUPS, dailyCheck: c.DAILY_CHECK, modules: c.MODULES, ngIssueCategories: c.NG_ISSUE_CATEGORIES, wasteCategories: c.WASTE_CATEGORIES,
     netHoursPerShift: c.NET_HOURS_PER_SHIFT, normalHoursPerShift: c.NORMAL_HOURS_PER_SHIFT, otHoursPerShift: c.OT_HOURS_PER_SHIFT,
     mms: c.MMS && c.MMS.ENABLED ? { webUrl: c.MMS.WEB_URL, area: c.MMS.AREA } : null
   };
