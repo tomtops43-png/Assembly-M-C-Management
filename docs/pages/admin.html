@@ -276,7 +276,8 @@
     if (del) {
       const p = products.find((x) => x.productCode === del.dataset.pdel);
       if (!await UI.confirm({ title: 'ลบสินค้า ' + del.dataset.pdel + '?', message: (p ? p.productName + ' — ' : '') + 'BOM จะถูกลบ และเอาออกจากทุกเครื่อง (ประวัติการผลิตยังอยู่)', danger: true })) return;
-      if (check(await API.post('deleteProduct', { productCode: del.dataset.pdel }))) { UI.showToast('ลบสินค้าแล้ว', 'success'); loadProducts(); }
+      if (check(await API.post('deleteProduct', { productCode: del.dataset.pdel }))) UI.showToast('ลบสินค้าแล้ว', 'success');
+      loadProducts();
       return;
     }
     if (ed) { const p = products.find((x) => x.productCode === ed.dataset.pedit); $('pCode').value = p.productCode; $('pName').value = p.productName; $('pQty').value = p.defaultQty; $('pCap').value = p.capacity || ''; window.scrollTo(0, 0); }
