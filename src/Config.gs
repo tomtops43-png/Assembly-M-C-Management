@@ -21,7 +21,18 @@ var LINE_CONFIG = {
   // https://drive.google.com/drive/folders/1dMBIj2vMWPtc46d0ijKoDfTaaddYEN4B
   DRIVE_FOLDER_ID: '1dMBIj2vMWPtc46d0ijKoDfTaaddYEN4B',
   DRIVE_FOLDER: 'Assembly_MC_Photos', // ใช้เมื่อเปิดโฟลเดอร์ตาม ID ไม่ได้ (สร้างใหม่ตามชื่อ)
-  PHOTO_CATEGORIES: { maintenance: 'แจ้งซ่อม', rawmaterial: 'รับวัตถุดิบ' },
+  PHOTO_CATEGORIES: { maintenance: 'แจ้งซ่อม', rawmaterial: 'รับวัตถุดิบ', ngissue: 'ปัญหา NG' },
+
+  // หมวดสาเหตุปัญหา NG (6M) — หน้า "ปัญหา NG"
+  NG_ISSUE_CATEGORIES: [
+    { key: 'machine', label: 'เครื่องจักร (Machine)' },
+    { key: 'material', label: 'วัตถุดิบ (Material)' },
+    { key: 'man', label: 'คน (Man)' },
+    { key: 'method', label: 'วิธีการ (Method)' },
+    { key: 'measurement', label: 'การวัด/ตรวจสอบ (Measurement)' },
+    { key: 'environment', label: 'สภาพแวดล้อม (Environment)' },
+    { key: 'other', label: 'อื่นๆ' }
+  ],
 
   // ---- ระบบซ่อมส่วนกลาง (Maintenance-Management-System) ----
   // แจ้งซ่อมที่นี่ → ส่งต่อเป็นใบ BM ใน MMS (พื้นที่ "Assembly M/C") และดึงสถานะกลับมา (ปิดงานที่ MMS = ปิดงานที่นี่)
@@ -189,7 +200,7 @@ var LINE_CONFIG = {
   // โมดูลที่เปิดใช้ (ปิดได้)  — cost/labor เปิดในเฟส 2
   MODULES: {
     production: true, dailycheck: true, inbox: true, maintenance: true, joborders: true,
-    rawmaterial: true, sorting: true, waste: true, alarm: true, machines: true,
+    rawmaterial: true, sorting: true, waste: true, alarm: true, ngissue: true, machines: true,
     dashboard: true, cost: false, labor: false, admin: true
   },
 
@@ -244,6 +255,8 @@ var SHEET_SCHEMAS = {
   RawMaterialLog: ['ReceiveID', 'Timestamp', 'Date', 'ReceivedBy', 'ReceiverName', 'MachineID', 'PartCode', 'SupplierCode', 'PartName', 'Specification', 'Quantity', 'Unit', 'LotNumber', 'Inspector', 'Customer', 'NetWeight', 'GrossWeight', 'CartonNo', 'PackingDate', 'RefNo', 'Remark', 'Photos', 'Status'],
   SortingLog: ['JobID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'MachineID', 'ProductCode', 'FoundProcess', 'TotalQty', 'GoodQty', 'DefectQty', 'DefectDetails', 'Status', 'RegisteredBy', 'RegisteredByName', 'SortedBy', 'SortedByName', 'PulledAt', 'CompletedAt', 'Remark', 'JobOrderID'],
   WasteLog: ['WasteID', 'Timestamp', 'Date', 'RecordedBy', 'RecorderName', 'WasteType', 'WeightKg', 'Remark'],
+  NgIssues: ['IssueID', 'Title', 'Category', 'MachineID', 'ProductCode', 'Description', 'RootCause', 'Countermeasure', 'Status', 'CreatedAt', 'CreatedBy', 'CreatorName', 'UpdatedAt', 'UpdatedBy', 'ClosedAt', 'ClosedBy'],
+  NgIssueLog: ['OccurrenceID', 'IssueID', 'Timestamp', 'Date', 'Shift', 'MachineID', 'ProductCode', 'NgQty', 'Detail', 'Photos', 'RecordedBy', 'RecorderName', 'ClientRequestID'],
   AlarmLog: ['AlarmID', 'Timestamp', 'Date', 'Shift', 'MachineID', 'AlarmType', 'Count', 'DurationMinutes', 'RecordedBy', 'RecorderName', 'Remark'],
   DailyCheckLog: ['CheckID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'TimePeriod', 'MachineID', 'Results', 'Decision', 'Remark', 'RecordedBy', 'RecorderName', 'Status', 'ClientRequestID', 'UpdatedAt', 'UpdatedBy', 'FormID', 'VerifiedBy', 'VerifiedAt'],
 
@@ -260,7 +273,7 @@ function getPublicLineConfig() {
     defaultQty: c.DEFAULT_QTY, defectAggregate: c.DEFECT_AGGREGATE, ngRowSeparate: c.NG_ROW_SEPARATE,
     ngReasons: c.NG_REASONS, defectPartGroups: c.DEFECT_PART_GROUPS,
     sortingProcesses: c.SORTING_PROCESSES, sortingFgProcesses: c.SORTING_FG_PROCESSES,
-    issueTypes: c.ISSUE_TYPES, machineGroups: c.MACHINE_GROUPS, dailyCheck: c.DAILY_CHECK, modules: c.MODULES,
+    issueTypes: c.ISSUE_TYPES, machineGroups: c.MACHINE_GROUPS, dailyCheck: c.DAILY_CHECK, modules: c.MODULES, ngIssueCategories: c.NG_ISSUE_CATEGORIES,
     netHoursPerShift: c.NET_HOURS_PER_SHIFT, normalHoursPerShift: c.NORMAL_HOURS_PER_SHIFT, otHoursPerShift: c.OT_HOURS_PER_SHIFT,
     mms: c.MMS && c.MMS.ENABLED ? { webUrl: c.MMS.WEB_URL, area: c.MMS.AREA } : null
   };

@@ -10,17 +10,17 @@ const Auth = (() => {
 
   const _roleDefaults = {
     viewer:      ['inbox', 'dashboard'],
-    operator:    ['production', 'inbox', 'maintenance', 'machines', 'waste', 'sorting', 'alarm', 'dailycheck'],
-    maintenance: ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'waste', 'sorting', 'alarm', 'dailycheck'],
-    supervisor:  ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'joborders', 'cost', 'waste', 'sorting', 'alarm', 'dailycheck', 'ngExport'],
-    admin:       ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin', 'joborders', 'cost', 'waste', 'sorting', 'alarm', 'dailycheck', 'ngExport']
+    operator:    ['production', 'inbox', 'maintenance', 'machines', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck'],
+    maintenance: ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck'],
+    supervisor:  ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'joborders', 'cost', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport'],
+    admin:       ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin', 'joborders', 'cost', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport']
   };
   const PERMISSION_KEYS = ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin',
-    'joborders', 'cost', 'labor', 'waste', 'sorting', 'alarm', 'dailycheck', 'ngExport'];
+    'joborders', 'cost', 'labor', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport'];
   const PERMISSION_LABELS = {
     production: 'กรอกยอด', inbox: 'Inbox', maintenance: 'แจ้งซ่อม', rawmaterial: 'รับวัตถุดิบ', machines: 'เครื่องจักร',
     dashboard: 'Dashboard', admin: 'จัดการ', joborders: 'วางแผนการผลิต', cost: 'ต้นทุน', labor: 'ค่าแรง',
-    waste: 'ทิ้งขยะ', sorting: 'คัดแยก', alarm: 'Alarm', dailycheck: 'Daily Check', ngExport: 'ส่งออก NG (QC)'
+    waste: 'ทิ้งขยะ', sorting: 'คัดแยก', alarm: 'Alarm', ngissue: 'ปัญหา NG', dailycheck: 'Daily Check', ngExport: 'ส่งออก NG (QC)'
   };
 
   const store = {
@@ -53,6 +53,8 @@ const Auth = (() => {
     if (page === 'inbox') return true;
     if (C.DISABLED_MODULES.includes(page)) return false;
     const perms = u.permissions || defaultPermissions(u.role);
+    // สิทธิ์ที่เพิ่มใหม่หลัง login (session เก่ายังไม่มี key นี้) → ใช้ค่า default ของ role — backend ตรวจซ้ำทุก request
+    if (perms[page] === undefined) return !!defaultPermissions(u.role)[page];
     return !!perms[page];
   }
 
