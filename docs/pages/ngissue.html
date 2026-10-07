@@ -15,13 +15,44 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 <link rel="stylesheet" href="../css/style.css">
+<style>
+  /* ---- วิเคราะห์ NG ---- */
+  .an-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .an-filters .date-input { min-width: 0; }
+  .an-target { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; font-size: 13.5px; }
+  .an-target input { width: 80px; }
+  .an-kpi .kpi-sub { font-size: 12px; margin-top: 4px; color: var(--gray); }
+  .an-kpi .kpi-sub.bad { color: var(--primary); } .an-kpi .kpi-sub.good { color: var(--success); }
+  .an-chart { position: relative; width: 100%; }
+  .an-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .an-chart .grid { stroke: var(--line); stroke-width: 1; }
+  .an-chart .axis-t { fill: var(--gray); font-size: 11px; font-family: var(--mono); }
+  .an-chart .hit { fill: transparent; cursor: pointer; }
+  .an-chart .hit:hover, .an-chart .hit.sel { fill: rgba(22,23,27,.05); }
+  .an-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-3); margin: 4px 0 8px; }
+  .an-legend i { display: inline-block; vertical-align: middle; margin-right: 5px; }
+  .an-tip { position: fixed; z-index: 2000; pointer-events: none; background: var(--ink); color: #fff; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.5; box-shadow: 0 6px 18px rgba(0,0,0,.2); max-width: 260px; display: none; }
+  .an-tip b { font-family: var(--mono); }
+  .an-pareto td:first-child { min-width: 170px; }
+  .an-pareto td.bar-cell { width: 22%; min-width: 60px; }
+  .an-bar { height: 10px; border-radius: 0 4px 4px 0; background: var(--ink-3); min-width: 2px; }
+  .an-bar.over { background: var(--primary); }
+  .an-pareto tr.vital td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+  .an-heat { border-collapse: separate; border-spacing: 2px; font-size: 11.5px; }
+  .an-heat th { font-weight: 600; color: var(--gray); white-space: nowrap; padding: 2px 4px; }
+  .an-heat th.d { writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--mono); font-weight: 500; height: 52px; }
+  .an-heat th.t { text-align: left; max-width: 220px; overflow: hidden; text-overflow: ellipsis; position: sticky; left: 0; background: #fff; z-index: 1; }
+  .an-heat td { width: 22px; min-width: 22px; height: 22px; text-align: center; border-radius: 4px; background: var(--bg); color: var(--ink); font-family: var(--mono); cursor: default; }
+  .an-heat td.hot { color: #fff; }
+  .an-day-photo { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; flex: none; }
+</style>
 </head>
 <body>
 <main class="main"><div class="container">
   <div class="tabs" id="tabs">
     <button class="tab-btn active" data-tab="entry">แจ้งปัญหา</button>
     <button class="tab-btn" data-tab="list">รายการปัญหา</button>
-    <button class="tab-btn" data-tab="stats">สรุป</button>
+    <button class="tab-btn" data-tab="stats">วิเคราะห์</button>
   </div>
 
   <section data-panel="entry">
@@ -70,11 +101,54 @@
 
   <section data-panel="stats" class="hidden">
     <div class="card">
-      <div class="date-selector mb-2"><input type="date" class="date-input" id="sFrom"> – <input type="date" class="date-input" id="sTo">
-        <button class="btn btn-outline btn-sm" id="sSearch">ดูสรุป</button></div>
-      <div class="kpi-grid" id="sKpi"></div>
-      <div class="grid-2"><div><div class="form-label">ตามสาเหตุ (ครั้ง)</div><div id="sCat"></div></div><div><div class="form-label">ปัญหาที่เกิดบ่อย (ครั้ง)</div><div id="sTop"></div></div></div>
+      <div class="an-filters">
+        <input type="date" class="date-input" id="aFrom"> – <input type="date" class="date-input" id="aTo">
+        <button class="date-btn" data-ad="7">7 วัน</button><button class="date-btn" data-ad="30">30 วัน</button><button class="date-btn" data-ad="90">90 วัน</button><button class="date-btn" data-ad="month">เดือนนี้</button>
+        <select class="date-input" id="aMachine"></select>
+        <select class="date-input" id="aProduct"></select>
+        <select class="date-input" id="aShift"><option value="">ทุกกะ</option><option value="Day">กะเช้า</option><option value="Night">กะดึก</option></select>
+        <button class="btn btn-primary btn-sm" id="aGo"><i class="bi bi-bar-chart"></i> วิเคราะห์</button>
+      </div>
+      <div class="an-target" id="aTargetBox"></div>
     </div>
+
+    <div class="kpi-grid an-kpi" id="aKpi"></div>
+
+    <div class="card">
+      <div class="card-title"><i class="bi bi-graph-up"></i> แนวโน้ม NG% รายวัน <span class="small text-gray" style="font-weight:400">· คลิกวันเพื่อดูว่าเจออะไร</span></div>
+      <div class="an-legend" id="aTrendLegend"></div>
+      <div class="an-chart" id="aTrend"></div>
+      <div class="form-label mt-3">ยอดผลิตรายวัน (FG + NG, ชิ้น)</div>
+      <div class="an-chart" id="aVolume"></div>
+      <details class="mt-2"><summary class="small text-gray" style="cursor:pointer">ดูเป็นตาราง</summary><div class="table-wrap mt-2"><table class="data-table" id="aDailyTable"></table></div></details>
+      <div id="aDay" class="mt-3"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><i class="bi bi-sort-down"></i> Pareto — ปัญหา NG (จากการแจ้งปัญหา)</div>
+        <div class="small text-gray mb-2">เรียงตามจำนวน NG · แถบแดงซ้าย = กลุ่มที่รวมกันเป็น ~80% ของ NG ควรแก้ก่อน</div>
+        <div class="table-wrap" id="aPareto"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="bi bi-clipboard-data"></i> Pareto — อาการ NG (จากหน้ากรอกยอด)</div>
+        <div class="small text-gray mb-2">NG ทุกชิ้นที่ลงในหน้ากรอกยอด แยกตามอาการที่เลือกตอนลงยอด</div>
+        <div class="table-wrap" id="aReasons"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="bi bi-grid-3x3"></i> วันไหนเจออะไร (ปัญหา × วันที่)</div>
+      <div class="small text-gray mb-2">ตัวเลข = จำนวนครั้งที่พบ · สียิ่งเข้ม = NG ยิ่งมาก · ดูรูปแบบ เช่น เจอเฉพาะต้นสัปดาห์ / หลังเปลี่ยนล็อต</div>
+      <div class="table-wrap" id="aHeat"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card"><div class="card-title"><i class="bi bi-gear"></i> NG% ตามเครื่อง</div><div class="table-wrap" id="aByMachine"></div></div>
+      <div class="card"><div class="card-title"><i class="bi bi-clock"></i> NG% ตามกะ</div><div class="table-wrap" id="aByShift"></div>
+        <div class="card-title mt-3"><i class="bi bi-diagram-3"></i> ปัญหาตามสาเหตุ (6M)</div><div class="table-wrap" id="aByCat"></div></div>
+    </div>
+    <div class="card"><div class="card-title"><i class="bi bi-box"></i> NG% ตามรุ่นสินค้า</div><div class="table-wrap" id="aByProduct"></div></div>
   </section>
 </div></main>
 
@@ -107,6 +181,7 @@
   <div id="dBody"></div>
 </div></div>
 
+<div class="an-tip" id="aTip"></div>
 <script src="../js/config.js"></script>
 <script src="../js/api.js"></script>
 <script src="../js/auth.js"></script>
@@ -350,31 +425,236 @@
     }
   });
 
-  // ---------- สรุป ----------
-  function bars(rows) {
-    const max = Math.max(1, ...rows.map((r) => r.value));
-    return rows.map((r) => `<div class="bar-row"><span title="${UI.esc(r.label)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${UI.esc(r.label)}</span><div class="bar" style="width:${r.value / max * 100}%"></div><span>${r.value}</span></div>`).join('') || '<div class="small text-gray">ไม่มีข้อมูล</div>';
+  // ---------- วิเคราะห์ ----------
+  let an = null, anSel = '';
+  const fmtPct = (v) => (Math.round(v * 100) / 100).toFixed(2) + '%';
+  const shortD = (d) => d.slice(8, 10) + '/' + d.slice(5, 7);
+  const tip = $('aTip');
+  function showTip(e, html) {
+    tip.innerHTML = html; tip.style.display = 'block';
+    const r = tip.getBoundingClientRect();
+    let x = e.clientX + 14, y = e.clientY + 14;
+    if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - 14;
+    if (y + r.height > window.innerHeight - 8) y = e.clientY - r.height - 14;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  }
+  const hideTip = () => { tip.style.display = 'none'; };
+
+  function anFilters() {
+    return { dateFrom: $('aFrom').value, dateTo: $('aTo').value, machineId: $('aMachine').value, productCode: $('aProduct').value, shift: $('aShift').value };
   }
   async function loadStats() {
-    const r = await API.get('getNgIssues', { filters: { dateFrom: $('sFrom').value, dateTo: $('sTo').value } });
+    if (!$('aMachine').options.length) {
+      $('aMachine').innerHTML = '<option value="">ทุกเครื่อง</option>' + UI.machineOptions(machines);
+      $('aProduct').innerHTML = '<option value="">ทุกรุ่น</option>' + products.map((x) => `<option value="${UI.esc(x.productCode)}">${UI.esc(x.productCode)}</option>`).join('');
+    }
+    const r = await API.get('getNgAnalytics', { filters: anFilters() }, { long: true });
     if (!r.success) return UI.showToast(r.message, 'error');
-    const list = r.data;
-    const times = list.reduce((s, i) => s + i.count, 0), qty = list.reduce((s, i) => s + i.totalNgQty, 0);
-    const open = list.filter((i) => i.status !== 'closed').length;
-    $('sKpi').innerHTML = `<div class="kpi-card danger"><div class="kpi-value">${list.length}</div><div class="kpi-label">ปัญหาที่พบในช่วงนี้</div></div>
-      <div class="kpi-card warning"><div class="kpi-value">${times}</div><div class="kpi-label">จำนวนครั้งที่พบ</div></div>
-      <div class="kpi-card"><div class="kpi-value">${UI.formatNumber(qty)}</div><div class="kpi-label">NG รวม (ชิ้น)</div></div>
-      <div class="kpi-card success"><div class="kpi-value">${open}</div><div class="kpi-label">ยังไม่ปิด</div></div>`;
-    const byCat = {};
-    list.forEach((i) => { byCat[i.category] = (byCat[i.category] || 0) + i.count; });
-    $('sCat').innerHTML = bars(Object.keys(byCat).map((k) => ({ label: catShort(k), value: byCat[k] })).sort((a, b) => b.value - a.value));
-    $('sTop').innerHTML = bars(list.slice().sort((a, b) => b.count - a.count).slice(0, 10).map((i) => ({ label: i.title, value: i.count })));
+    an = r.data; anSel = '';
+    $('aFrom').value = an.range.from; $('aTo').value = an.range.to;
+    renderAnalytics();
   }
-  $('sSearch').onclick = loadStats;
+  function renderAnalytics() {
+    renderTarget(); renderKpi(); renderTrend(); renderDailyTable(); renderDay();
+    renderPareto(); renderReasons(); renderHeat(); renderBreakdowns();
+  }
+
+  function renderTarget() {
+    const t = an.target;
+    $('aTargetBox').innerHTML = isSup
+      ? `<span>เป้า NG ไม่เกิน</span><input type="number" step="0.01" min="0.01" class="date-input" id="aTarget" value="${t}"><span>%</span><button class="btn btn-outline btn-sm" id="aTargetSave">บันทึกเป้า</button><span class="small text-gray">(= ${UI.formatNumber(Math.round(t * 10000))} ppm)</span>`
+      : `<span>เป้า NG ไม่เกิน <b>${t}%</b> (= ${UI.formatNumber(Math.round(t * 10000))} ppm)</span>`;
+  }
+  $('aTargetBox').addEventListener('click', (e) => {
+    if (!e.target.closest('#aTargetSave')) return;
+    UI.withButton($('aTargetSave'), async () => {
+      const v = Number($('aTarget').value);
+      const r = await API.post('setNgTarget', { target: v });
+      if (!r.success) return UI.showToast(r.message, 'error');
+      an.target = r.target; UI.showToast('บันทึกเป้าแล้ว', 'success'); renderAnalytics();
+    });
+  });
+
+  function renderKpi() {
+    const t = an.totals, p = an.prev, tg = an.target;
+    const over = t.total > 0 && t.ngPct > tg;
+    const diff = Math.round((t.ngPct - p.ngPct) * 100) / 100;
+    const cmp = p.total > 0 ? `<div class="kpi-sub ${diff > 0 ? 'bad' : diff < 0 ? 'good' : ''}">${diff > 0 ? '▲ แย่ลง' : diff < 0 ? '▼ ดีขึ้น' : '• เท่าเดิม'} ${diff > 0 ? '+' : ''}${diff.toFixed(2)} จากช่วงก่อน (${fmtPct(p.ngPct)})</div>` : '<div class="kpi-sub">ช่วงก่อนหน้าไม่มียอดผลิต</div>';
+    const s = an.issueSummary;
+    $('aKpi').innerHTML = `
+      <div class="kpi-card ${over ? 'danger' : 'success'}"><div class="kpi-value">${t.total ? fmtPct(t.ngPct) : '-'}</div>
+        <div class="kpi-label">NG% · เป้า ≤ ${tg}% ${t.total ? (over ? '<b class="text-danger">✕ เกินเป้า</b>' : '<b class="text-success">✓ ผ่านเป้า</b>') : ''}</div>${cmp}</div>
+      <div class="kpi-card"><div class="kpi-value">${UI.formatNumber(t.ppm)}</div><div class="kpi-label">ppm (NG ต่อล้านชิ้น)</div></div>
+      <div class="kpi-card"><div class="kpi-value">${UI.formatNumber(t.total)}</div><div class="kpi-label">ยอดผลิตรวม (FG ${UI.formatNumber(t.ok)} + NG ${UI.formatNumber(t.ng)})</div></div>
+      <div class="kpi-card warning"><div class="kpi-value">${s.issues}</div><div class="kpi-label">ปัญหาที่พบ (${s.occurrences} ครั้ง · NG ${UI.formatNumber(s.ngQty)} ชิ้น)</div><div class="kpi-sub">${s.open} ปัญหายังไม่ปิด</div></div>`;
+  }
+
+  // กราฟเส้น NG% + เส้นเป้า และกราฟแท่งยอดผลิต — ใช้แกน X ร่วมกัน (แยกกราฟ ไม่ใช้ 2 แกน Y)
+  function chartGeom(el) {
+    const W = Math.max(320, el.clientWidth || 600), padL = 44, padR = 12;
+    const n = an.daily.length, step = (W - padL - padR) / n;
+    return { W, padL, padR, n, step, cx: (i) => padL + step * i + step / 2 };
+  }
+  function xLabels(g, H) {
+    const every = Math.max(1, Math.ceil(g.n / Math.floor((g.W - g.padL) / 46)));
+    // ทุก ๆ `every` วัน นับถอยจากวันล่าสุด (วันล่าสุดมีป้ายเสมอ ไม่ชนกัน)
+    const show = (i) => (g.n - 1 - i) % every === 0;
+    return an.daily.map((d, i) => (show(i) ? `<text class="axis-t" x="${g.cx(i)}" y="${H - 4}" text-anchor="middle">${shortD(d.date)}</text>` : '')).join('');
+  }
+  function niceMax(v) {
+    if (v <= 0) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(v))), m = v / p;
+    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
+  }
+  function dayTip(d) {
+    const over = d.total > 0 && d.ngPct > an.target;
+    return `<div>${UI.formatDate(d.date)}</div>` + (d.total
+      ? `NG <b>${fmtPct(d.ngPct)}</b> ${over ? '— <b>เกินเป้า</b>' : ''}<br>NG ${UI.formatNumber(d.ng)} / ${UI.formatNumber(d.total)} ชิ้น`
+      : 'ไม่มียอดผลิต') + `<br>แจ้งปัญหา ${d.issueCount} ครั้ง${d.issueNg ? ' (NG ' + UI.formatNumber(d.issueNg) + ')' : ''}`;
+  }
+  function renderTrend() {
+    const tg = an.target;
+    $('aTrendLegend').innerHTML = `<span><i style="width:18px;height:2px;background:var(--ink)"></i>NG% รายวัน</span>
+      <span><i style="width:18px;border-top:2px dashed var(--gray)"></i>เป้า ${tg}%</span>
+      <span><i style="width:10px;height:10px;border-radius:50%;background:var(--primary)"></i>วันที่เกินเป้า</span>
+      <span><b style="color:var(--primary);margin-right:5px">▼</b>วันที่มีการแจ้งปัญหา</span>`;
+    // NG%
+    let el = $('aTrend'), g = chartGeom(el), H = 220, top = 10, bottom = H - 22;
+    const maxV = niceMax(Math.max(tg * 1.5, ...an.daily.map((d) => d.ngPct)));
+    const y = (v) => bottom - (v / maxV) * (bottom - top);
+    const ticks = [0, maxV / 4, maxV / 2, maxV * 3 / 4, maxV];
+    let svg = ticks.map((t) => `<line class="grid" x1="${g.padL}" x2="${g.W - g.padR}" y1="${y(t)}" y2="${y(t)}"/><text class="axis-t" x="${g.padL - 6}" y="${y(t) + 4}" text-anchor="end">${+t.toFixed(2)}%</text>`).join('');
+    svg += `<line x1="${g.padL}" x2="${g.W - g.padR}" y1="${y(tg)}" y2="${y(tg)}" stroke="var(--gray)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+    // เส้น: ข้ามวันที่ไม่มียอดผลิต (ไม่ลากผ่าน)
+    let path = '', pen = false;
+    an.daily.forEach((d, i) => { if (!d.total) { pen = false; return; } path += (pen ? 'L' : 'M') + g.cx(i).toFixed(1) + ' ' + y(d.ngPct).toFixed(1); pen = true; });
+    svg += `<path d="${path}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    an.daily.forEach((d, i) => {
+      if (!d.total) return;
+      const over = d.ngPct > tg;
+      svg += `<circle cx="${g.cx(i)}" cy="${y(d.ngPct)}" r="${over ? 5 : 3.5}" fill="${over ? 'var(--primary)' : 'var(--ink)'}" stroke="#fff" stroke-width="2"/>`;
+    });
+    an.daily.forEach((d, i) => { if (d.issueCount) svg += `<text x="${g.cx(i)}" y="${top + 2}" text-anchor="middle" font-size="11" fill="var(--primary)">▼</text>`; });
+    svg += xLabels(g, H);
+    svg += an.daily.map((d, i) => `<rect class="hit${anSel === d.date ? ' sel' : ''}" data-day="${d.date}" x="${g.padL + g.step * i}" y="${top}" width="${g.step}" height="${bottom - top}"/>`).join('');
+    el.innerHTML = `<svg viewBox="0 0 ${g.W} ${H}" role="img" aria-label="แนวโน้ม NG% รายวัน">${svg}</svg>`;
+    // ยอดผลิต
+    el = $('aVolume'); g = chartGeom(el); H = 120; top = 6; bottom = H - 22;
+    const maxT = niceMax(Math.max(...an.daily.map((d) => d.total)));
+    const yv = (v) => bottom - (v / maxT) * (bottom - top);
+    const bw = Math.max(2, Math.min(28, g.step - 2));
+    let svg2 = [0, maxT / 2, maxT].map((t) => `<line class="grid" x1="${g.padL}" x2="${g.W - g.padR}" y1="${yv(t)}" y2="${yv(t)}"/><text class="axis-t" x="${g.padL - 6}" y="${yv(t) + 4}" text-anchor="end">${t >= 1000 ? +(t / 1000).toFixed(1) + 'k' : t}</text>`).join('');
+    an.daily.forEach((d, i) => {
+      if (!d.total) return;
+      const x = g.cx(i) - bw / 2, h = bottom - yv(d.total), r = Math.min(4, bw / 2, h);
+      svg2 += `<path d="M${x} ${bottom}V${bottom - h + r}Q${x} ${bottom - h} ${x + r} ${bottom - h}H${x + bw - r}Q${x + bw} ${bottom - h} ${x + bw} ${bottom - h + r}V${bottom}Z" fill="var(--gray-light)"/>`;
+    });
+    svg2 += xLabels(g, H);
+    svg2 += an.daily.map((d, i) => `<rect class="hit${anSel === d.date ? ' sel' : ''}" data-day="${d.date}" x="${g.padL + g.step * i}" y="${top}" width="${g.step}" height="${bottom - top}"/>`).join('');
+    el.innerHTML = `<svg viewBox="0 0 ${g.W} ${H}" role="img" aria-label="ยอดผลิตรายวัน">${svg2}</svg>`;
+  }
+  ['aTrend', 'aVolume'].forEach((id) => {
+    $(id).addEventListener('mousemove', (e) => { const h = e.target.closest('[data-day]'); if (!h) return hideTip(); showTip(e, dayTip(an.daily.find((d) => d.date === h.dataset.day))); });
+    $(id).addEventListener('mouseleave', hideTip);
+    $(id).addEventListener('click', (e) => { const h = e.target.closest('[data-day]'); if (!h) return; anSel = anSel === h.dataset.day ? '' : h.dataset.day; hideTip(); renderTrend(); renderDay(); if (anSel) $('aDay').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+  });
+
+  function renderDailyTable() {
+    $('aDailyTable').innerHTML = '<thead><tr><th>วันที่</th><th class="num">ยอดผลิต</th><th class="num">NG</th><th class="num">NG%</th><th class="num">แจ้งปัญหา (ครั้ง)</th></tr></thead><tbody>' +
+      an.daily.slice().reverse().map((d) => `<tr><td>${UI.esc(UI.formatDate(d.date))}</td><td class="num">${UI.formatNumber(d.total)}</td><td class="num">${UI.formatNumber(d.ng)}</td>
+        <td class="num ${d.total && d.ngPct > an.target ? 'text-danger fw-bold' : ''}">${d.total ? fmtPct(d.ngPct) : '-'}</td><td class="num">${d.issueCount || ''}</td></tr>`).join('') + '</tbody>';
+  }
+
+  function renderDay() {
+    if (!anSel) { $('aDay').innerHTML = '<div class="small text-gray">เลือกวันจากกราฟเพื่อดูรายละเอียดของวันนั้น</div>'; return; }
+    const d = an.daily.find((x) => x.date === anSel);
+    const occ = an.occurrences.filter((o) => o.date === anSel);
+    $('aDay').innerHTML = `<div class="entry-card" style="border-color:var(--ink)">
+      <div class="entry-head"><span><i class="bi bi-calendar3"></i> ${UI.esc(UI.formatDate(anSel))}</span>
+        <span>${d.total ? `NG ${fmtPct(d.ngPct)} (${UI.formatNumber(d.ng)} / ${UI.formatNumber(d.total)})` : 'ไม่มียอดผลิต'}</span></div>
+      ${occ.length ? occ.map((o) => `<div class="d-flex gap-2 mt-2 align-center">
+          ${o.photo ? `<a href="${UI.esc(o.photo)}" target="_blank" rel="noopener"><img class="an-day-photo" src="${UI.esc(o.photo)}" loading="lazy"></a>` : ''}
+          <div class="flex-1" style="min-width:0"><a href="#" data-detail="${UI.esc(o.issueId)}" class="fw-bold">${UI.esc(o.title)}</a>
+          <div class="entry-meta">${UI.esc(o.timestamp.slice(11, 16))} · ${UI.esc(UI.shiftLabel(o.shift))} · ${UI.esc(catShort(o.category))}${o.machineId ? ' · ' + UI.esc(mName(o.machineId)) : ''}${o.ngQty ? ' · NG ' + UI.formatNumber(o.ngQty) + ' ชิ้น' : ''} · ${UI.esc(o.recorderName)}</div>
+          ${o.detail ? `<div class="small">${UI.esc(o.detail)}</div>` : ''}</div></div>`).join('')
+        : '<div class="small text-gray mt-2">ไม่มีการแจ้งปัญหาในวันนี้</div>'}</div>`;
+  }
+  $('aDay').addEventListener('click', (e) => { const a = e.target.closest('[data-detail]'); if (a) { e.preventDefault(); openDetail(a.dataset.detail); } });
+
+  function paretoTable(rows, cols) {
+    if (!rows.length) return '<div class="small text-gray">ไม่มีข้อมูลในช่วงนี้</div>';
+    const max = Math.max(1, ...rows.map(cols.value));
+    let prevCum = 0;
+    return `<table class="data-table an-pareto"><thead><tr><th>${cols.head}</th><th class="num">NG</th>${cols.extraHead || ''}<th></th><th class="num">% ของ NG</th><th class="num">สะสม</th><th class="num">% ยอดผลิต</th></tr></thead><tbody>` +
+      rows.map((r) => { const vital = prevCum < 80; prevCum = r.cumShare; return `<tr class="${vital ? 'vital' : ''}"${cols.attr ? cols.attr(r) : ''}><td style="white-space:normal">${cols.label(r)}</td><td class="num">${UI.formatNumber(cols.value(r))}</td>${cols.extra ? cols.extra(r) : ''}
+        <td class="bar-cell"><div class="an-bar ${vital ? 'over' : ''}" style="width:${cols.value(r) / max * 100}%"></div></td>
+        <td class="num">${r.share.toFixed(1)}%</td><td class="num">${r.cumShare.toFixed(1)}%</td><td class="num">${fmtPct(r.pctOfProduction)}</td></tr>`; }).join('') + '</tbody></table>';
+  }
+  function renderPareto() {
+    $('aPareto').innerHTML = paretoTable(an.pareto, {
+      head: 'ปัญหา', value: (r) => r.ngQty, extraHead: '<th class="num">ครั้ง</th>', extra: (r) => `<td class="num">${r.count}</td>`,
+      label: (r) => `<a href="#" data-detail="${UI.esc(r.issueId)}">${UI.esc(r.title)}</a> <span class="badge">${UI.esc(catShort(r.category))}</span>${r.status === 'closed' ? ' <span class="badge badge-resolved">ปิดแล้ว</span>' : ''}`
+    });
+  }
+  $('aPareto').addEventListener('click', (e) => { const a = e.target.closest('[data-detail]'); if (a) { e.preventDefault(); openDetail(a.dataset.detail); } });
+  function renderReasons() {
+    $('aReasons').innerHTML = paretoTable(an.reasons, { head: 'อาการ', value: (r) => r.ng, label: (r) => UI.esc(r.reason) });
+  }
+
+  function renderHeat() {
+    const top = an.pareto.slice(0, 15);
+    if (!top.length) { $('aHeat').innerHTML = '<div class="small text-gray">ไม่มีการแจ้งปัญหาในช่วงนี้</div>'; return; }
+    const days = an.daily.map((d) => d.date);
+    let maxNg = 1, maxCnt = 1;
+    top.forEach((p) => Object.values(an.matrix[p.issueId] || {}).forEach((c) => { maxNg = Math.max(maxNg, c.ngQty); maxCnt = Math.max(maxCnt, c.count); }));
+    const shade = (c) => { const k = c.ngQty ? c.ngQty / maxNg : c.count / maxCnt; return 0.18 + 0.82 * k; };
+    $('aHeat').innerHTML = `<table class="an-heat"><thead><tr><th class="t">ปัญหา</th>${days.map((d) => `<th class="d">${shortD(d)}</th>`).join('')}<th>รวม</th></tr></thead><tbody>` +
+      top.map((p) => `<tr><th class="t" title="${UI.esc(p.title)}">${UI.esc(p.title)}</th>` + days.map((d) => {
+        const c = (an.matrix[p.issueId] || {})[d];
+        if (!c) return '<td></td>';
+        const a = shade(c);
+        return `<td class="${a > 0.55 ? 'hot' : ''}" style="background:rgba(200,16,46,${a.toFixed(2)})" data-h="${UI.esc(p.title)}|${d}|${c.count}|${c.ngQty}">${c.count}</td>`;
+      }).join('') + `<td class="fw-bold" style="background:none">${p.count}</td></tr>`).join('') + '</tbody></table>' +
+      (an.pareto.length > 15 ? `<div class="small text-gray mt-1">แสดง 15 ปัญหาแรกจาก ${an.pareto.length}</div>` : '');
+  }
+  $('aHeat').addEventListener('mousemove', (e) => {
+    const c = e.target.closest('[data-h]'); if (!c) return hideTip();
+    const [t, d, n, q] = c.dataset.h.split('|');
+    showTip(e, `${UI.esc(t)}<br>${UI.esc(UI.formatDate(d))}<br>พบ <b>${n}</b> ครั้ง${Number(q) ? ' · NG <b>' + UI.formatNumber(Number(q)) + '</b> ชิ้น' : ''}`);
+  });
+  $('aHeat').addEventListener('mouseleave', hideTip);
+
+  function breakdownTable(rows, labelOf) {
+    if (!rows.length) return '<div class="small text-gray">ไม่มียอดผลิตในช่วงนี้</div>';
+    const max = Math.max(an.target, ...rows.map((r) => r.ngPct));
+    return '<table class="data-table"><thead><tr><th></th><th class="num">ยอดผลิต</th><th class="num">NG</th><th class="num">NG%</th><th style="width:30%"></th></tr></thead><tbody>' +
+      rows.map((r) => { const over = r.ngPct > an.target; return `<tr><td>${labelOf(r)}</td><td class="num">${UI.formatNumber(r.total)}</td><td class="num">${UI.formatNumber(r.ng)}</td>
+        <td class="num ${over ? 'text-danger fw-bold' : ''}">${fmtPct(r.ngPct)}${over ? ' ✕' : ''}</td>
+        <td style="position:relative"><div class="an-bar ${over ? 'over' : ''}" style="width:${max ? r.ngPct / max * 100 : 0}%"></div>
+          <div style="position:absolute;top:2px;bottom:2px;left:${max ? an.target / max * 100 : 0}%;border-left:1.5px dashed var(--gray)" title="เป้า ${an.target}%"></div></td></tr>`; }).join('') + '</tbody></table>';
+  }
+  function renderBreakdowns() {
+    $('aByMachine').innerHTML = breakdownTable(an.byMachine, (r) => UI.esc(r.label || r.key));
+    $('aByShift').innerHTML = breakdownTable(an.byShift, (r) => UI.esc(UI.shiftLabel(r.key)));
+    $('aByProduct').innerHTML = breakdownTable(an.byProduct, (r) => UI.esc(r.key));
+    $('aByCat').innerHTML = an.byCategory.length ? '<table class="data-table"><thead><tr><th>สาเหตุ</th><th class="num">ครั้ง</th><th class="num">NG (ชิ้น)</th></tr></thead><tbody>' +
+      an.byCategory.map((c) => `<tr><td>${UI.esc(catShort(c.category))}</td><td class="num">${c.count}</td><td class="num">${UI.formatNumber(c.ngQty)}</td></tr>`).join('') + '</tbody></table>'
+      : '<div class="small text-gray">ไม่มีการแจ้งปัญหาในช่วงนี้</div>';
+  }
+
+  document.querySelectorAll('[data-ad]').forEach((b) => b.addEventListener('click', () => {
+    const t = UI.getToday();
+    $('aTo').value = t;
+    $('aFrom').value = b.dataset.ad === 'month' ? t.slice(0, 8) + '01' : UI.addDays(t, -(Number(b.dataset.ad) - 1));
+    loadStats();
+  }));
+  $('aGo').onclick = () => UI.withButton($('aGo'), loadStats);
+  let anResize = null;
+  window.addEventListener('resize', () => { clearTimeout(anResize); anResize = setTimeout(() => { if (an && !$('aTrend').closest('.hidden')) renderTrend(); }, 200); });
 
   const today = UI.getToday();
   $('at').value = UI.nowLocalInput();
-  $('sTo').value = today; $('sFrom').value = UI.addDays(today, -29);
+  $('aTo').value = today; $('aFrom').value = UI.addDays(today, -29);
   UI.showLoading(); await loadMasters(); await refreshIssues(); UI.hideLoading();
 })();
 </script>

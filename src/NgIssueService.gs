@@ -179,3 +179,140 @@ function getNgIssueDetail(token, issueId) {
   issue.occurrences = occs.slice().reverse();
   return { success: true, data: issue };
 }
+
+// ---------- วิเคราะห์ NG (ใช้ยอดผลิตจาก ProductionLog เป็นตัวหาร) ----------
+var NG_TARGET_KEY = 'NG_TARGET_PCT';
+
+function getNgTarget() {
+  var v = Number(PropertiesService.getScriptProperties().getProperty(NG_TARGET_KEY));
+  return v > 0 ? v : toNumber(LINE_CONFIG.NG_TARGET_PCT, 0.5);
+}
+
+/** ตั้งเป้า NG% (หัวหน้าขึ้นไป) */
+function setNgTarget(token, pctValue) {
+  var u = requireRole(token, 'supervisor');
+  var v = Number(pctValue);
+  if (!(v > 0 && v <= 100)) throw new Error('เป้า NG% ต้องมากกว่า 0 และไม่เกิน 100');
+  PropertiesService.getScriptProperties().setProperty(NG_TARGET_KEY, String(v));
+  logAction(u, 'setNgTarget', { pct: v });
+  return { success: true, target: v };
+}
+
+function round2(n) { return Math.round(n * 100) / 100; }
+function ngPctOf(ng, total) { return total > 0 ? round2(ng / total * 100) : 0; }
+
+function daysBetween(from, to) {
+  return Math.round((parseDate(to + ' 12:00:00') - parseDate(from + ' 12:00:00')) / 86400000);
+}
+
+/** รวมยอดผลิต: ok = FG, ng = NG, total = FG + NG */
+function sumProduction(rows) {
+  var t = { ok: 0, ng: 0 };
+  rows.forEach(function (r) { t.ok += r.actualQty; t.ng += r.defectQty; });
+  t.total = t.ok + t.ng; t.ngPct = ngPctOf(t.ng, t.total); t.ppm = t.total > 0 ? Math.round(t.ng / t.total * 1e6) : 0;
+  return t;
+}
+
+/**
+ * filters: { dateFrom, dateTo, machineId, productCode, shift (Day|Night) }
+ * คืน: KPI + ช่วงก่อนหน้า, รายวัน, แยกเครื่อง/กะ/รุ่น, Pareto ปัญหา + อาการ NG จากหน้ากรอกยอด, ตารางวัน×ปัญหา, การพบในช่วงนั้น
+ */
+function getNgAnalytics(token, filters) {
+  requireLogin(token);
+  var f = filters || {};
+  var to = isValidDateStr(f.dateTo) ? f.dateTo : getWorkDate();
+  var from = isValidDateStr(f.dateFrom) ? f.dateFrom : addDays(to, -29);
+  if (from > to) { var tmp = from; from = to; to = tmp; }
+  var span = daysBetween(from, to) + 1;
+  if (span > 366) throw new Error('เลือกช่วงได้ไม่เกิน 1 ปี');
+  var pf = { machineId: f.machineId || '', productCode: f.productCode || '', shiftDN: f.shift || '' };
+
+  // ---- ยอดผลิต ----
+  var rows = queryProduction({ dateFrom: from, dateTo: to, machineId: pf.machineId, productCode: pf.productCode, shiftDN: pf.shiftDN });
+  var prevTo = addDays(from, -1), prevFrom = addDays(from, -span);
+  var prevRows = queryProduction({ dateFrom: prevFrom, dateTo: prevTo, machineId: pf.machineId, productCode: pf.productCode, shiftDN: pf.shiftDN });
+
+  var daily = {}, byMachine = {}, byShift = {}, byProduct = {}, byReason = {};
+  for (var d = from; d <= to; d = addDays(d, 1)) daily[d] = { date: d, ok: 0, ng: 0, issueCount: 0, issueNg: 0 };
+  var mNames = {};
+  getMachines().forEach(function (m) { mNames[m.machineId] = m.machineName; });
+  var add = function (map, key, extra) {
+    var o = map[key] = map[key] || Object.assign({ key: key, ok: 0, ng: 0 }, extra || {});
+    return o;
+  };
+  rows.forEach(function (r) {
+    var dd = daily[r.date]; if (dd) { dd.ok += r.actualQty; dd.ng += r.defectQty; }
+    [add(byMachine, r.machineId, { label: mNames[r.machineId] || r.machineId }), add(byShift, r.shiftDN || '-'), add(byProduct, r.productCode)]
+      .forEach(function (o) { o.ok += r.actualQty; o.ng += r.defectQty; });
+    if (r.defectQty > 0) { var reason = ngReasonOf(r.remark); byReason[reason] = (byReason[reason] || 0) + r.defectQty; }
+  });
+  var finish = function (map) {
+    return Object.keys(map).map(function (k) { var o = map[k]; o.total = o.ok + o.ng; o.ngPct = ngPctOf(o.ng, o.total); return o; })
+      .sort(function (a, b) { return b.ngPct - a.ngPct || b.ng - a.ng; });
+  };
+  var totals = sumProduction(rows), prev = sumProduction(prevRows);
+
+  // ---- ปัญหา NG ที่พบในช่วงนี้ ----
+  var issues = {};
+  getAllRows('NgIssues').map(ngIssueToObj).forEach(function (i) { issues[i.issueId] = i; });
+  var occs = getAllRows('NgIssueLog').map(ngOccurrenceToObj).filter(function (o) {
+    var i = issues[o.issueId];
+    if (!i || o.date < from || o.date > to) return false;
+    if (pf.machineId && (o.machineId || i.machineId) !== pf.machineId) return false;
+    if (pf.productCode && (o.productCode || i.productCode) !== pf.productCode) return false;
+    if (pf.shiftDN && o.shift !== pf.shiftDN) return false;
+    return true;
+  });
+  var byIssue = {}, byCategory = {}, matrix = {};
+  occs.forEach(function (o) {
+    var i = issues[o.issueId];
+    var bi = byIssue[o.issueId] = byIssue[o.issueId] || { issueId: o.issueId, title: i.title, category: i.category, status: i.status, count: 0, ngQty: 0, days: {} };
+    bi.count++; bi.ngQty += o.ngQty; bi.days[o.date] = true;
+    var bc = byCategory[i.category] = byCategory[i.category] || { category: i.category, count: 0, ngQty: 0 };
+    bc.count++; bc.ngQty += o.ngQty;
+    var dd = daily[o.date]; if (dd) { dd.issueCount++; dd.issueNg += o.ngQty; }
+    var mx = matrix[o.issueId] = matrix[o.issueId] || {};
+    var cell = mx[o.date] = mx[o.date] || { count: 0, ngQty: 0 };
+    cell.count++; cell.ngQty += o.ngQty;
+  });
+  var issueNgTotal = 0;
+  var pareto = Object.keys(byIssue).map(function (k) {
+    var b = byIssue[k]; b.dayCount = Object.keys(b.days).length; delete b.days; issueNgTotal += b.ngQty; return b;
+  }).sort(function (a, b) { return b.ngQty - a.ngQty || b.count - a.count; });
+  var cum = 0;
+  pareto.forEach(function (b) {
+    cum += b.ngQty;
+    b.share = issueNgTotal ? round2(b.ngQty / issueNgTotal * 100) : 0;
+    b.cumShare = issueNgTotal ? round2(cum / issueNgTotal * 100) : 0;
+    b.pctOfProduction = ngPctOf(b.ngQty, totals.total);
+  });
+  var reasonTotal = 0;
+  var reasons = Object.keys(byReason).map(function (k) { reasonTotal += byReason[k]; return { reason: k, ng: byReason[k] }; })
+    .sort(function (a, b) { return b.ng - a.ng; });
+  cum = 0;
+  reasons.forEach(function (r) {
+    cum += r.ng; r.share = reasonTotal ? round2(r.ng / reasonTotal * 100) : 0; r.cumShare = reasonTotal ? round2(cum / reasonTotal * 100) : 0;
+    r.pctOfProduction = ngPctOf(r.ng, totals.total);
+  });
+
+  return {
+    success: true,
+    data: {
+      range: { from: from, to: to, days: span, prevFrom: prevFrom, prevTo: prevTo },
+      target: getNgTarget(),
+      totals: totals, prev: prev,
+      issueSummary: { issues: pareto.length, occurrences: occs.length, ngQty: issueNgTotal,
+        open: pareto.filter(function (p) { return p.status !== 'closed'; }).length },
+      daily: Object.keys(daily).sort().map(function (k) { var o = daily[k]; o.total = o.ok + o.ng; o.ngPct = ngPctOf(o.ng, o.total); return o; }),
+      byMachine: finish(byMachine), byShift: finish(byShift), byProduct: finish(byProduct),
+      byCategory: Object.keys(byCategory).map(function (k) { return byCategory[k]; }).sort(function (a, b) { return b.ngQty - a.ngQty || b.count - a.count; }),
+      pareto: pareto, reasons: reasons, matrix: matrix,
+      occurrences: occs.map(function (o) {
+        var i = issues[o.issueId];
+        return { date: o.date, timestamp: o.timestamp, shift: o.shift, issueId: o.issueId, title: i.title, category: i.category,
+          machineId: o.machineId || i.machineId, productCode: o.productCode || i.productCode, ngQty: o.ngQty, detail: o.detail,
+          photo: o.photos[0] || '', recorderName: o.recorderName };
+      }).sort(function (a, b) { return a.timestamp < b.timestamp ? 1 : -1; })
+    }
+  };
+}
