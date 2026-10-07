@@ -112,14 +112,24 @@ function saveMachine(token, d) {
   var id = String(d.machineId || '').trim().toUpperCase();
   if (!id || !d.machineName) throw new Error('กรุณากรอกรหัสและชื่อเครื่อง');
   var exists = findRow('Machines', 'MachineID', id);
+  // assignedProducts (array) = รายการสินค้าที่ผลิตได้ทั้งหมด (ไม่ส่งมา = ไม่แก้)
+  var products = Array.isArray(d.assignedProducts)
+    ? d.assignedProducts.map(function (p) { return String(p || '').trim(); }).filter(function (p, i, a) { return p && a.indexOf(p) === i; })
+    : null;
   if (exists) {
-    updateRow('Machines', 'MachineID', id, {
-      MachineName: d.machineName, MachineGroup: d.group || '', Capacity: toNumber(d.capacity), Installed: d.installed !== false
-    });
+    var upd = { MachineName: d.machineName, MachineGroup: d.group || '', Capacity: toNumber(d.capacity) };
+    if (d.installed !== undefined) upd.Installed = d.installed !== false;
+    if (products) {
+      upd.AssignedProducts = products.join(', ');
+      // สินค้าที่กำลังผลิตถูกเอาออก → ล้างสินค้า/JO ปัจจุบัน
+      if (exists.CurrentProduct && products.indexOf(String(exists.CurrentProduct)) < 0) { upd.CurrentProduct = ''; upd.CurrentJobOrder = ''; }
+    }
+    updateRow('Machines', 'MachineID', id, upd);
   } else {
     appendRow('Machines', {
       MachineID: id, MachineName: d.machineName, Line: LINE_CONFIG.LINE_CODE, Status: 'running',
-      AssignedProducts: '', CurrentProduct: '', Capacity: toNumber(d.capacity), CurrentJobOrder: '',
+      AssignedProducts: (products || []).join(', '), CurrentProduct: products && products.length === 1 ? products[0] : '',
+      Capacity: toNumber(d.capacity), CurrentJobOrder: '',
       Installed: d.installed !== false, MachineGroup: d.group || ''
     });
   }

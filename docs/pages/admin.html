@@ -51,6 +51,7 @@
         <div class="form-group"><label class="form-label">ชื่อเครื่อง *</label><input class="form-input" id="mName"></div>
         <div class="form-group"><label class="form-label">Capacity (ชิ้น/ชม.)</label><input type="number" class="form-input" id="mCap"></div>
       </div>
+      <div class="form-group"><label class="form-label">สินค้าที่ผลิตได้ (ติ๊กเลือก)</label><div class="d-flex flex-wrap gap-2" id="mProducts"></div></div>
       <button class="btn btn-primary" id="mSave"><i class="bi bi-save"></i> บันทึก</button>
     </div>
     <div class="card"><div class="table-wrap"><table class="data-table" id="mTable"></table></div></div>
@@ -178,10 +179,13 @@
   });
 
   // ---------- machines ----------
+  let machineProducts = [];
   async function loadMachines() {
-    const r = await API.get('getMachines');
+    const [r, p] = await Promise.all([API.get('getMachines'), API.get('getProducts')]);
     if (!check(r)) return;
     machines = r.data;
+    if (p.success) machineProducts = p.data.map((x) => x.productCode);
+    renderMachineProducts($('mProducts').dataset.sel ? $('mProducts').dataset.sel.split(',') : []);
     $('groupList').innerHTML = [...new Set(machines.map((m) => m.group).filter(Boolean))].map((g) => `<option value="${UI.esc(g)}">`).join('');
     $('mTable').innerHTML = '<thead><tr><th>กลุ่ม</th><th>รหัส</th><th>ชื่อ</th><th>สถานะ</th><th class="num">Capacity</th><th>ติดตั้ง</th><th>สินค้าที่ผลิตได้</th><th></th></tr></thead><tbody>' +
       (machines.map((m) => `<tr><td>${UI.esc(m.group || '-')}</td><td>${UI.esc(m.machineId)}</td><td>${UI.esc(m.machineName)}</td><td><span class="badge badge-${m.status}">${UI.statusLabel(m.status)}</span></td>
@@ -192,10 +196,19 @@
             <button class="btn btn-outline btn-sm" data-mdel="${UI.esc(m.machineId)}"><i class="bi bi-trash"></i></button></td></tr>`).join('') ||
         '<tr><td colspan="8" class="text-center text-gray">ยังไม่มีเครื่องจักร</td></tr>') + '</tbody>';
   }
+  // สินค้าที่ผลิตได้: สินค้าที่ active + สินค้าที่เครื่องผูกไว้อยู่แล้ว (แม้ถูกปิดใช้)
+  function renderMachineProducts(selected) {
+    const codes = [...new Set(machineProducts.concat(selected))];
+    $('mProducts').dataset.sel = selected.join(',');
+    $('mProducts').innerHTML = codes.map((c) => `<label class="chip" style="background:var(--bg);color:var(--ink);cursor:pointer"><input type="checkbox" value="${UI.esc(c)}" ${selected.includes(c) ? 'checked' : ''}> ${UI.esc(c)}</label>`).join('') ||
+      '<span class="small text-gray">ยังไม่มีสินค้า — เพิ่มที่แท็บ "สินค้า / BOM"</span>';
+  }
   $('mSave').onclick = () => UI.withButton($('mSave'), async () => {
-    const r = await API.post('saveMachine', { data: { machineId: $('mId').value.trim().toUpperCase(), machineName: $('mName').value.trim(), group: $('mGroup').value.trim(), capacity: Number($('mCap').value) || 0 } });
+    const assignedProducts = [...$('mProducts').querySelectorAll('input:checked')].map((i) => i.value);
+    const r = await API.post('saveMachine', { data: { machineId: $('mId').value.trim().toUpperCase(), machineName: $('mName').value.trim(), group: $('mGroup').value.trim(), capacity: Number($('mCap').value) || 0, assignedProducts } });
     if (!check(r)) return;
     ['mId', 'mName', 'mCap', 'mGroup'].forEach((id) => { $(id).value = ''; });
+    renderMachineProducts([]);
     UI.showToast('บันทึกเครื่องจักรแล้ว', 'success'); loadMachines();
   });
   $('mTable').addEventListener('change', async (e) => {
@@ -207,7 +220,7 @@
   });
   $('mTable').addEventListener('click', async (e) => {
     const ed = e.target.closest('[data-medit]'), del = e.target.closest('[data-mdel]');
-    if (ed) { const m = machines.find((x) => x.machineId === ed.dataset.medit); $('mId').value = m.machineId; $('mName').value = m.machineName; $('mGroup').value = m.group || ''; $('mCap').value = m.capacity; window.scrollTo(0, 0); }
+    if (ed) { const m = machines.find((x) => x.machineId === ed.dataset.medit); $('mId').value = m.machineId; $('mName').value = m.machineName; $('mGroup').value = m.group || ''; $('mCap').value = m.capacity; renderMachineProducts(m.assignedProducts || []); window.scrollTo(0, 0); }
     if (del && await UI.confirm({ title: 'ลบเครื่อง ' + del.dataset.mdel + '?', message: 'ประวัติการผลิตยังอยู่', danger: true })) {
       if (check(await API.post('deleteMachine', { machineId: del.dataset.mdel }))) loadMachines();
     }
