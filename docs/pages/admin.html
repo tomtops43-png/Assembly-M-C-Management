@@ -246,7 +246,7 @@
   $('mTable').addEventListener('click', async (e) => {
     const ed = e.target.closest('[data-medit]'), del = e.target.closest('[data-mdel]');
     if (ed) { const m = machines.find((x) => x.machineId === ed.dataset.medit); $('mId').value = m.machineId; $('mName').value = m.machineName; $('mGroup').value = m.group || ''; $('mCap').value = m.capacity; renderMachineProducts(m.assignedProducts || []); window.scrollTo(0, 0); }
-    if (del && await UI.confirm({ title: 'ลบเครื่อง ' + del.dataset.mdel + '?', message: 'ประวัติการผลิตยังอยู่', danger: true })) {
+    if (del && await UI.confirm({ title: 'ลบเครื่อง ' + del.dataset.mdel + '?', message: 'ประวัติการผลิตยังอยู่\nถ้าแค่หยุดใช้ชั่วคราว ให้เอาติ๊ก "ติดตั้ง" ออกแทน', danger: true, okText: 'ลบเครื่อง' })) {
       if (check(await API.post('deleteMachine', { machineId: del.dataset.mdel }))) loadMachines();
     }
   });

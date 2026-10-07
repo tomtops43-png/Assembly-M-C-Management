@@ -58,6 +58,7 @@
     <div class="chips mt-2" id="mAssigned"></div>
   </div>
   <button class="btn btn-primary btn-full" id="mSave">บันทึกการตั้งค่า</button>
+  <button class="btn btn-outline btn-full mt-2 hidden" id="mDelete" style="color:var(--primary)"><i class="bi bi-trash"></i> ลบเครื่องจักรนี้</button>
 </div></div>
 
 <script src="../js/config.js"></script>
@@ -68,7 +69,7 @@
 (async function () {
   if (!UI.initPage('machines', 'สถานะเครื่องจักร', 'bi-gear')) return;
   const $ = (id) => document.getElementById(id);
-  const isSup = Auth.hasRole('supervisor');
+  const isSup = Auth.hasRole('supervisor'), isAdmin = Auth.hasRole('admin');
   let machines = [], products = [], joProgress = {}, current = null;
 
   async function load() {
@@ -116,6 +117,7 @@
     $('mStats').innerHTML = '<div class="small text-gray">กำลังโหลด...</div>';
     renderProducts(current.currentProduct);
     $('mAssign').classList.toggle('hidden', !isSup);
+    $('mDelete').classList.toggle('hidden', !isAdmin);
     renderAssigned();
     UI.openModal('mcModal');
     API.get('getMachineWithStats', { machineId: id }).then((r) => {
@@ -171,6 +173,16 @@
     current.assignedProducts = current.assignedProducts.filter((c) => c !== b.dataset.rm); renderAssigned(); renderProducts(selectedProduct());
   });
 
+  // ลบเครื่อง (admin) — ประวัติการผลิตยังอยู่; ถ้าแค่หยุดใช้ชั่วคราว ให้เอาติ๊ก "ติดตั้ง" ออกที่หน้าจัดการแทน
+  $('mDelete').onclick = async () => {
+    const m = current;
+    if (!await UI.confirm({ title: `ลบเครื่อง ${m.machineName} (${m.machineId})?`, message: 'เครื่องจะหายจากทุกหน้า — ประวัติการผลิตยังอยู่\nถ้าแค่หยุดใช้ชั่วคราว ให้เอาติ๊ก "ติดตั้ง" ออกที่หน้า จัดการ > เครื่องจักร แทน', danger: true, okText: 'ลบเครื่อง' })) return;
+    UI.withButton($('mDelete'), async () => {
+      const r = await API.post('deleteMachine', { machineId: m.machineId });
+      if (!r.success) return UI.showToast(r.message, 'error');
+      UI.closeModal('mcModal'); UI.showToast('ลบเครื่องแล้ว', 'success'); load(); loadProgress();
+    });
+  };
   $('mSave').onclick = () => UI.withButton($('mSave'), async () => {
     const prod = selectedProduct(), jo = $('mJo').value;
     if (prod !== current.currentProduct) {

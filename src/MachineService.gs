@@ -139,7 +139,7 @@ function saveMachine(token, d) {
 
 function deleteMachine(token, machineId) {
   var u = requireRole(token, 'admin');
-  deleteRow('Machines', 'MachineID', machineId);
+  if (!deleteRow('Machines', 'MachineID', machineId)) throw new Error('ไม่พบเครื่องจักร');
   logAction(u, 'deleteMachine', { machineId: machineId });
   return { success: true };
 }
