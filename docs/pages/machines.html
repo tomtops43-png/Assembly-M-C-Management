@@ -52,11 +52,6 @@
     <label class="form-label">Job Order</label>
     <select class="form-input" id="mJo"></select>
   </div>
-  <div id="mAssign" class="hidden form-group">
-    <label class="form-label">สินค้าที่เครื่องนี้ผลิตได้ (หัวหน้า)</label>
-    <div class="d-flex gap-2"><select class="form-input" id="mAssignSel"></select><button class="btn btn-outline" id="mAssignBtn">เพิ่ม</button></div>
-    <div class="chips mt-2" id="mAssigned"></div>
-  </div>
   <button class="btn btn-primary btn-full" id="mSave">บันทึกการตั้งค่า</button>
   <button class="btn btn-outline btn-full mt-2 hidden" id="mDelete" style="color:var(--primary)"><i class="bi bi-trash"></i> ลบเครื่องจักรนี้</button>
 </div></div>
@@ -69,7 +64,7 @@
 (async function () {
   if (!UI.initPage('machines', 'สถานะเครื่องจักร', 'bi-gear')) return;
   const $ = (id) => document.getElementById(id);
-  const isSup = Auth.hasRole('supervisor'), isAdmin = Auth.hasRole('admin');
+  const isAdmin = Auth.hasRole('admin');
   let machines = [], products = [], joProgress = {}, current = null;
 
   async function load() {
@@ -116,9 +111,7 @@
     $('mTitle').textContent = `${current.machineName} (${current.machineId})${current.group ? ' · ' + current.group : ''}`;
     $('mStats').innerHTML = '<div class="small text-gray">กำลังโหลด...</div>';
     renderProducts(current.currentProduct);
-    $('mAssign').classList.toggle('hidden', !isSup);
     $('mDelete').classList.toggle('hidden', !isAdmin);
-    renderAssigned();
     UI.openModal('mcModal');
     API.get('getMachineWithStats', { machineId: id }).then((r) => {
       if (!r.success) return;
@@ -152,26 +145,6 @@
       `<option value="${UI.esc(j.jobOrderId)}" ${j.jobOrderId === selected ? 'selected' : ''}>คิว ${j.queueNo || '-'} · ${UI.esc(j.jobOrderId)} · ${UI.formatNumber(j.plannedQty)} ชิ้น · ${UI.esc(j.priority)}${j.isTemp ? ' · ชั่วคราว' : ''}${mine(j) ? '' : ' · ใช้ร่วมกับ ' + UI.esc(j.machineIds.join(', '))}</option>`).join('');
   }
 
-  function renderAssigned() {
-    if (!isSup) return;
-    $('mAssignSel').innerHTML = products.filter((p) => !current.assignedProducts.includes(p.productCode))
-      .map((p) => `<option value="${UI.esc(p.productCode)}">${UI.esc(p.productCode)} — ${UI.esc(p.productName)}</option>`).join('') || '<option value="">(ไม่มีสินค้าเพิ่ม)</option>';
-    $('mAssigned').innerHTML = current.assignedProducts.map((c) => `<span class="chip">${UI.esc(c)} <button data-rm="${UI.esc(c)}">&times;</button></span>`).join('');
-  }
-  $('mAssignBtn').onclick = async () => {
-    const code = $('mAssignSel').value;
-    if (!code) return;
-    const r = await API.post('assignProductToMachine', { machineId: current.machineId, productCode: code });
-    if (!r.success) return UI.showToast(r.message, 'error');
-    current.assignedProducts.push(code); renderAssigned(); renderProducts(selectedProduct());
-  };
-  $('mAssigned').addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-rm]');
-    if (!b || !await UI.confirm({ title: 'นำสินค้าออกจากเครื่อง?', message: b.dataset.rm, danger: true, okText: 'นำออก' })) return;
-    const r = await API.post('removeProductFromMachine', { machineId: current.machineId, productCode: b.dataset.rm });
-    if (!r.success) return UI.showToast(r.message, 'error');
-    current.assignedProducts = current.assignedProducts.filter((c) => c !== b.dataset.rm); renderAssigned(); renderProducts(selectedProduct());
-  });
 
   // ลบเครื่อง (admin) — ประวัติการผลิตยังอยู่; ถ้าแค่หยุดใช้ชั่วคราว ให้เอาติ๊ก "ติดตั้ง" ออกที่หน้าจัดการแทน
   $('mDelete').onclick = async () => {
