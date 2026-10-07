@@ -23,6 +23,8 @@ var LINE_CONFIG = {
   DRIVE_FOLDER: 'Assembly_MC_Photos', // ใช้เมื่อเปิดโฟลเดอร์ตาม ID ไม่ได้ (สร้างใหม่ตามชื่อ)
   PHOTO_CATEGORIES: { maintenance: 'แจ้งซ่อม', rawmaterial: 'รับวัตถุดิบ', ngissue: 'ปัญหา NG' },
 
+  NG_TARGET_PCT: 0.5, // เป้า NG% เริ่มต้น (แก้ได้จากหน้า ปัญหา NG > วิเคราะห์ — เก็บใน Script Properties)
+
   // หมวดสาเหตุปัญหา NG (6M) — หน้า "ปัญหา NG"
   NG_ISSUE_CATEGORIES: [
     { key: 'machine', label: 'เครื่องจักร (Machine)' },
