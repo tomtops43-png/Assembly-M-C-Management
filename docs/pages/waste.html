@@ -12,9 +12,40 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Assembly M/C">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 <link rel="stylesheet" href="../css/style.css">
+<style>
+  /* ใบนำส่งขยะ (Scrap List) — ส่วนที่ออกเป็น PDF ใช้สีขาว-ดำตามฟอร์มต้นฉบับ */
+  #scrapPrintArea { overflow-x: auto; }
+  .scrap-doc { border: 2px solid #000; color: #000; background: #fff; min-width: 900px; font-family: 'Sarabun', 'IBM Plex Sans Thai', sans-serif; }
+  .scrap-doc-header { display: flex; align-items: center; gap: 16px; border-bottom: 2px solid #000; padding: 14px 16px; }
+  .scrap-doc-header img { width: 100px; height: 64px; object-fit: contain; flex-shrink: 0; }
+  .scrap-doc-header-text { flex: 1; text-align: center; line-height: 1.3; }
+  .scrap-doc-title { font-size: 17px; font-weight: 700; }
+  .scrap-doc-title-cn { font-size: 14px; font-weight: 700; }
+  .scrap-doc-meta { padding: 10px 16px; font-size: 13px; }
+  .scrap-doc-meta p { margin: 4px 0; }
+  .scrap-doc-types span { cursor: pointer; user-select: none; margin-right: 14px; }
+  .scrap-doc-input { border: none; border-bottom: 1px solid #000; outline: none; background: transparent; padding: 0 4px; font-size: 13px; font-family: inherit; min-height: 0; border-radius: 0; }
+  .scrap-doc-table { width: 100%; border-top: 2px solid #000; border-collapse: collapse; font-size: 12px; }
+  .scrap-doc-table th, .scrap-doc-table td { border-right: 2px solid #000; padding: 6px; color: #000; background: #fff; text-align: left; font-family: inherit; letter-spacing: 0; text-transform: none; }
+  .scrap-doc-table th { text-align: center; font-weight: 700; }
+  .scrap-doc-table th:last-child, .scrap-doc-table td:last-child { border-right: none; }
+  /* เส้นแนวนอนอยู่ที่ cell (html2canvas ไม่วาด border ของ <tr>) */
+  .scrap-doc-table thead th { border-bottom: 2px solid #000; }
+  .scrap-doc-table tbody td { border-bottom: 1px solid #000; height: 42px; }
+  .scrap-doc-table tbody tr:last-child td { border-bottom: none; }
+  .scrap-doc-table td[contenteditable]:focus { outline: 2px solid #3b82f6; outline-offset: -2px; }
+  .scrap-doc-table .cn-sub { font-size: 10px; color: #333; display: block; font-weight: 400; }
+  @media print {
+    body * { visibility: hidden; }
+    #scrapPrintArea, #scrapPrintArea * { visibility: visible; }
+    #scrapPrintArea { position: absolute; left: 0; top: 0; width: 100%; overflow: visible; }
+    .scrap-doc { min-width: 0; }
+    @page { size: A4 portrait; margin: 8mm; }
+  }
+</style>
 </head>
 <body>
 <main class="main"><div class="container">
@@ -38,7 +69,52 @@
         <button class="btn btn-outline btn-sm" id="search">ค้นหา</button>
       </div>
       <div class="table-wrap"><table class="data-table" id="hist"></table></div>
-      <div class="notice info mt-2">ใบนำส่งขยะ (Scrap List PDF) จะเพิ่มหลังได้รูปแบบเอกสารของไลน์นี้</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><i class="bi bi-file-earmark-pdf"></i> ใบนำส่งขยะ (Scrap List)</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">เดือน</label><input type="month" class="form-input" id="slMonth"></div>
+      <div class="form-group"><label class="form-label">ชนิดขยะ (ไม่บังคับ)</label><select class="form-input" id="slType"><option value="">-- ทั้งหมด --</option></select></div>
+    </div>
+    <div class="d-flex flex-wrap gap-2 mb-2">
+      <button class="btn btn-primary" id="slPdf"><i class="bi bi-download"></i> Export PDF</button>
+      <button class="btn btn-outline" id="slAddRow"><i class="bi bi-plus-lg"></i> เพิ่มแถว</button>
+      <button class="btn btn-outline" id="slPrint"><i class="bi bi-printer"></i> พิมพ์</button>
+    </div>
+    <div class="small text-gray mb-2">ข้อมูลดึงจากรายการทิ้งขยะของเดือนที่เลือก · คลิกช่องในตารางเพื่อแก้ไขก่อน Export ได้ · คลิก ☐ เพื่อติ๊กประเภทของเสีย</div>
+    <div id="scrapPrintArea">
+      <div class="scrap-doc" id="scrapDoc">
+        <div class="scrap-doc-header">
+          <img src="../icons/scrap-list-logo.jpg" alt="Logo">
+          <div class="scrap-doc-header-text">
+            <div class="scrap-doc-title">ใบนำส่งขยะและวัสดุเหลือใช้ภายในโรงงาน Scrap List</div>
+            <div class="scrap-doc-title-cn">厂内垃圾或边料余料搬运记录表</div>
+          </div>
+        </div>
+        <div class="scrap-doc-meta">
+          <p class="scrap-doc-types">ประเภทของเสีย / 废弃物类别: <span id="slTypes"></span></p>
+          <p>แผนก/ฝ่าย (ผู้นำส่งขยะ) Division/Dept. (Transfer by) 运搬部门:
+            <input id="slDiv" type="text" class="scrap-doc-input" style="width:160px;">
+            &nbsp;&nbsp;&nbsp; ประจำเดือน/ปี Monthly/Yearly 月/年:
+            <input id="slDocMonth" type="text" class="scrap-doc-input" style="width:120px;">
+            &nbsp;&nbsp;&nbsp; Page 页:
+            <input id="slPage" type="text" value="1" class="scrap-doc-input" style="width:44px;text-align:center;">
+          </p>
+        </div>
+        <table class="scrap-doc-table">
+          <thead><tr>
+            <th>วันที่ Date<span class="cn-sub">日期</span></th>
+            <th>ลำดับ No.<span class="cn-sub">序号</span></th>
+            <th>รายการ / รายละเอียดประเภทขยะ Description/ Rubbish Type<span class="cn-sub">项目/种类</span></th>
+            <th>จำนวน (กก.) q'ty<span class="cn-sub">数量</span></th>
+            <th>ผู้นำส่ง Transfered by<span class="cn-sub">搬运者</span></th>
+            <th>ผู้รับ Received by<span class="cn-sub">接收者</span></th>
+          </tr></thead>
+          <tbody id="slBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div></main>
@@ -97,8 +173,94 @@
   document.querySelectorAll('[data-days]').forEach((b) => b.onclick = () => { $('to').value = UI.getToday(); $('from').value = UI.addDays(UI.getToday(), -(Number(b.dataset.days) - 1)); loadHist(); });
   $('search').onclick = loadHist;
 
+  // ---------- ใบนำส่งขยะ (Scrap List) ----------
+  const SL_MIN_ROWS = 5, SL_DIV_KEY = APP_CONFIG.STORAGE_PREFIX + 'scrap_div';
+  const SL_CATS = [
+    { label: 'ขยะอันตราย 危险垃圾', match: (t) => t.includes('อันตราย') && !t.includes('ไม่') && !t.includes('อุตสาหกรรม') },
+    { label: 'ขยะรีไซเคิล 回收垃圾', match: (t) => t.includes('รีไซเคิล') },
+    { label: 'ขยะอุตสาหกรรมที่ไม่เป็นอันตราย (เศษเหลือใช้จากการผลิต) 非危险工业垃圾（如生产边料）', match: (t) => t.includes('อุตสาหกรรม') },
+    { label: 'อื่น ๆ (ระบุ) Other 其他 ____________', match: null }
+  ];
+  let slRows = [], slChecked = [false, false, false, false];
+  const slMonth = () => (/^\d{4}-\d{2}$/.test($('slMonth').value) ? $('slMonth').value : UI.getToday().slice(0, 7));
+  const slRowHtml = (cells) => '<tr>' + cells.map((c) => `<td contenteditable="true">${UI.esc(c)}</td>`).join('') + '</tr>';
+  function slRenderTypes() {
+    $('slTypes').innerHTML = SL_CATS.map((c, i) => `<span data-i="${i}">${slChecked[i] ? '☑' : '☐'} ${UI.esc(c.label)}</span>`).join('');
+  }
+  function slRender() {
+    const ft = $('slType').value;
+    const rows = ft ? slRows.filter((r) => r.wasteType === ft) : slRows;
+    const html = rows.map((r, i) => slRowHtml([r.date, i + 1, r.wasteType, Number(r.weightKg || 0).toFixed(2), r.recorderName, '']));
+    while (html.length < SL_MIN_ROWS) html.push(slRowHtml(['', '', '', '', '', '']));
+    $('slBody').innerHTML = html.join('');
+    slChecked = [false, false, false, false];
+    (ft ? [ft] : [...new Set(rows.map((r) => r.wasteType).filter(Boolean))]).forEach((t) => {
+      let idx = SL_CATS.findIndex((c) => c.match && c.match(t));
+      if (idx < 0) idx = 3;
+      slChecked[idx] = true;
+    });
+    slRenderTypes();
+  }
+  async function slLoad() {
+    const ym = slMonth(), [y, m] = ym.split('-');
+    $('slDocMonth').value = m + '/' + y;
+    const last = new Date(Number(y), Number(m), 0).getDate();
+    const r = await API.get('getWasteHistory', { filters: { dateFrom: ym + '-01', dateTo: ym + '-' + String(last).padStart(2, '0') } });
+    if (!r.success) { UI.showToast(r.message, 'error'); slRows = []; }
+    else slRows = r.data.slice().sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)));
+    const keep = $('slType').value;
+    const ts = [...new Set(slRows.map((x) => x.wasteType).filter(Boolean))];
+    $('slType').innerHTML = '<option value="">-- ทั้งหมด --</option>' + ts.map((t) => `<option>${UI.esc(t)}</option>`).join('');
+    if (ts.includes(keep)) $('slType').value = keep;
+    slRender();
+  }
+  function slLoadScript(src) {
+    return new Promise((resolve, reject) => {
+      if ([...document.scripts].some((x) => x.src === src)) return resolve();
+      const el = document.createElement('script'); el.src = src; el.onload = resolve; el.onerror = reject; document.head.appendChild(el);
+    });
+  }
+  async function slExportPdf() {
+    await slLoadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    await slLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    await document.fonts.ready;
+    const target = $('scrapDoc');
+    const canvas = await window.html2canvas(target, {
+      scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: target.scrollWidth, scrollX: 0, scrollY: 0,
+      onclone: (doc) => {
+        doc.querySelectorAll('.scrap-doc-input').forEach((inp) => {
+          const span = doc.createElement('span');
+          if (inp.value) { const pad = '\u00a0'.repeat(6); span.textContent = pad + inp.value + pad; span.style.textDecoration = 'underline'; span.style.textUnderlineOffset = '4px'; }
+          else span.textContent = '____________';
+          inp.parentNode.replaceChild(span, inp);
+        });
+      }
+    });
+    const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
+    const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight(), margin = 8;
+    const imgW = pageW - margin * 2, imgH = canvas.height * imgW / canvas.width;
+    const img = canvas.toDataURL('image/jpeg', 0.92);
+    pdf.addImage(img, 'JPEG', margin, margin, imgW, imgH);
+    let left = imgH - (pageH - margin);
+    while (left > 0) { pdf.addPage(); pdf.addImage(img, 'JPEG', margin, margin - (imgH - left), imgW, imgH); left -= pageH; }
+    const t = $('slType').value;
+    pdf.save('ScrapList_' + slMonth() + (t ? '_' + t.replace(/[\s/\\?%*:|"<>]+/g, '-') : '') + '.pdf');
+  }
+  $('slPdf').onclick = () => UI.withButton($('slPdf'), async () => {
+    try { await slExportPdf(); }
+    catch (e) { console.warn('PDF failed, fallback to print', e); UI.showToast('สร้าง PDF ไม่ได้ — เปิดหน้าพิมพ์แทน (เลือก "บันทึกเป็น PDF")', 'warning'); window.print(); }
+  });
+  $('slPrint').onclick = () => window.print();
+  $('slAddRow').onclick = () => { const b = $('slBody'); b.insertAdjacentHTML('beforeend', slRowHtml(['', b.rows.length + 1, '', '', '', ''])); };
+  $('slMonth').addEventListener('change', slLoad);
+  $('slType').addEventListener('change', slRender);
+  $('slTypes').addEventListener('click', (e) => { const x = e.target.closest('span[data-i]'); if (x) { slChecked[x.dataset.i] = !slChecked[x.dataset.i]; slRenderTypes(); } });
+  try { $('slDiv').value = localStorage.getItem(SL_DIV_KEY) || APP_CONFIG.LINE_NAME; } catch (e) { $('slDiv').value = APP_CONFIG.LINE_NAME; }
+  $('slDiv').addEventListener('change', () => { try { localStorage.setItem(SL_DIV_KEY, $('slDiv').value); } catch (e) {} });
+  $('slMonth').value = UI.getToday().slice(0, 7);
+
   $('at').value = UI.nowLocalInput(); $('to').value = UI.getToday(); $('from').value = UI.addDays(UI.getToday(), -6);
-  UI.showLoading(); await Promise.all([loadTypes(), loadToday(), loadHist()]); UI.hideLoading();
+  UI.showLoading(); await Promise.all([loadTypes(), loadToday(), loadHist(), slLoad()]); UI.hideLoading();
 })();
 </script>
 </body>
