@@ -34,10 +34,15 @@ function checkPin(user, pin) {
   return ('0000' + stored).slice(-4) === String(pin); // รองรับ PIN แบบเดิม (ไม่ได้ hash)
 }
 
+/** สถานะพนักงาน: active = ใช้งาน, suspended = ระงับชั่วคราว, resigned = พ้นสภาพ (ลาออก/เลิกจ้าง) */
+function userStatus(u) { return u.ResignedAt ? 'resigned' : isActiveValue(u.Active) ? 'active' : 'suspended'; }
+
 function publicUser(u) {
   return {
     employeeId: String(u.EmployeeID), name: u.Name, role: u.Role, shift: u.Shift || '',
-    active: isActiveValue(u.Active), permissions: resolvePermissions(u.Role, u.Permissions),
+    active: isActiveValue(u.Active) && !u.ResignedAt, status: userStatus(u),
+    resignedAt: u.ResignedAt || '', resignReason: u.ResignReason || '',
+    permissions: resolvePermissions(u.Role, u.Permissions),
     permissionOverrides: safeJson(u.Permissions, {}), createdAt: u.CreatedAt
   };
 }
@@ -48,6 +53,7 @@ function login(employeeId, pin) {
   if (!employeeId || !/^\d{4}$/.test(pin)) return { success: false, message: 'กรุณากรอกรหัสพนักงานและ PIN 4 หลัก' };
   var u = findRow('Users', 'EmployeeID', employeeId);
   if (!u) return { success: false, message: 'ไม่พบรหัสพนักงาน' };
+  if (u.ResignedAt) return { success: false, message: 'พนักงานพ้นสภาพแล้ว — เข้าระบบไม่ได้' };
   if (!isActiveValue(u.Active)) return { success: false, message: 'บัญชีถูกระงับ' };
   if (!checkPin(u, pin)) return { success: false, message: 'PIN ไม่ถูกต้อง' };
   cleanupExpiredSessions();
@@ -91,7 +97,7 @@ function getSessionUser(token) {
   var s = safeJson(raw, null);
   if (!s || s.expiry < Date.now()) return null;
   var u = findRow('Users', 'EmployeeID', s.employeeId);
-  if (!u || !isActiveValue(u.Active)) return null;
+  if (!u || !isActiveValue(u.Active) || u.ResignedAt) return null;
   return publicUser(u);
 }
 
@@ -157,7 +163,16 @@ function updateUser(token, employeeId, updates) {
     upd.Role = updates.role;
   }
   if (updates.shift !== undefined) upd.Shift = updates.shift;
-  if (updates.active !== undefined) upd.Active = !!updates.active;
+  if (updates.status !== undefined) {
+    if (updates.status === 'resigned') {
+      var rd = String(updates.resignedAt || '').trim() || formatDateOnly();
+      if (!isValidDateStr(rd)) throw new Error('วันที่พ้นสภาพไม่ถูกต้อง');
+      if (String(employeeId).toUpperCase() === String(admin.employeeId).toUpperCase()) throw new Error('ตั้งตัวเองเป็นพ้นสภาพไม่ได้');
+      upd.Active = false; upd.ResignedAt = rd; upd.ResignReason = String(updates.resignReason || '').trim();
+    } else if (updates.status === 'active' || updates.status === 'suspended') {
+      upd.Active = updates.status === 'active'; upd.ResignedAt = ''; upd.ResignReason = '';
+    } else throw new Error('สถานะไม่ถูกต้อง');
+  } else if (updates.active !== undefined) upd.Active = !!updates.active;
   if (updates.pin) {
     if (!/^\d{4}$/.test(String(updates.pin))) throw new Error('PIN ต้องเป็นตัวเลข 4 หลัก');
     upd.PIN = hashPin(employeeId, updates.pin);

@@ -237,7 +237,7 @@ var LINE_CONFIG = {
 
 /** โครงสร้างทุกชีท (แถว 1 = header) */
 var SHEET_SCHEMAS = {
-  Users: ['EmployeeID', 'Name', 'PIN', 'Role', 'Shift', 'Active', 'CreatedAt', 'Permissions'],
+  Users: ['EmployeeID', 'Name', 'PIN', 'Role', 'Shift', 'Active', 'CreatedAt', 'Permissions', 'ResignedAt', 'ResignReason'],
   Products: ['ProductCode', 'ProductName', 'DefaultQty', 'Active', 'UnitPrice', 'Capacity'],
   BOM: ['ProductCode', 'ComponentCode', 'ComponentName', 'QtyPerUnit', 'Supplier'],
   MaterialAlias: ['AliasCode', 'CanonicalCode', 'Note', 'Active'],

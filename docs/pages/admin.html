@@ -38,7 +38,10 @@
       </div>
       <button class="btn btn-primary" id="uAdd"><i class="bi bi-plus-lg"></i> เพิ่ม</button>
     </div>
-    <div class="card"><div class="table-wrap"><table class="data-table" id="uTable"></table></div></div>
+    <div class="card">
+      <label class="small d-flex align-center gap-1 mb-2"><input type="checkbox" id="uShowResigned"> แสดงพนักงานที่พ้นสภาพ <span id="uResignedCount"></span></label>
+      <div class="table-wrap"><table class="data-table" id="uTable"></table></div>
+    </div>
   </section>
 
   <!-- เครื่องจักร -->
@@ -98,7 +101,11 @@
     <div class="form-group"><label class="form-label">ชื่อ</label><input class="form-input" id="euName"></div>
     <div class="form-group"><label class="form-label">บทบาท</label><select class="form-input" id="euRole"></select></div>
     <div class="form-group"><label class="form-label">PIN ใหม่ (ว่าง = ไม่เปลี่ยน)</label><input class="form-input" id="euPin" inputmode="numeric" maxlength="4"></div>
-    <div class="form-group"><label class="form-label">สถานะ</label><select class="form-input" id="euActive"><option value="1">ใช้งาน</option><option value="0">ระงับ</option></select></div>
+    <div class="form-group"><label class="form-label">สถานะ</label><select class="form-input" id="euStatus"><option value="active">ใช้งาน</option><option value="suspended">ระงับชั่วคราว</option><option value="resigned">พ้นสภาพ (ลาออก / เลิกจ้าง)</option></select></div>
+  </div>
+  <div class="form-row hidden" id="euResignBox">
+    <div class="form-group"><label class="form-label">วันที่พ้นสภาพ</label><input type="date" class="form-input" id="euResignedAt"></div>
+    <div class="form-group"><label class="form-label">เหตุผล</label><input class="form-input" id="euResignReason" placeholder="เช่น ลาออก, หมดสัญญา"></div>
   </div>
   <div class="form-group">
     <label class="form-label d-flex justify-between">สิทธิ์การเข้าถึง <button class="btn btn-outline btn-sm" id="euReset">ค่า default ตามบทบาท</button></label>
@@ -142,12 +149,24 @@
     const r = await API.get('getAllUsers');
     if (!check(r)) return;
     users = r.data;
-    $('uTable').innerHTML = '<thead><tr><th>รหัส</th><th>ชื่อ</th><th>บทบาท</th><th>สิทธิ์</th><th>สถานะ</th><th></th></tr></thead><tbody>' +
-      users.map((u) => `<tr><td>${UI.esc(u.employeeId)}</td><td>${UI.esc(u.name)}</td><td>${Auth.ROLE_LABELS[u.role] || u.role}</td>
-        <td class="small">${Object.keys(u.permissions).filter((k) => u.permissions[k]).length} หน้า${Object.keys(u.permissionOverrides || {}).length ? ' *' : ''}</td>
-        <td><span class="badge ${u.active ? 'badge-running' : 'badge-down'}">${u.active ? 'ใช้งาน' : 'ระงับ'}</span></td>
-        <td><button class="btn btn-outline btn-sm" data-u="${UI.esc(u.employeeId)}">แก้ไข</button></td></tr>`).join('') + '</tbody>';
+    renderUsers();
   }
+  const USER_STATUS = { active: ['ใช้งาน', 'badge-running'], suspended: ['ระงับ', 'badge-down'], resigned: ['พ้นสภาพ', 'badge-closed'] };
+  const statusOf = (u) => u.status || (u.active ? 'active' : 'suspended');
+  function renderUsers() {
+    const showResigned = $('uShowResigned').checked;
+    const resigned = users.filter((u) => statusOf(u) === 'resigned').length;
+    $('uResignedCount').textContent = resigned ? `(${resigned} คน)` : '';
+    const rank = { active: 0, suspended: 1, resigned: 2 };
+    const list = users.filter((u) => showResigned || statusOf(u) !== 'resigned').sort((a, b) => rank[statusOf(a)] - rank[statusOf(b)]);
+    $('uTable').innerHTML = '<thead><tr><th>รหัส</th><th>ชื่อ</th><th>บทบาท</th><th>สิทธิ์</th><th>สถานะ</th><th></th></tr></thead><tbody>' +
+      list.map((u) => { const st = USER_STATUS[statusOf(u)]; return `<tr${statusOf(u) === 'resigned' ? ' style="opacity:.6"' : ''}><td>${UI.esc(u.employeeId)}</td><td>${UI.esc(u.name)}</td><td>${Auth.ROLE_LABELS[u.role] || u.role}</td>
+        <td class="small">${Object.keys(u.permissions).filter((k) => u.permissions[k]).length} หน้า${Object.keys(u.permissionOverrides || {}).length ? ' *' : ''}</td>
+        <td><span class="badge ${st[1]}">${st[0]}</span>${u.resignedAt ? `<div class="small text-gray">${UI.esc(UI.formatDate(u.resignedAt))}${u.resignReason ? ' · ' + UI.esc(u.resignReason) : ''}</div>` : ''}</td>
+        <td><button class="btn btn-outline btn-sm" data-u="${UI.esc(u.employeeId)}">แก้ไข</button></td></tr>`; }).join('') +
+      (list.length ? '' : '<tr><td colspan="6" class="text-center text-gray">ไม่มีพนักงาน</td></tr>') + '</tbody>';
+  }
+  $('uShowResigned').addEventListener('change', renderUsers);
   $('uAdd').onclick = () => UI.withButton($('uAdd'), async () => {
     const r = await API.post('addUser', { userData: { employeeId: $('uId').value.trim().toUpperCase(), name: $('uName').value.trim(), pin: $('uPin').value.trim(), role: $('uRole').value, shift: '' } });
     if (!check(r)) return;
@@ -162,16 +181,22 @@
     editingUser = users.find((u) => u.employeeId === id);
     $('euTitle').textContent = `แก้ไข ${editingUser.employeeId}`;
     $('euName').value = editingUser.name; $('euRole').value = editingUser.role; $('euPin').value = '';
-    $('euActive').value = editingUser.active ? '1' : '0';
+    $('euStatus').value = statusOf(editingUser);
+    $('euResignedAt').value = editingUser.resignedAt || UI.getToday(); $('euResignReason').value = editingUser.resignReason || '';
+    $('euResignBox').classList.toggle('hidden', statusOf(editingUser) !== 'resigned');
     renderPerms(editingUser.permissions);
     UI.openModal('userModal');
   }
+  $('euStatus').onchange = () => $('euResignBox').classList.toggle('hidden', $('euStatus').value !== 'resigned');
   $('euReset').onclick = () => renderPerms(Auth.defaultPermissions($('euRole').value));
   $('euRole').onchange = () => renderPerms(Auth.defaultPermissions($('euRole').value));
   $('euSave').onclick = () => UI.withButton($('euSave'), async () => {
     const role = $('euRole').value, defs = Auth.defaultPermissions(role), ov = {};
     document.querySelectorAll('[data-perm]').forEach((c) => { if (c.checked !== !!defs[c.dataset.perm]) ov[c.dataset.perm] = c.checked; });
-    const updates = { name: $('euName').value.trim(), role, shift: '', active: $('euActive').value === '1', permissions: Object.keys(ov).length ? ov : null };
+    const status = $('euStatus').value;
+    if (status === 'resigned' && statusOf(editingUser) !== 'resigned' &&
+      !await UI.confirm({ title: `ตั้ง ${editingUser.name} เป็นพ้นสภาพ?`, message: 'จะเข้าระบบไม่ได้ทันที (ประวัติการทำงานยังอยู่ — เปลี่ยนกลับเป็น "ใช้งาน" ได้ภายหลัง)', okText: 'ยืนยันพ้นสภาพ', danger: true })) return;
+    const updates = { name: $('euName').value.trim(), role, shift: '', status, resignedAt: $('euResignedAt').value, resignReason: $('euResignReason').value.trim(), permissions: Object.keys(ov).length ? ov : null };
     if ($('euPin').value) updates.pin = $('euPin').value.trim();
     const r = await API.post('updateUser', { employeeId: editingUser.employeeId, updates });
     if (!check(r)) return;
