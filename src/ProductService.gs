@@ -63,6 +63,33 @@ function saveProductBOM(token, productCode, components) {
   return { success: true };
 }
 
+/**
+ * ลบสินค้า + BOM ของสินค้านั้น + เอาออกจาก "สินค้าที่ผลิตได้" ของทุกเครื่อง
+ * ประวัติการผลิต/Job Order เก่ายังอยู่ — ห้ามลบถ้ายังมี Job Order ที่ยังไม่ปิดใช้สินค้านี้
+ */
+function deleteProduct(token, productCode) {
+  var u = requireRole(token, 'admin');
+  var code = String(productCode || '').trim();
+  if (!findRow('Products', 'ProductCode', code)) throw new Error('ไม่พบสินค้า');
+  var openJo = getAllRows('JobOrders').filter(function (r) {
+    return String(r.ProductCode) === code && r.Status !== 'completed' && r.Status !== 'cancelled';
+  });
+  if (openJo.length) {
+    throw new Error('ยังมี Job Order ที่ยังไม่ปิดใช้สินค้านี้ (' + openJo.map(function (r) { return r.JobOrderID; }).slice(0, 3).join(', ') +
+      (openJo.length > 3 ? ' ...' : '') + ') — ปิด/ยกเลิก Job Order ก่อน หรือแก้สถานะสินค้าเป็น "ปิด" แทน');
+  }
+  getMachines().forEach(function (m) {
+    if (m.assignedProducts.indexOf(code) < 0 && m.currentProduct !== code) return;
+    var upd = { AssignedProducts: m.assignedProducts.filter(function (p) { return p !== code; }).join(', ') };
+    if (m.currentProduct === code) { upd.CurrentProduct = ''; upd.CurrentJobOrder = ''; }
+    updateRow('Machines', 'MachineID', m.machineId, upd);
+  });
+  deleteRows('BOM', function (r) { return String(r.ProductCode) === code; });
+  deleteRow('Products', 'ProductCode', code);
+  logAction(u, 'deleteProduct', { productCode: code });
+  return { success: true };
+}
+
 function updateProductUnitPrice(token, productCode, unitPrice) {
   var u = requireLogin(token);
   if (['admin', 'supervisor'].indexOf(u.role) < 0) throw new Error('ไม่มีสิทธิ์ทำรายการนี้');
