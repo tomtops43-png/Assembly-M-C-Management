@@ -67,26 +67,36 @@ function saveProductBOM(token, productCode, components) {
  * ลบสินค้า + BOM ของสินค้านั้น + เอาออกจาก "สินค้าที่ผลิตได้" ของทุกเครื่อง
  * ประวัติการผลิต/Job Order เก่ายังอยู่ — ห้ามลบถ้ายังมี Job Order ที่ยังไม่ปิดใช้สินค้านี้
  */
+/** เทียบรหัสโดยไม่สนช่องว่าง/อักขระซ่อน (space, NBSP, zero-width) และตัวพิมพ์ — รหัสที่วางจากที่อื่นมักติดมา */
+function normCode(c) { return String(c === undefined || c === null ? '' : c).replace(/[\s\u00a0\u200b-\u200d\ufeff]/g, '').toUpperCase(); }
+
 function deleteProduct(token, productCode) {
   var u = requireRole(token, 'admin');
-  var code = String(productCode || '').trim();
-  if (!findRow('Products', 'ProductCode', code)) throw new Error('ไม่พบสินค้า');
+  var key = normCode(productCode);
+  var same = function (c) { return normCode(c) === key; };
+  if (!key) throw new Error('ไม่พบสินค้า');
+  var rows = getAllRows('Products').filter(function (r) { return same(r.ProductCode); });
+  if (!rows.length) {
+    afterWrite('Products'); // รายการบนหน้าเว็บอาจมาจาก cache เก่า (เช่น แก้ชีทตรง) → ล้าง cache ให้โหลดใหม่
+    throw new Error('ไม่พบสินค้า ' + productCode + ' ในชีท (อาจถูกลบ/แก้รหัสไปแล้ว) — รายการจะรีเฟรชใหม่');
+  }
   var openJo = getAllRows('JobOrders').filter(function (r) {
-    return String(r.ProductCode) === code && r.Status !== 'completed' && r.Status !== 'cancelled';
+    return same(r.ProductCode) && r.Status !== 'completed' && r.Status !== 'cancelled';
   });
   if (openJo.length) {
     throw new Error('ยังมี Job Order ที่ยังไม่ปิดใช้สินค้านี้ (' + openJo.map(function (r) { return r.JobOrderID; }).slice(0, 3).join(', ') +
       (openJo.length > 3 ? ' ...' : '') + ') — ปิด/ยกเลิก Job Order ก่อน หรือแก้สถานะสินค้าเป็น "ปิด" แทน');
   }
   getMachines().forEach(function (m) {
-    if (m.assignedProducts.indexOf(code) < 0 && m.currentProduct !== code) return;
-    var upd = { AssignedProducts: m.assignedProducts.filter(function (p) { return p !== code; }).join(', ') };
-    if (m.currentProduct === code) { upd.CurrentProduct = ''; upd.CurrentJobOrder = ''; }
+    var hit = m.assignedProducts.some(same) || (m.currentProduct && same(m.currentProduct));
+    if (!hit) return;
+    var upd = { AssignedProducts: m.assignedProducts.filter(function (p) { return !same(p); }).join(', ') };
+    if (m.currentProduct && same(m.currentProduct)) { upd.CurrentProduct = ''; upd.CurrentJobOrder = ''; }
     updateRow('Machines', 'MachineID', m.machineId, upd);
   });
-  deleteRows('BOM', function (r) { return String(r.ProductCode) === code; });
-  deleteRow('Products', 'ProductCode', code);
-  logAction(u, 'deleteProduct', { productCode: code });
+  deleteRows('BOM', function (r) { return same(r.ProductCode); });
+  deleteRows('Products', function (r) { return same(r.ProductCode); });
+  logAction(u, 'deleteProduct', { productCode: String(rows[0].ProductCode) });
   return { success: true };
 }
 
