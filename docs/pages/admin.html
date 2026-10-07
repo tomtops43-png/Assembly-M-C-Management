@@ -236,7 +236,8 @@
         <td class="small">${p.bom.map((b) => UI.esc(b.componentCode)).join(', ') || '<span class="text-danger">ยังไม่มี</span>'}</td>
         <td><span class="badge ${p.active ? 'badge-running' : 'badge-closed'}">${p.active ? 'ใช้งาน' : 'ปิด'}</span></td>
         <td><button class="btn btn-outline btn-sm" data-pedit="${UI.esc(p.productCode)}"><i class="bi bi-pencil"></i></button>
-            <button class="btn btn-outline btn-sm" data-bom="${UI.esc(p.productCode)}">BOM</button></td></tr>`).join('') ||
+            <button class="btn btn-outline btn-sm" data-bom="${UI.esc(p.productCode)}">BOM</button>
+            <button class="btn btn-outline btn-sm" data-pdel="${UI.esc(p.productCode)}" title="ลบสินค้า"><i class="bi bi-trash"></i></button></td></tr>`).join('') ||
         '<tr><td colspan="7" class="text-center text-gray">ยังไม่มีสินค้า</td></tr>') + '</tbody>';
   }
   $('pSave').onclick = () => UI.withButton($('pSave'), async () => {
@@ -245,8 +246,14 @@
     ['pCode', 'pName', 'pQty', 'pCap'].forEach((id) => { $(id).value = ''; });
     UI.showToast('บันทึกสินค้าแล้ว', 'success'); loadProducts();
   });
-  $('pTable').addEventListener('click', (e) => {
-    const ed = e.target.closest('[data-pedit]'), bom = e.target.closest('[data-bom]');
+  $('pTable').addEventListener('click', async (e) => {
+    const ed = e.target.closest('[data-pedit]'), bom = e.target.closest('[data-bom]'), del = e.target.closest('[data-pdel]');
+    if (del) {
+      const p = products.find((x) => x.productCode === del.dataset.pdel);
+      if (!await UI.confirm({ title: 'ลบสินค้า ' + del.dataset.pdel + '?', message: (p ? p.productName + ' — ' : '') + 'BOM จะถูกลบ และเอาออกจากทุกเครื่อง (ประวัติการผลิตยังอยู่)', danger: true })) return;
+      if (check(await API.post('deleteProduct', { productCode: del.dataset.pdel }))) { UI.showToast('ลบสินค้าแล้ว', 'success'); loadProducts(); }
+      return;
+    }
     if (ed) { const p = products.find((x) => x.productCode === ed.dataset.pedit); $('pCode').value = p.productCode; $('pName').value = p.productName; $('pQty').value = p.defaultQty; $('pCap').value = p.capacity || ''; window.scrollTo(0, 0); }
     if (bom) openBom(bom.dataset.bom);
   });

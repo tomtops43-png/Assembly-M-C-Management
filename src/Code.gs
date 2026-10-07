@@ -93,6 +93,7 @@ var WRITE_ACTIONS = {
   setCurrentProduct: function (b) { return setCurrentProduct(b.token, b.machineId, b.productCode); },
   setCurrentJobOrder: function (b) { return setCurrentJobOrder(b.token, b.machineId, b.jobOrderId); },
   saveProduct: function (b) { return saveProduct(b.token, b.data); },
+  deleteProduct: function (b) { return deleteProduct(b.token, b.productCode); },
   saveProductBOM: function (b) { return saveProductBOM(b.token, b.productCode, b.components); },
   saveMaterialAlias: function (b) { return saveMaterialAlias(b.token, b.data); },
   deleteMaterialAlias: function (b) { return deleteMaterialAlias(b.token, b.alias); },
