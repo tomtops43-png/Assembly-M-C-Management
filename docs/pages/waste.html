@@ -52,6 +52,8 @@
   <div class="grid-2">
     <div class="card">
       <div class="card-title"><i class="bi bi-trash3"></i> บันทึกทิ้งขยะ</div>
+      <div class="form-group"><label class="form-label">ประเภทของเสีย</label>
+        <div class="choice-grid" id="catGrid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr))"></div></div>
       <div class="form-group"><label class="form-label">ชนิดขยะ</label>
         <div class="d-flex gap-2"><select class="form-input" id="type"></select><button class="btn btn-outline" id="manage"><i class="bi bi-gear"></i></button></div></div>
       <div class="form-group"><label class="form-label">น้ำหนัก (กก.)</label><input type="number" step="0.01" class="form-input form-input-lg" id="weight"></div>
@@ -122,7 +124,8 @@
 <div class="modal-overlay" id="typeModal"><div class="modal-content">
   <button class="modal-close" data-close-modal>&times;</button>
   <h3 class="modal-title">จัดการชนิดขยะ</h3>
-  <div class="d-flex gap-2 mb-2"><input class="form-input" id="newType" placeholder="ชื่อชนิดใหม่"><button class="btn btn-primary" id="addType">เพิ่ม</button></div>
+  <div class="d-flex gap-2 mb-2 flex-wrap"><input class="form-input" id="newType" placeholder="ชื่อชนิดใหม่" style="flex:1 1 160px"><select class="form-input" id="newTypeCat" style="flex:1 1 160px"></select><button class="btn btn-primary" id="addType">เพิ่ม</button></div>
+  <div class="small text-gray mb-2">ประเภทของเสียของแต่ละชนิด = ค่าเริ่มต้นตอนบันทึก และใช้ติ๊กในใบนำส่งขยะ</div>
   <div id="typeList"></div>
 </div></div>
 
@@ -134,14 +137,48 @@
 (async function () {
   if (!UI.initPage('waste', 'ทิ้งขยะ', 'bi-trash3')) return;
   const $ = (id) => document.getElementById(id);
-  let types = [];
+  let types = [], selCat = '';
   const reqIds = UI.requestIdKeeper();
-  async function loadTypes() {
-    const r = await API.get('getWasteTypes');
-    types = r.success ? r.data : [];
-    $('type').innerHTML = types.length ? types.map((t) => `<option>${UI.esc(t.typeName)}</option>`).join('') : '<option value="">ยังไม่มีชนิดขยะ — กดปุ่มเฟือง</option>';
-    $('typeList').innerHTML = types.map((t) => `<div class="entry-card d-flex justify-between align-center">${UI.esc(t.typeName)}<button class="btn btn-outline btn-sm" data-del="${UI.esc(t.typeId)}"><i class="bi bi-trash"></i></button></div>`).join('');
+  // ประเภทของเสีย (ลำดับตรงกับช่องติ๊กในใบนำส่งขยะ)
+  const DEFAULT_WASTE_CATS = [
+    { key: 'hazardous', label: 'ขยะอันตราย' }, { key: 'recycle', label: 'ขยะรีไซเคิล' },
+    { key: 'industrial', label: 'ขยะอุตสาหกรรมที่ไม่เป็นอันตราย (เศษเหลือใช้จากการผลิต)' }, { key: 'other', label: 'อื่น ๆ' }
+  ];
+  const CAT_ICONS = { hazardous: 'bi-exclamation-octagon', recycle: 'bi-recycle', industrial: 'bi-box-seam', other: 'bi-three-dots' };
+  let wasteCats = DEFAULT_WASTE_CATS;
+  const catLabel = (k) => (wasteCats.find((c) => c.key === k) || { label: '' }).label;
+  const catShortLabel = (k) => catLabel(k).replace(/\s*\(.*\)$/, '');
+  function renderCats() {
+    $('catGrid').innerHTML = wasteCats.map((c) => `<button type="button" class="choice-btn ${c.key === selCat ? 'active' : ''}" data-cat="${c.key}"><i class="bi ${CAT_ICONS[c.key] || 'bi-tag'}"></i>${UI.esc(catShortLabel(c.key))}</button>`).join('');
   }
+  // ชนิดขยะ: แสดงเฉพาะของประเภทที่เลือก (+ ชนิดที่ยังไม่ได้ระบุประเภท)
+  function renderTypeSelect() {
+    const keep = $('type').value;
+    const list = selCat ? types.filter((t) => !t.category || t.category === selCat) : types;
+    $('type').innerHTML = list.length
+      ? list.map((t) => `<option value="${UI.esc(t.typeName)}">${UI.esc(t.typeName)}${t.category ? '' : ' (ยังไม่ระบุประเภท)'}</option>`).join('')
+      : `<option value="">${types.length ? 'ไม่มีชนิดขยะในประเภทนี้ — กดปุ่มเฟืองเพื่อเพิ่ม' : 'ยังไม่มีชนิดขยะ — กดปุ่มเฟือง'}</option>`;
+    if (list.some((t) => t.typeName === keep)) $('type').value = keep;
+    syncCatFromType();
+  }
+  // เลือกชนิดที่มีประเภทอยู่แล้ว → ติ๊กประเภทให้อัตโนมัติ
+  function syncCatFromType() {
+    const t = types.find((x) => x.typeName === $('type').value);
+    if (t && t.category && t.category !== selCat) { selCat = t.category; renderCats(); }
+  }
+  async function loadTypes() {
+    const [r, cfg] = await Promise.all([API.get('getWasteTypes'), UI.getLineConfig()]);
+    if (cfg && Array.isArray(cfg.wasteCategories) && cfg.wasteCategories.length) wasteCats = cfg.wasteCategories;
+    types = r.success ? r.data : [];
+    renderCats(); renderTypeSelect();
+    const catOpts = (sel) => '<option value="">— ยังไม่ระบุประเภท —</option>' + wasteCats.map((c) => `<option value="${c.key}" ${c.key === sel ? 'selected' : ''}>${UI.esc(catShortLabel(c.key))}</option>`).join('');
+    $('newTypeCat').innerHTML = catOpts(selCat);
+    $('typeList').innerHTML = types.map((t) => `<div class="entry-card d-flex justify-between align-center gap-2"><span class="flex-1">${UI.esc(t.typeName)}</span>
+      <select class="date-input" data-tcat="${UI.esc(t.typeId)}" style="max-width:190px">${catOpts(t.category)}</select>
+      <button class="btn btn-outline btn-sm" data-del="${UI.esc(t.typeId)}"><i class="bi bi-trash"></i></button></div>`).join('');
+  }
+  $('catGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (b) { selCat = b.dataset.cat; renderCats(); renderTypeSelect(); } });
+  $('type').addEventListener('change', syncCatFromType);
   async function loadToday() {
     const r = await API.get('getTodayWaste');
     if (!r.success) return;
@@ -152,11 +189,12 @@
   async function loadHist() {
     const r = await API.get('getWasteHistory', { filters: { dateFrom: $('from').value, dateTo: $('to').value } });
     if (!r.success) return UI.showToast(r.message, 'error');
-    $('hist').innerHTML = '<thead><tr><th>วันเวลา</th><th>ชนิด</th><th class="num">กก.</th><th>ผู้บันทึก</th><th>หมายเหตุ</th></tr></thead><tbody>' +
-      (r.data.map((w) => `<tr><td>${UI.esc(w.timestamp)}</td><td>${UI.esc(w.wasteType)}</td><td class="num">${UI.formatNumber(w.weightKg, 2)}</td><td>${UI.esc(w.recorderName)}</td><td>${UI.esc(w.remark)}</td></tr>`).join('') || '<tr><td colspan="5" class="text-center text-gray">ไม่มีข้อมูล</td></tr>') + '</tbody>';
+    $('hist').innerHTML = '<thead><tr><th>วันเวลา</th><th>ประเภท</th><th>ชนิด</th><th class="num">กก.</th><th>ผู้บันทึก</th><th>หมายเหตุ</th></tr></thead><tbody>' +
+      (r.data.map((w) => `<tr><td>${UI.esc(w.timestamp)}</td><td class="small">${UI.esc(catShortLabel(w.category) || '-')}</td><td>${UI.esc(w.wasteType)}</td><td class="num">${UI.formatNumber(w.weightKg, 2)}</td><td>${UI.esc(w.recorderName)}</td><td>${UI.esc(w.remark)}</td></tr>`).join('') || '<tr><td colspan="6" class="text-center text-gray">ไม่มีข้อมูล</td></tr>') + '</tbody>';
   }
   $('save').onclick = () => UI.withButton($('save'), async () => {
-    const data = { wasteType: $('type').value, weightKg: Number($('weight').value) || 0, recordedAt: $('at').value, remark: $('remark').value.trim() };
+    const data = { category: selCat, wasteType: $('type').value, weightKg: Number($('weight').value) || 0, recordedAt: $('at').value, remark: $('remark').value.trim() };
+    if (!data.category) return UI.showToast('กรุณาเลือกประเภทของเสีย', 'warning');
     if (!data.wasteType) return UI.showToast('กรุณาเลือกชนิดขยะ', 'warning');
     if (data.weightKg <= 0) return UI.showToast('กรุณากรอกน้ำหนัก', 'warning');
     data.clientRequestId = reqIds.get(data);
@@ -168,7 +206,13 @@
   });
   $('resetAt').onclick = () => { $('at').value = UI.nowLocalInput(); };
   $('manage').onclick = () => UI.openModal('typeModal');
-  $('addType').onclick = () => UI.withButton($('addType'), async () => { const r = await API.post('addWasteType', { typeName: $('newType').value }); if (!r.success) return UI.showToast(r.message, 'error'); $('newType').value = ''; await loadTypes(); });
+  $('addType').onclick = () => UI.withButton($('addType'), async () => { const r = await API.post('addWasteType', { typeName: $('newType').value, category: $('newTypeCat').value }); if (!r.success) return UI.showToast(r.message, 'error'); $('newType').value = ''; await loadTypes(); });
+  $('typeList').addEventListener('change', async (e) => {
+    const s = e.target.closest('[data-tcat]'); if (!s) return;
+    const r = await API.post('setWasteTypeCategory', { typeId: s.dataset.tcat, category: s.value });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    UI.showToast('บันทึกประเภทแล้ว', 'success'); await loadTypes();
+  });
   $('typeList').addEventListener('click', async (e) => { const b = e.target.closest('[data-del]'); if (b && await UI.confirm({ title: 'ลบชนิดนี้?', danger: true })) { const r = await API.post('deleteWasteType', { typeId: b.dataset.del }); if (!r.success) UI.showToast(r.message, 'error'); loadTypes(); } });
   document.querySelectorAll('[data-days]').forEach((b) => b.onclick = () => { $('to').value = UI.getToday(); $('from').value = UI.addDays(UI.getToday(), -(Number(b.dataset.days) - 1)); loadHist(); });
   $('search').onclick = loadHist;
@@ -194,9 +238,10 @@
     while (html.length < SL_MIN_ROWS) html.push(slRowHtml(['', '', '', '', '', '']));
     $('slBody').innerHTML = html.join('');
     slChecked = [false, false, false, false];
-    (ft ? [ft] : [...new Set(rows.map((r) => r.wasteType).filter(Boolean))]).forEach((t) => {
-      let idx = SL_CATS.findIndex((c) => c.match && c.match(t));
-      if (idx < 0) idx = 3;
+    const CAT_IDX = { hazardous: 0, recycle: 1, industrial: 2, other: 3 };
+    rows.forEach((r) => {
+      let idx = CAT_IDX[r.category];
+      if (idx === undefined) { idx = SL_CATS.findIndex((c) => c.match && c.match(r.wasteType || '')); if (idx < 0) idx = 3; }
       slChecked[idx] = true;
     });
     slRenderTypes();
