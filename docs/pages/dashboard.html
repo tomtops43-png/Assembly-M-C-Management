@@ -378,6 +378,14 @@
     return out;
   }
 
+  /** JO ในช่วงรายงาน + ยอด FG/NG เฉพาะช่วง (backend เก่าไม่มี rangeActual → รวมจากตารางข้อมูลการผลิตแทน) */
+  function joReportRows() {
+    const sum = {};
+    rows.forEach((r) => { if (r.status === 'cancelled') return; const k = r.jobOrderId || '__unassigned__', o = sum[k] = sum[k] || { a: 0, d: 0 }; o.a += Number(r.actualQty) || 0; o.d += Number(r.defectQty) || 0; });
+    return (data.jobOrders || []).map((j) => j.rangeActual !== undefined ? j : Object.assign({}, j, { rangeActual: (sum[j.jobOrderId] || {}).a || 0, rangeDefect: (sum[j.jobOrderId] || {}).d || 0 }))
+      .sort((a, b) => (a.jobOrderId === '__unassigned__') - (b.jobOrderId === '__unassigned__') || b.rangeActual - a.rangeActual);
+  }
+
   function reportHtml(logoSrc) {
     const k = data.kpi, mt = data.maintenance, dc = data.dailyCheck;
     const logo = logoSrc ? `<img class="rp-logo" src="${logoSrc}" alt="logo">` : '';
@@ -396,6 +404,9 @@
       <h2>Production report by machine</h2>
       ${tbl('', '<th>Machine</th><th class="n">Capacity/hr</th><th class="n">FG</th><th class="n">NG</th><th class="n">OEE</th><th class="n">%NG</th><th class="n">OT</th>',
         data.byMachine.map((m) => `<tr><td>${esc(m.machineName)}</td><td class="n">${m.capacity ? n(m.capacity) : '-'}</td><td class="n">${n(m.actual)}</td><td class="n">${n(m.defect)}</td><td class="n">${pctTxt(m.oee)}</td><td class="n">${m.defectRate}%</td><td class="n">${m.otShifts ? m.otShifts + ' shift' + (m.otActual ? ' / ' + n(m.otActual) : '') : '-'}</td></tr>`).join(''), 7)}
+      <h2>Production report by Job Order</h2>
+      ${tbl('', '<th>Job Order</th><th>Product</th><th class="n">Plan</th><th class="n">FG (period)</th><th class="n">NG (period)</th><th class="n">FG (total)</th><th class="n">%Complete</th>',
+        joReportRows().map((j) => `<tr><td>${j.jobOrderId === '__unassigned__' ? 'ไม่ระบุ JO' : esc(j.jobOrderId)}</td><td>${esc(j.productCode)}</td><td class="n">${j.plannedQty ? n(j.plannedQty) : '-'}</td><td class="n">${n(j.rangeActual)}</td><td class="n">${n(j.rangeDefect)}</td><td class="n">${j.jobOrderId === '__unassigned__' ? '-' : n(j.actualQty)}</td><td class="n">${j.completionRate === undefined ? '-' : j.completionRate + '%'}</td></tr>`).join(''), 7)}
       ${reasons.length ? `<h2>NG by defect (Pareto)</h2>${tbl('', '<th>#</th><th>อาการ</th><th class="n">NG</th><th class="n">%</th>',
         reasons.slice(0, 10).map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r)}</td><td class="n">${n(data.ngByReason[r])}</td><td class="n">${k.defect ? (data.ngByReason[r] / k.defect * 100).toFixed(1) : 0}%</td></tr>`).join(''), 4)}` : ''}
       <h2>Unclosed maintenance jobs (may impact output)</h2>
