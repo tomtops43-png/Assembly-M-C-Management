@@ -232,10 +232,15 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
   maint.unclosedList = maint.unclosedList.slice(0, 30);
 
   // Job Order progress (JO ที่อยู่ในช่วง)
+  // rangeActual/rangeDefect = ยอดเฉพาะช่วงรายงาน (actualQty = สะสมทั้ง JO)
   var joIds = {};
-  rows.forEach(function (r) { joIds[r.jobOrderId || '__unassigned__'] = (joIds[r.jobOrderId || '__unassigned__'] || 0) + r.actualQty; });
+  rows.forEach(function (r) {
+    var k = r.jobOrderId || '__unassigned__', o = joIds[k] = joIds[k] || { actual: 0, defect: 0 };
+    o.actual += r.actualQty; o.defect += r.defectQty;
+  });
   var joList = computeJobOrderProgress(getAllRows('JobOrders').map(jobOrderToObj).filter(function (j) { return joIds[j.jobOrderId] !== undefined; }));
-  if (joIds.__unassigned__ !== undefined) joList.push({ jobOrderId: '__unassigned__', productCode: '-', plannedQty: 0, actualQty: joIds.__unassigned__ });
+  joList.forEach(function (j) { j.rangeActual = joIds[j.jobOrderId].actual; j.rangeDefect = joIds[j.jobOrderId].defect; });
+  if (joIds.__unassigned__ !== undefined) joList.push({ jobOrderId: '__unassigned__', productCode: '-', plannedQty: 0, actualQty: joIds.__unassigned__.actual, rangeActual: joIds.__unassigned__.actual, rangeDefect: joIds.__unassigned__.defect });
 
   var dailyCheck = range.from ? buildDailyCheckSummary(range.from, range.to, rows) : null;
 
