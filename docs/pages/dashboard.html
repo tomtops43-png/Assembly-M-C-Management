@@ -429,6 +429,29 @@
     </div>`;
   }
 
+  /**
+   * html2canvas วาดข้อความทีละ "คำ" ตามตำแหน่งที่วัดได้ — ภาษาไทย/รหัสยาวที่ไม่มีช่องว่างแต่เบราว์เซอร์ตัดขึ้นบรรทัดใหม่กลางคำ
+   * จะถูกวาดเป็นบรรทัดเดียวทับกัน → แยกข้อความในช่องตารางเป็น span ทีละตัวอักษร (grapheme) ให้วัด/วาดตรงตำแหน่งจริง
+   * (การตัดบรรทัดของเบราว์เซอร์ไม่เปลี่ยน เพราะ span แบบ inline ไม่สร้างจุดตัดคำใหม่)
+   */
+  function splitCellText(root) {
+    if (!window.Intl || !Intl.Segmenter) return;
+    const seg = new Intl.Segmenter('th', { granularity: 'grapheme' });
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: (t) => t.nodeValue.trim() && t.parentElement.closest('td, th') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+    });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach((t) => {
+      const frag = document.createDocumentFragment();
+      for (const { segment } of seg.segment(t.nodeValue)) {
+        if (/^\s+$/.test(segment)) { frag.append(segment); continue; }
+        const s = document.createElement('span'); s.textContent = segment; frag.append(s);
+      }
+      t.replaceWith(frag);
+    });
+  }
+
   $('repPdf').onclick = () => UI.withButton($('repPdf'), async () => {
     if (!data) return UI.showToast('ยังไม่มีข้อมูล — กดค้นหาก่อน', 'warning');
     if (!reportAt) generateReport('auto');
@@ -444,6 +467,7 @@
       w.className = 'rp-section'; h.before(w); w.append(h);
       if (next && next.tagName !== 'H2' && !next.classList.contains('rp-charts')) w.append(next);
     });
+    splitCellText(holder);
     document.body.appendChild(holder);
     try {
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
