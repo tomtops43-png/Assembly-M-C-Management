@@ -10,15 +10,15 @@ const Auth = (() => {
 
   const _roleDefaults = {
     viewer:      ['inbox', 'dashboard'],
-    operator:    ['production', 'inbox', 'maintenance', 'machines', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck'],
-    maintenance: ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck'],
-    supervisor:  ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'joborders', 'cost', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport'],
-    admin:       ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin', 'joborders', 'cost', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport']
+    operator:    ['production', 'inbox', 'maintenance', 'machines', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
+    maintenance: ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
+    supervisor:  ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'joborders', 'cost', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber'],
+    admin:       ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin', 'joborders', 'cost', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber']
   };
   const PERMISSION_KEYS = ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin',
-    'joborders', 'cost', 'labor', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport'];
+    'joborders', 'cost', 'labor', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber'];
   const PERMISSION_LABELS = {
-    production: 'กรอกยอด', inbox: 'Inbox', maintenance: 'แจ้งซ่อม', rawmaterial: 'รับวัตถุดิบ', machines: 'เครื่องจักร',
+    production: 'กรอกยอด', inbox: 'Inbox', maintenance: 'แจ้งซ่อม', rawmaterial: 'รับวัตถุดิบ', fiber: 'อบไฟเบอร์', machines: 'เครื่องจักร',
     dashboard: 'Dashboard', admin: 'จัดการ', joborders: 'วางแผนการผลิต', cost: 'ต้นทุน', labor: 'ค่าแรง',
     waste: 'ทิ้งขยะ', sorting: 'คัดแยก', alarm: 'Alarm', ngissue: 'ปัญหา NG', dailycheck: 'Daily Check', ngExport: 'ส่งออก NG (QC)'
   };
@@ -47,7 +47,14 @@ const Auth = (() => {
     return out;
   }
 
+  // หน้าเว็บที่รวมหลายสิทธิ์ (APP_CONFIG.PAGES[].anyOf) — มีสิทธิ์ใดสิทธิ์หนึ่งก็เข้าหน้าได้
   function hasPermission(page) {
+    const p = C.PAGES.find((x) => x.key === page);
+    if (p && p.anyOf) return p.anyOf.some(hasKey);
+    return hasKey(page);
+  }
+
+  function hasKey(page) {
     const u = getUser();
     if (!u) return false;
     if (page === 'inbox') return true;
@@ -95,7 +102,7 @@ const Auth = (() => {
   }
 
   return {
-    getToken, setToken, getUser, setUser, isLoggedIn, hasRole, hasPermission, defaultPermissions, getHomePage,
+    getToken, setToken, getUser, setUser, isLoggedIn, hasRole, hasPermission, hasKey, defaultPermissions, getHomePage,
     pageUrl, logout, requireAuth, requirePermission, ROLE_LEVELS, ROLE_LABELS, PERMISSION_KEYS, PERMISSION_LABELS
   };
 })();

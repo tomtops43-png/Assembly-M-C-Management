@@ -19,7 +19,7 @@ window.APP_CONFIG = {
     { key: 'inbox', label: 'Inbox', icon: 'bi-inbox', file: 'inbox.html' },
     { key: 'maintenance', label: 'แจ้งซ่อม', icon: 'bi-wrench', file: 'maintenance.html' },
     { key: 'joborders', label: 'วางแผนการผลิต', icon: 'bi-calendar2-week', file: 'joborders.html' },
-    { key: 'rawmaterial', label: 'รับวัตถุดิบ', icon: 'bi-box-seam', file: 'rawmaterial.html' },
+    { key: 'rawmaterial', label: 'วัตถุดิบ', icon: 'bi-box-seam', file: 'rawmaterial.html', anyOf: ['rawmaterial', 'fiber'] },
     { key: 'sorting', label: 'คัดแยก', icon: 'bi-funnel', file: 'sorting.html' },
     { key: 'waste', label: 'ทิ้งขยะ', icon: 'bi-trash3', file: 'waste.html' },
     { key: 'ngissue', label: 'ปัญหา NG', icon: 'bi-exclamation-triangle', file: 'ngissue.html' },
