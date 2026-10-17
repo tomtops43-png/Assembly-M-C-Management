@@ -194,6 +194,18 @@ var LINE_CONFIG = {
     ]
   },
 
+  // ---- อบไฟเบอร์ (เมนู วัตถุดิบ > อบไฟเบอร์) ----
+  // ทุกม้วนต้องมีแท็ก ; นำไปผลิตได้เฉพาะม้วนที่อบครบ MIN_DRY_HOURS ; ออกจากตู้แล้วใช้ได้ไม่เกิน MAX_OUT_HOURS
+  // ใช้ไม่หมดม้วน → คืนเข้าอบ (เริ่มนับเวลาอบใหม่)
+  FIBER_DRYING: {
+    MIN_DRY_HOURS: 4,          // TODO(ข้อมูลไลน์) เวลาอบขั้นต่ำจนได้ความชื้นตามเกณฑ์ (ชม.)
+    MAX_OUT_HOURS: 8,          // TODO(ข้อมูลไลน์) อยู่นอกตู้อบได้นานสุดก่อนต้องกลับไปอบใหม่ (ชม.)
+    MAX_MOISTURE_PCT: null,    // TODO(ข้อมูลไลน์) เกณฑ์ความชื้นสูงสุด (%) — null = ไม่บังคับกรอกค่าความชื้น
+    MACHINES: ['GV-2', 'AS-MED', 'AS-HIGH'], // TODO(ข้อมูลไลน์) เครื่องที่ใช้ไฟเบอร์
+    OVENS: ['ตู้อบ 1'],         // TODO(ข้อมูลไลน์) รายชื่อตู้อบ
+    BLOCK_PRODUCTION: false    // true = เครื่องในรายการข้างบนลงยอดผลิตไม่ได้ ถ้าไม่มีม้วนที่อบครบและยังไม่เกินเวลาอยู่ที่เครื่อง
+  },
+
   INBOX_AM_CHECKSHEET: false, // TODO(ข้อมูลไลน์) ต้องการข้อความ AM Check Sheet ทุกวันไหม
 
   // กลุ่มเครื่องจักร (ไลน์ย่อย) — ใช้จัดลำดับการแสดงผล ; กลุ่มที่ไม่อยู่ในรายการจะต่อท้าย
@@ -210,7 +222,7 @@ var LINE_CONFIG = {
   // โมดูลที่เปิดใช้ (ปิดได้)  — cost/labor เปิดในเฟส 2
   MODULES: {
     production: true, dailycheck: true, inbox: true, maintenance: true, joborders: true,
-    rawmaterial: true, sorting: true, waste: true, alarm: true, ngissue: true, machines: true,
+    rawmaterial: true, fiber: true, sorting: true, waste: true, alarm: true, ngissue: true, machines: true,
     dashboard: true, cost: false, labor: false, admin: true
   },
 
@@ -263,6 +275,8 @@ var SHEET_SCHEMAS = {
   ActionLog: ['ActionID', 'Timestamp', 'EmployeeID', 'EmployeeName', 'Action', 'Payload'],
   MaintenanceLog: ['TicketID', 'Timestamp', 'Date', 'ShiftAB', 'ShiftDN', 'ReportedBy', 'ReporterName', 'MachineID', 'IssueType', 'Description', 'Priority', 'Status', 'AssignedTo', 'ResolvedAt', 'DowntimeMinutes', 'Resolution', 'Photos', 'ResolutionPhotos', 'ClientRequestID', 'MmsJobNo', 'MmsStatus', 'MmsError'],
   RawMaterialLog: ['ReceiveID', 'Timestamp', 'Date', 'ReceivedBy', 'ReceiverName', 'MachineID', 'PartCode', 'SupplierCode', 'PartName', 'Specification', 'Quantity', 'Unit', 'LotNumber', 'Inspector', 'Customer', 'NetWeight', 'GrossWeight', 'CartonNo', 'PackingDate', 'RefNo', 'Remark', 'Photos', 'Status'],
+  FiberRolls: ['RollID', 'CreatedAt', 'CreatedBy', 'PartCode', 'LotNumber', 'Oven', 'Status', 'Cycle', 'DryStart', 'ReadyAt', 'OutAt', 'ExpireAt', 'MachineID', 'Moisture', 'UpdatedAt', 'UpdatedBy', 'UpdatedByName', 'Remark'],
+  FiberLog: ['LogID', 'Timestamp', 'RollID', 'Action', 'Cycle', 'MachineID', 'Moisture', 'ByID', 'ByName', 'Remark'],
   SortingLog: ['JobID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'MachineID', 'ProductCode', 'FoundProcess', 'TotalQty', 'GoodQty', 'DefectQty', 'DefectDetails', 'Status', 'RegisteredBy', 'RegisteredByName', 'SortedBy', 'SortedByName', 'PulledAt', 'CompletedAt', 'Remark', 'JobOrderID'],
   WasteLog: ['WasteID', 'Timestamp', 'Date', 'RecordedBy', 'RecorderName', 'WasteType', 'WeightKg', 'Remark', 'Category'],
   NgIssues: ['IssueID', 'Title', 'Category', 'MachineID', 'ProductCode', 'Description', 'RootCause', 'Countermeasure', 'Status', 'CreatedAt', 'CreatedBy', 'CreatorName', 'UpdatedAt', 'UpdatedBy', 'ClosedAt', 'ClosedBy'],

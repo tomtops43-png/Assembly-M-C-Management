@@ -162,6 +162,7 @@ function submitProduction(token, data) {
     return { success: false, settingsChanged: true, message: 'การตั้งค่าสินค้า/Job Order ของเครื่องเปลี่ยนแล้ว — โหลดข้อมูลใหม่ให้แล้ว กรุณาตรวจสอบแล้วบันทึกอีกครั้ง' };
   }
   if (!m.currentJobOrder) throw new Error('เครื่องนี้ยังไม่ได้เลือก Job Order — แจ้งหัวหน้าให้ตั้งที่เมนูเครื่องจักรก่อนลงยอด');
+  assertFiberReadyForProduction(m.machineId);
   var workDate = data.workDate || getWorkDate();
   if (!isValidDateStr(workDate) || workDate > getWorkDate()) throw new Error('วันที่งานไม่ถูกต้อง');
   var timePeriod = data.timePeriod || detectTimePeriod();
