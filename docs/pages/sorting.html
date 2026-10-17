@@ -35,11 +35,12 @@
       </div>
       <div class="form-group"><label class="form-label">กระบวนการที่พบ</label><div class="choice-grid" id="procGrid"></div>
         <div class="form-hint">FG = งานที่กรอกยอดไปแล้ว (งานเสียจะถูกหักออกจาก FG) · ไลน์ผลิต = ยังไม่ได้กรอกยอด (งานดีจะบวกเข้า FG)</div></div>
-      <div class="form-group"><label class="form-label">หมายเหตุ / อาการ NG <span class="req">*</span></label>
+      <div class="form-group"><label class="form-label">หมายเหตุ / อาการ NG <span class="req">*</span> <span class="text-gray small">(เลือกได้มากกว่า 1 อาการ)</span></label>
         <div class="d-flex gap-2"><select class="form-input" id="reason"></select>
           <button class="btn btn-outline" type="button" id="reasonAdd"><i class="bi bi-plus-lg"></i> เพิ่มอาการ</button>
           <button class="btn btn-outline" type="button" id="reasonDel" title="ลบอาการที่เลือกออกจากรายการ"><i class="bi bi-trash"></i></button></div>
-        <input class="form-input mt-2 hidden" id="reasonOther" placeholder="ระบุ"></div>
+        <input class="form-input mt-2 hidden" id="reasonOther" placeholder="ระบุ">
+        <div class="chips mt-2" id="reasonChips"></div></div>
       <button class="btn btn-primary btn-full btn-lg" id="register">ลงทะเบียน</button>
     </div>
     <div class="card">
@@ -77,7 +78,7 @@
   if (!UI.initPage('sorting', 'คัดแยกงาน', 'bi-funnel')) return;
   const $ = (id) => document.getElementById(id);
   const user = Auth.getUser(), OTHER = 'อื่นๆ';
-  let cfg, machines = [], products = [], jobs = [], proc = '', current = null;
+  let cfg, machines = [], products = [], jobs = [], proc = '', current = null, reasons = [];
   const reqIds = UI.requestIdKeeper(), resultIds = UI.requestIdKeeper();
 
   $('tabs').addEventListener('click', (e) => {
@@ -90,9 +91,21 @@
 
   function renderProc() { $('procGrid').innerHTML = cfg.sortingProcesses.map((p) => `<button class="choice-btn ${proc === p ? 'active' : ''}" data-proc="${UI.esc(p)}">${UI.esc(p)}</button>`).join(''); }
   $('procGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-proc]'); if (b) { proc = b.dataset.proc; renderProc(); } });
-  $('reason').onchange = () => $('reasonOther').classList.toggle('hidden', $('reason').value !== OTHER);
+  // อาการที่เลือกแล้ว (หลายอาการ) แสดงเป็น chip — เลือกจาก dropdown ทีละอาการ
+  const renderReasons = () => {
+    $('reasonChips').innerHTML = reasons.map((r, i) => `<span class="chip">${UI.esc(r)}<button type="button" data-del-reason="${i}" title="เอาออก">&times;</button></span>`).join('');
+  };
+  $('reasonChips').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-del-reason]'); if (!b) return;
+    reasons.splice(Number(b.dataset.delReason), 1); renderReasons();
+  });
+  $('reason').onchange = () => {
+    const v = $('reason').value;
+    $('reasonOther').classList.toggle('hidden', v !== OTHER);
+    if (v && v !== OTHER && !reasons.includes(v)) { reasons.push(v); renderReasons(); }
+  };
   const machineGroup = () => { const m = machines.find((x) => x.machineId === $('machine').value); return m ? m.group : ''; };
-  const fillReasons = () => { UI.fillNgSelect($('reason'), cfg, machineGroup(), '— เลือก —'); $('reason').onchange(); };
+  const fillReasons = () => { UI.fillNgSelect($('reason'), cfg, machineGroup(), '— เลือกอาการ (เพิ่มได้หลายอาการ) —'); $('reason').onchange(); };
   UI.bindNgControls({ sel: $('reason'), other: $('reasonOther'), addBtn: $('reasonAdd'), delBtn: $('reasonDel'),
     getCfg: () => cfg, getGroup: machineGroup });
 
@@ -111,7 +124,8 @@
   $('product').onchange = loadJoOptions;
 
   $('register').onclick = () => UI.withButton($('register'), async () => {
-    const remark = $('reason').value === OTHER ? ($('reasonOther').value.trim() ? OTHER + ': ' + $('reasonOther').value.trim() : '') : $('reason').value;
+    const other = $('reason').value === OTHER && $('reasonOther').value.trim() ? OTHER + ': ' + $('reasonOther').value.trim() : '';
+    const remark = reasons.concat(other ? [other] : []).join(', ');
     if (!proc) return UI.showToast('กรุณาเลือกกระบวนการที่พบ', 'warning');
     if (!remark) return UI.showToast('กรุณาระบุหมายเหตุ', 'warning');
     const data = { date: $('date').value, machineId: $('machine').value, productCode: $('product').value, jobOrderId: $('jo').value,
@@ -121,7 +135,8 @@
     const r = await API.post('submitSortingJob', { data });
     if (!r.success) return UI.showToast(r.message, 'error');
     reqIds.reset();
-    UI.showToast('ลงทะเบียน ' + r.jobId, 'success'); $('qty').value = ''; proc = ''; renderProc(); loadJobs();
+    UI.showToast('ลงทะเบียน ' + r.jobId, 'success'); $('qty').value = ''; proc = ''; renderProc();
+    reasons = []; renderReasons(); $('reason').value = ''; $('reasonOther').value = ''; $('reason').onchange(); loadJobs();
   });
 
   async function loadJobs() {
