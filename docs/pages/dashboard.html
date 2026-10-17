@@ -67,7 +67,8 @@
   <div class="card">
     <div class="card-title"><i class="bi bi-file-earmark-text"></i> Auto Generated Report <span class="spacer"></span>
       <button class="btn btn-outline btn-sm" id="repGen"><i class="bi bi-arrow-repeat"></i> Generate now</button>
-      <button class="btn btn-outline btn-sm" id="repPdf"><i class="bi bi-download"></i> Download PDF</button></div>
+      <button class="btn btn-outline btn-sm" id="repPdf"><i class="bi bi-download"></i> Download PDF</button>
+      <button class="btn btn-outline btn-sm hidden" id="repShare"><i class="bi bi-share"></i> แชร์ PDF</button></div>
     <div class="small text-gray mb-2" id="repStamp"></div>
     <pre class="auto-report" id="autoReport"></pre>
   </div>
@@ -452,10 +453,31 @@
     });
   }
 
-  $('repPdf').onclick = () => UI.withButton($('repPdf'), async () => {
+  /**
+   * แชร์ไฟล์ PDF ตรงไปแอป (LINE ฯลฯ) — ส่งเฉพาะไฟล์ ไม่ส่ง url/text
+   * (แชร์จากหน้าดาวน์โหลดของเบราว์เซอร์จะแนบลิงก์ blob:... ไปด้วย)
+   */
+  const pdfProbe = typeof File !== 'undefined' ? [new File([''], 'a.pdf', { type: 'application/pdf' })] : null;
+  const canSharePdf = !!(pdfProbe && navigator.canShare && navigator.share && navigator.canShare({ files: pdfProbe }));
+  if (canSharePdf) $('repShare').classList.remove('hidden');
+  let lastPdf = null; // { key, file } — สร้างนานเกินไป เบราว์เซอร์จะไม่ให้เปิดหน้าแชร์ → กดอีกครั้งใช้ไฟล์เดิม
+  async function sharePdf(file) {
+    try { await navigator.share({ files: [file] }); return true; }
+    catch (err) {
+      if (err.name === 'AbortError') return true; // ผู้ใช้ปิดหน้าแชร์เอง
+      if (err.name === 'NotAllowedError') { UI.showToast('PDF พร้อมแล้ว — กด "แชร์ PDF" อีกครั้ง', 'info'); return true; }
+      throw err;
+    }
+  }
+
+  $('repPdf').onclick = () => UI.withButton($('repPdf'), () => makePdf(false));
+  $('repShare').onclick = () => UI.withButton($('repShare'), () => makePdf(true));
+  async function makePdf(share) {
     if (!data) return UI.showToast('ยังไม่มีข้อมูล — กดค้นหาก่อน', 'warning');
     if (!reportAt) generateReport('auto');
     const name = `${APP_CONFIG.LINE_NAME.replace(/[^A-Za-z0-9]+/g, '')}_report_${data.range.from || 'all'}${data.range.to && data.range.to !== data.range.from ? '_' + data.range.to : ''}_${($('fShiftDN').value || 'all').toLowerCase()}.pdf`;
+    const key = name + '|' + reportAt;
+    if (share && lastPdf && lastPdf.key === key) return sharePdf(lastPdf.file);
     const keepScroll = window.scrollY;
     const holder = document.createElement('div');
     // วางไว้มุมบนซ้ายของเอกสาร (หลังเนื้อหา) — html2canvas อ้างอิงตำแหน่ง scroll ถ้าวางแบบ fixed/เลื่อนจออยู่ จะได้ขอบขาวด้านบนและท้ายรายงานขาด
@@ -473,21 +495,29 @@
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
       if (document.fonts && document.fonts.ready) await document.fonts.ready;
       window.scrollTo(0, 0);
-      await window.html2pdf().set({
+      const worker = window.html2pdf().set({
         margin: [8, 0, 8, 0], filename: name, image: { type: 'jpeg', quality: 0.92 },
         html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.rp-section', '.rp-chart', '.rp-kpi'] }
-      }).from(holder.firstElementChild).save();
-      UI.showToast('ดาวน์โหลด PDF แล้ว', 'success');
+      }).from(holder.firstElementChild);
+      if (share) {
+        const file = new File([await worker.outputPdf('blob')], name, { type: 'application/pdf' });
+        lastPdf = { key, file };
+        await sharePdf(file);
+      } else {
+        await worker.save();
+        UI.showToast('ดาวน์โหลด PDF แล้ว', 'success');
+      }
     } catch (err) {
+      if (share) return UI.showToast('แชร์ไม่สำเร็จ: ' + err.message + ' — ใช้ Download PDF แทน', 'error');
       // สำรอง: เปิดหน้าพิมพ์ → เลือก "บันทึกเป็น PDF"
       const w = window.open('', '_blank');
       if (!w) return UI.showToast(err.message + ' — อนุญาต pop-up แล้วลองใหม่', 'error');
       w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${esc(name)}</title>${document.querySelector('style').outerHTML}</head><body style="margin:0">${holder.innerHTML}<script>setTimeout(function(){print()},400)<\/script></body></html>`);
       w.document.close();
     } finally { holder.remove(); window.scrollTo(0, keepScroll); }
-  });
+  }
 
   const COLS = [['date', 'วันที่'], ['timePeriod', 'ช่วง'], ['shift', 'กะ'], ['machineId', 'เครื่อง'], ['productCode', 'รุ่น'], ['jobOrderId', 'JO'], ['actualQty', 'FG'], ['defectQty', 'NG'], ['remark', 'อาการ'], ['employeeName', 'ผู้บันทึก'], ['status', 'สถานะ']];
   function renderTable() {
