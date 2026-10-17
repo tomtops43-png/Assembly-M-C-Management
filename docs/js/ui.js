@@ -567,7 +567,7 @@ const UI = (() => {
         const name = await addNgReasonPrompt(g);
         if (!name) return;
         fillNgSelect(sel, getCfg(), g);
-        sel.value = name; sync();
+        sel.value = name; sync(); sel.dispatchEvent(new Event('change'));
       } finally { addBtn.disabled = false; }
     };
     if (delBtn && delBtn.isConnected) delBtn.onclick = async () => {
