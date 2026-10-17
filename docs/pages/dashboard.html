@@ -459,7 +459,16 @@
    */
   const pdfProbe = typeof File !== 'undefined' ? [new File([''], 'a.pdf', { type: 'application/pdf' })] : null;
   const canSharePdf = !!(pdfProbe && navigator.canShare && navigator.share && navigator.canShare({ files: pdfProbe }));
-  if (canSharePdf) $('repShare').classList.remove('hidden');
+  // เปิดเว็บจากลิงก์ใน LINE = เบราว์เซอร์ในแอป LINE (แชร์ไฟล์ไม่ได้) → ปุ่มยังแสดงบนมือถือ กดแล้วพาไปเปิดในเบราว์เซอร์ปกติ
+  const inLineApp = / Line\//i.test(navigator.userAgent);
+  if (canSharePdf || !UI.isDesktop()) $('repShare').classList.remove('hidden');
+  function shareUnsupported() {
+    if (inLineApp) {
+      const u = new URL(location.href); u.searchParams.set('openExternalBrowser', '1');
+      UI.showToast('เบราว์เซอร์ใน LINE แชร์ไฟล์ไม่ได้ — กำลังเปิดใน Chrome/Safari', 'info');
+      setTimeout(() => { location.href = u.toString(); }, 800);
+    } else UI.showToast('เบราว์เซอร์นี้แชร์ไฟล์ไม่ได้ — เปิดเว็บใน Chrome หรือ Safari หรือใช้ Download PDF', 'warning');
+  }
   let lastPdf = null; // { key, file } — สร้างนานเกินไป เบราว์เซอร์จะไม่ให้เปิดหน้าแชร์ → กดอีกครั้งใช้ไฟล์เดิม
   async function sharePdf(file) {
     try { await navigator.share({ files: [file] }); return true; }
@@ -471,7 +480,7 @@
   }
 
   $('repPdf').onclick = () => UI.withButton($('repPdf'), () => makePdf(false));
-  $('repShare').onclick = () => UI.withButton($('repShare'), () => makePdf(true));
+  $('repShare').onclick = () => canSharePdf ? UI.withButton($('repShare'), () => makePdf(true)) : shareUnsupported();
   async function makePdf(share) {
     if (!data) return UI.showToast('ยังไม่มีข้อมูล — กดค้นหาก่อน', 'warning');
     if (!reportAt) generateReport('auto');
