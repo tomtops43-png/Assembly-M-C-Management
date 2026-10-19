@@ -67,9 +67,7 @@
   <div class="card">
     <div class="card-title"><i class="bi bi-file-earmark-text"></i> Auto Generated Report <span class="spacer"></span>
       <button class="btn btn-outline btn-sm" id="repGen"><i class="bi bi-arrow-repeat"></i> Generate now</button>
-      <button class="btn btn-outline btn-sm" id="repPdf"><i class="bi bi-download"></i> Download PDF</button>
-      <button class="btn btn-outline btn-sm hidden" id="repShare"><i class="bi bi-share"></i> แชร์ PDF</button>
-      <button class="btn btn-outline btn-sm hidden" id="repShareImg"><i class="bi bi-image"></i> แชร์รูป (LINE)</button></div>
+      <button class="btn btn-outline btn-sm" id="repPdf"><i class="bi bi-download"></i> Download PDF</button></div>
     <div class="small text-gray mb-2" id="repStamp"></div>
     <pre class="auto-report" id="autoReport"></pre>
   </div>
@@ -454,62 +452,11 @@
     });
   }
 
-  /**
-   * แชร์ไฟล์ PDF ตรงไปแอป (LINE ฯลฯ) — ส่งเฉพาะไฟล์ ไม่ส่ง url/text
-   * (แชร์จากหน้าดาวน์โหลดของเบราว์เซอร์จะแนบลิงก์ blob:... ไปด้วย)
-   */
-  const pdfProbe = typeof File !== 'undefined' ? [new File([''], 'a.pdf', { type: 'application/pdf' })] : null;
-  const canSharePdf = !!(pdfProbe && navigator.canShare && navigator.share && navigator.canShare({ files: pdfProbe }));
-  // เปิดเว็บจากลิงก์ใน LINE = เบราว์เซอร์ในแอป LINE (แชร์ไฟล์ไม่ได้) → ปุ่มยังแสดงบนมือถือ กดแล้วพาไปเปิดในเบราว์เซอร์ปกติ
-  const inLineApp = / Line\//i.test(navigator.userAgent);
-  // LINE บน iPhone ไม่รับไฟล์ PDF จากหน้าแชร์ของเว็บ (รับเฉพาะรูป/ข้อความ) → มีปุ่มแชร์เป็นรูปทีละหน้าแยกไว้
-  const imgProbe = typeof File !== 'undefined' ? [new File([''], 'a.jpg', { type: 'image/jpeg' })] : null;
-  const canShareImg = !!(imgProbe && navigator.canShare && navigator.share && navigator.canShare({ files: imgProbe }));
-  if (canSharePdf || !UI.isDesktop()) $('repShare').classList.remove('hidden');
-  if (canShareImg || !UI.isDesktop()) $('repShareImg').classList.remove('hidden');
-  function shareUnsupported() {
-    if (inLineApp) {
-      const u = new URL(location.href); u.searchParams.set('openExternalBrowser', '1');
-      UI.showToast('เบราว์เซอร์ใน LINE แชร์ไฟล์ไม่ได้ — กำลังเปิดใน Chrome/Safari', 'info');
-      setTimeout(() => { location.href = u.toString(); }, 800);
-    } else UI.showToast('เบราว์เซอร์นี้แชร์ไฟล์ไม่ได้ — เปิดเว็บใน Chrome หรือ Safari หรือใช้ Download PDF', 'warning');
-  }
-  let lastPdf = null; // { key, files } — สร้างนานเกินไป เบราว์เซอร์จะไม่ให้เปิดหน้าแชร์ → กดอีกครั้งใช้ไฟล์เดิม
-  async function shareFiles(files) {
-    try { await navigator.share({ files }); return true; }
-    catch (err) {
-      if (err.name === 'AbortError') return true; // ผู้ใช้ปิดหน้าแชร์เอง
-      if (err.name === 'NotAllowedError') { UI.showToast('ไฟล์พร้อมแล้ว — กดปุ่มแชร์อีกครั้ง', 'info'); return true; }
-      throw err;
-    }
-  }
-
-  $('repPdf').onclick = () => UI.withButton($('repPdf'), () => makePdf('save'));
-  $('repShare').onclick = () => canSharePdf ? UI.withButton($('repShare'), () => makePdf('pdf')) : shareUnsupported();
-  $('repShareImg').onclick = () => canShareImg ? UI.withButton($('repShareImg'), () => makePdf('img')) : shareUnsupported();
-
-  /** ตัดภาพรายงาน (canvas ยาวต่อเนื่อง) เป็นรูปทีละหน้า A4 — ความสูงหน้าเท่ากับที่ html2pdf ใช้ตัดหน้า PDF จุดตัดหน้าจึงตรงกัน */
-  async function canvasPages(canvas, ratio, baseName) {
-    const pageH = Math.floor(canvas.width * ratio), files = [];
-    for (let y = 0, i = 1; y < canvas.height; y += pageH, i++) {
-      const c = document.createElement('canvas');
-      c.width = canvas.width; c.height = Math.min(pageH, canvas.height - y);
-      const ctx = c.getContext('2d');
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
-      ctx.drawImage(canvas, 0, y, c.width, c.height, 0, 0, c.width, c.height);
-      const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.9));
-      files.push(new File([blob], `${baseName}_p${i}.jpg`, { type: 'image/jpeg' }));
-    }
-    return files;
-  }
-
-  async function makePdf(mode) {
-    const share = mode !== 'save';
+  $('repPdf').onclick = () => UI.withButton($('repPdf'), () => makePdf());
+  async function makePdf() {
     if (!data) return UI.showToast('ยังไม่มีข้อมูล — กดค้นหาก่อน', 'warning');
     if (!reportAt) generateReport('auto');
     const name = `${APP_CONFIG.LINE_NAME.replace(/[^A-Za-z0-9]+/g, '')}_report_${data.range.from || 'all'}${data.range.to && data.range.to !== data.range.from ? '_' + data.range.to : ''}_${($('fShiftDN').value || 'all').toLowerCase()}.pdf`;
-    const key = mode + '|' + name + '|' + reportAt;
-    if (share && lastPdf && lastPdf.key === key) return shareFiles(lastPdf.files);
     const keepScroll = window.scrollY;
     const holder = document.createElement('div');
     // วางไว้มุมบนซ้ายของเอกสาร (หลังเนื้อหา) — html2canvas อ้างอิงตำแหน่ง scroll ถ้าวางแบบ fixed/เลื่อนจออยู่ จะได้ขอบขาวด้านบนและท้ายรายงานขาด
@@ -533,18 +480,9 @@
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.rp-section', '.rp-chart', '.rp-kpi'] }
       }).from(holder.firstElementChild);
-      if (share) {
-        const files = mode === 'img'
-          ? await canvasPages(await worker.toCanvas().get('canvas'), (await worker.get('pageSize')).inner.ratio, name.replace(/\.pdf$/, ''))
-          : [new File([await worker.outputPdf('blob')], name, { type: 'application/pdf' })];
-        lastPdf = { key, files };
-        await shareFiles(files);
-      } else {
-        await worker.save();
-        UI.showToast('ดาวน์โหลด PDF แล้ว', 'success');
-      }
+      await worker.save();
+      UI.showToast('ดาวน์โหลด PDF แล้ว', 'success');
     } catch (err) {
-      if (share) return UI.showToast('แชร์ไม่สำเร็จ: ' + err.message + ' — ใช้ Download PDF แทน', 'error');
       // สำรอง: เปิดหน้าพิมพ์ → เลือก "บันทึกเป็น PDF"
       const w = window.open('', '_blank');
       if (!w) return UI.showToast(err.message + ' — อนุญาต pop-up แล้วลองใหม่', 'error');
