@@ -155,7 +155,7 @@
           <span>NG <b class="text-danger">${UI.formatNumber(j.defectQty)}</b></span><span>คงเหลือ <b>${UI.formatNumber(j.remaining)}</b></span><span><b>${j.completionRate}%</b></span></div>
         <div class="progress-bar-container mt-1"><div class="progress-bar-fill ${pct >= 100 ? 'over' : pct >= 90 ? 'near' : ''}" style="width:${pct}%"></div></div>
         ${j.sortedGood || j.sortedDefect ? `<div class="small text-gray mt-1">คัดแยก: ดี ${UI.formatNumber(j.sortedGood)} · เสีย ${UI.formatNumber(j.sortedDefect)}</div>` : ''}
-        <div class="entry-actions"><button class="btn btn-outline btn-sm" data-edit="${UI.esc(j.jobOrderId)}"><i class="bi bi-pencil"></i> แก้ไข</button>${j.status === 'open' || j.status === 'in-progress' ? `<button class="btn btn-success btn-sm" data-close="${UI.esc(j.jobOrderId)}"><i class="bi bi-check2-circle"></i> ปิด Job Order</button>` : ''}</div>
+        <div class="entry-actions"><button class="btn btn-outline btn-sm" data-edit="${UI.esc(j.jobOrderId)}"><i class="bi bi-pencil"></i> แก้ไข</button>${j.status === 'open' || j.status === 'in-progress' ? `<button class="btn btn-outline btn-sm" style="margin-left:auto" data-close="${UI.esc(j.jobOrderId)}"><i class="bi bi-check2-circle"></i> ปิด Job Order</button>` : ''}</div>
       </div>`;
     }).join('') : UI.emptyState('bi-calendar2-x', 'ไม่มี Job Order');
   }
@@ -163,7 +163,15 @@
     const c = e.target.closest('[data-close]');
     if (c) {
       const j = list.find((x) => x.jobOrderId === c.dataset.close);
-      if (!j || !await UI.confirm({ title: `ปิด Job Order ${j.jobOrderId}`, message: `ผลิตได้ ${UI.formatNumber(j.actualQty)} / แผน ${UI.formatNumber(j.plannedQty)} (${j.completionRate}%) — เปลี่ยนสถานะเป็น completed และถอดออกจากเครื่องที่ผูกอยู่`, okText: 'ปิด Job Order' })) return;
+      if (!j) return;
+      // กันเผลอกด: ต้องพิมพ์ 4 ตัวท้ายของเลข Job Order ให้ตรงก่อนปิด
+      const code = j.jobOrderId.slice(-4);
+      const short = j.plannedQty && j.actualQty < j.plannedQty;
+      const typed = await UI.prompt({ title: `ปิด Job Order ${j.jobOrderId}?`, icon: 'bi-exclamation-triangle-fill',
+        message: `ผลิตได้ ${UI.formatNumber(j.actualQty)} / แผน ${UI.formatNumber(j.plannedQty)} (${j.completionRate}%)${short ? `\n⚠️ ยังผลิตไม่ครบแผน (คงเหลือ ${UI.formatNumber(j.remaining)})` : ''}\nเปลี่ยนสถานะเป็น completed และถอดออกจากเครื่องที่ผูกอยู่\n\nพิมพ์ "${code}" (4 ตัวท้ายของเลข Job Order) เพื่อยืนยัน`,
+        placeholder: code, okText: 'ปิด Job Order' });
+      if (typed == null) return;
+      if (typed.toUpperCase() !== code.toUpperCase()) return UI.showToast('รหัสยืนยันไม่ตรง — ยังไม่ได้ปิด Job Order', 'warning');
       return UI.withButton(c, async () => {
         const r = await API.post('updateJobOrder', { jobOrderId: j.jobOrderId, updates: { status: 'completed' } });
         if (!r.success) return UI.showToast(r.message, 'error');
