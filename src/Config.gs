@@ -236,7 +236,8 @@ var LINE_CONFIG = {
       { id: 'AC-06', name: 'Arc chute 06', group: 'Arc chute', capacity: 2000, products: ['51207116JR'] },
       { id: 'AC-07', name: 'Arc chute 07', group: 'Arc chute', capacity: 2375, products: ['51207116JR'] },
       { id: 'AC-08', name: 'Arc chute 08', group: 'Arc chute', capacity: 2375, products: ['51207116JR'] },
-      { id: 'AC-BETA', name: 'Arc chute Beta', group: 'Arc chute', capacity: 2375, products: ['51207116JR'] },
+      // AC-BETA: จับ CT หน้างาน 30/10/2026 — 1 นาที = 80 ชิ้น (CT 0.75 วินาที/ชิ้น) → 80 × 60 = 4800 ชิ้น/ชม.
+      { id: 'AC-BETA', name: 'Arc chute Beta', group: 'Arc chute', capacity: 4800, products: ['51207116JR'] },
       { id: 'GV-2', name: 'GV.2', group: 'GV.2', capacity: 0, products: ['W813890060190-JR', 'W813890890211-JR'] },
       { id: 'AS-MED', name: 'Arc Stack medium', group: 'Arc Stack', capacity: 0, products: ['S1A23976-D'] },
       { id: 'AS-HIGH', name: 'Arc Stack High', group: 'Arc Stack', capacity: 0, products: ['S1A23969-D'] }
