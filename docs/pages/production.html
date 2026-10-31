@@ -63,8 +63,8 @@
         <input type="number" inputmode="numeric" class="form-input form-input-lg" id="actualQty">
       </div>
       <div class="form-group">
-        <label class="form-label">NG รวม</label>
-        <input type="number" class="form-input form-input-lg" id="defectQty" readonly value="0">
+        <label class="form-label">NG รวม (ตัว)</label>
+        <input type="number" min="0" step="1" inputmode="numeric" class="form-input form-input-lg" id="defectQty" value="0">
         <div class="form-hint" id="ngHint"></div>
       </div>
     </div>
@@ -121,7 +121,7 @@
   <h3 class="modal-title">แก้ไขยอดผลิต</h3>
   <div class="form-row">
     <div class="form-group"><label class="form-label">FG</label><input type="number" class="form-input" id="eActual"></div>
-    <div class="form-group"><label class="form-label">NG</label><input type="number" class="form-input" id="eDefect" readonly></div>
+    <div class="form-group"><label class="form-label">NG</label><input type="number" min="0" step="1" inputmode="numeric" class="form-input" id="eDefect"></div>
   </div>
   <div id="eComponents"></div>
   <div class="form-group"><label class="form-label">หมายเหตุ NG</label>
@@ -297,7 +297,7 @@
     const bom = (master.bom || {})[productCode] || [];
     container.innerHTML = bom.length ? `<div class="form-row">${bom.map((c) => `
       <div class="form-group"><label class="form-label" title="${UI.esc(c.componentName || '')}">NG ${UI.esc(c.componentCode)}</label>
-      <input type="number" min="0" inputmode="numeric" class="form-input" data-comp="${UI.esc(c.componentCode)}" data-name="${UI.esc(c.componentName)}" value="${(values[c.componentCode] || {}).qty || ''}"></div>`).join('')}</div>`
+      <input type="number" min="0" step="any" inputmode="decimal" class="form-input" data-comp="${UI.esc(c.componentCode)}" data-name="${UI.esc(c.componentName)}" data-per="${Number(c.qtyPerUnit) || 1}" value="${(values[c.componentCode] || {}).qty || ''}"></div>`).join('')}</div>`
       : `<div class="form-group"><label class="form-label">NG (ยังไม่มี BOM)</label><input type="number" min="0" inputmode="numeric" class="form-input" data-comp="" value="${values.__total || ''}"></div>`;
     container.querySelectorAll('input').forEach((i) => i.addEventListener('input', onChange));
   }
@@ -306,10 +306,19 @@
     container.querySelectorAll('input[data-comp]').forEach((i) => {
       const q = Math.max(0, Number(i.value) || 0);
       if (!i.dataset.comp) { total = q; return; }
-      if (q > 0) { out[i.dataset.comp] = { componentName: i.dataset.name, qty: q }; qtys.push(q); }
+      // qty = จำนวน MAT → แปลงเป็นตัว (FG) ด้วยจำนวนต่อ FG ตาม BOM (ต้องตรงกับ normalizeDefects ใน backend)
+      if (q > 0) { out[i.dataset.comp] = { componentName: i.dataset.name, qty: q }; qtys.push(Math.ceil(q / (Number(i.dataset.per) || 1) - 1e-9)); }
     });
     if (qtys.length) total = cfg.defectAggregate === 'sum' ? qtys.reduce((a, b) => a + b, 0) : Math.max(...qtys);
     return { details: out, total };
+  }
+  /** พิมพ์ NG รวมเป็นจำนวนตัว (FG) → แตกเป็น MAT ราย component ตาม BOM (ตัว × จำนวนต่อ FG) */
+  function spreadNgTotal(totalInput, container) {
+    const n = Math.max(0, Math.floor(Number(totalInput.value) || 0));
+    container.querySelectorAll('input[data-comp]').forEach((i) => {
+      const v = i.dataset.comp ? Math.round(n * (Number(i.dataset.per) || 1) * 10000) / 10000 : n;
+      i.value = n ? v : '';
+    });
   }
   function groupOf(machineId) { const m = master && master.machines.find((x) => x.machineId === machineId); return m ? m.group : ''; }
   function fillReasons(sel, group) { UI.fillNgSelect(sel, cfg, group); }
@@ -321,15 +330,16 @@
     if (sel.value === OTHER) return other.value.trim() ? OTHER + ': ' + other.value.trim() : '';
     return sel.value;
   }
-  function recalcNg() {
+  function recalcNg(fromTotal) {
     const ng = readComponents($('componentInputs'));
-    $('defectQty').value = ng.total;
+    if (fromTotal !== true) $('defectQty').value = ng.total;
     $('ngReasonGroup').classList.toggle('hidden', ng.total <= 0);
     const both = cfg.ngRowSeparate && ng.total > 0 && (Number($('actualQty').value) || 0) > 0;
     $('ngHint').textContent = both ? 'มีทั้ง FG และ NG → ระบบบันทึกแยกเป็น 2 รายการให้อัตโนมัติ'
-      : (cfg.defectAggregate === 'sum' ? 'NG = ผลรวมของชิ้นส่วน' : 'NG = ค่าสูงสุดของชิ้นส่วน');
+      : 'พิมพ์ NG เป็นจำนวนตัว → ระบบแตกเป็น MAT ตาม BOM ให้ · หรือกรอก NG ราย MAT ด้านล่าง';
   }
   $('actualQty').addEventListener('input', recalcNg);
+  $('defectQty').addEventListener('input', () => { spreadNgTotal($('defectQty'), $('componentInputs')); recalcNg(true); });
   $('ngReason').addEventListener('change', () => $('ngReasonOther').classList.toggle('hidden', $('ngReason').value !== OTHER));
 
   /** สรุปในกล่องยืนยัน: แถวข้อมูล + ช่อง FG / NG ตัวใหญ่ */
@@ -604,6 +614,7 @@
     const vals = Object.assign({}, editing.defectDetails);
     if (!Object.keys(vals).length) vals.__total = editing.defectQty;
     const recalc = () => { $('eDefect').value = readComponents($('eComponents')).total; };
+    $('eDefect').oninput = () => spreadNgTotal($('eDefect'), $('eComponents'));
     renderComponents($('eComponents'), editing.productCode, vals, recalc);
     recalc();
     const eGroup = groupOf(editing.machineId);
