@@ -27,8 +27,10 @@ function submitSortingJob(token, d) {
   if (!getMachine(d.machineId)) throw new Error('ไม่พบเครื่องจักร');
   if (!d.productCode) throw new Error('กรุณาเลือกสินค้า');
   if (LINE_CONFIG.SORTING_PROCESSES.indexOf(d.foundProcess) < 0) throw new Error('กรุณาเลือกกระบวนการที่พบ');
-  if (toNumber(d.totalQty) <= 0) throw new Error('กรุณากรอกจำนวนที่ต้อง Sort');
+  var tq = toNumber(d.totalQty);
+  if (tq <= 0 || Math.floor(tq) !== tq) throw new Error('จำนวนที่ต้อง Sort ต้องเป็นจำนวนเต็มมากกว่า 0');
   if (!hasNgReason(d.remark)) throw new Error('กรุณาระบุหมายเหตุ');
+  checkSortQtyAvailable(d.foundProcess, d.jobOrderId, tq, '');
   var id = makeId('ST', date);
   appendRow('SortingLog', {
     JobID: id, Timestamp: formatDate(), Date: date, Shift: d.shift === 'Day' || d.shift === 'Night' ? d.shift : detectShift(), ShiftDN: detectShift(),
@@ -39,6 +41,25 @@ function submitSortingJob(token, d) {
   return { success: true, jobId: id };
 }
 
+/**
+ * Interlock: งานที่พบที่ FG (กรอกยอดไปแล้ว) + ระบุ Job Order → จำนวนที่ต้อง Sort ห้ามเกินยอด FG ของ JO นั้น
+ * ที่ยังไม่ได้อยู่ในงานคัดแยก FG อื่นที่ยังค้าง (ไลน์ผลิต = ยังไม่ลงยอด จึงตรวจกับยอดไม่ได้)
+ */
+function checkSortQtyAvailable(foundProcess, jobOrderId, qty, excludeJobId) {
+  if (!jobOrderId || LINE_CONFIG.SORTING_FG_PROCESSES.indexOf(foundProcess) < 0) return;
+  var jo = findRow('JobOrders', 'JobOrderID', jobOrderId);
+  if (!jo) throw new Error('ไม่พบ Job Order ' + jobOrderId);
+  var fg = computeJobOrderProgress([jobOrderToObj(jo)])[0].actualQty;
+  var inSort = 0;
+  getAllRows('SortingLog').map(sortingToObj).forEach(function (s) {
+    if (s.jobId === excludeJobId || s.jobOrderId !== String(jobOrderId) || s.status === 'completed') return;
+    if (LINE_CONFIG.SORTING_FG_PROCESSES.indexOf(s.foundProcess) < 0) return;
+    inSort += Math.max(0, s.totalQty - s.goodQty - s.defectQty);
+  });
+  var avail = Math.max(0, fg - inSort);
+  if (qty > avail) throw new Error('จำนวนที่ต้อง Sort (' + qty + ') เกินยอด FG ของ ' + jobOrderId + ' ที่ยังไม่ได้ส่งคัด (' + avail + ' ชิ้น — FG ' + fg + ', อยู่ระหว่างคัด ' + inSort + ')');
+}
+
 function updateSortingJob(token, jobId, updates) {
   var u = requirePermission(token, 'sorting');
   var j = getSortingJob(jobId);
@@ -46,7 +67,12 @@ function updateSortingJob(token, jobId, updates) {
   if (j.registeredBy !== u.employeeId && roleLevel(u.role) < roleLevel('supervisor')) throw new Error('ไม่มีสิทธิ์แก้ไข');
   var upd = {};
   updates = updates || {};
-  if (updates.totalQty !== undefined) upd.TotalQty = toNumber(updates.totalQty);
+  if (updates.totalQty !== undefined) {
+    var tq = toNumber(updates.totalQty);
+    if (tq <= 0 || Math.floor(tq) !== tq) throw new Error('จำนวนที่ต้อง Sort ต้องเป็นจำนวนเต็มมากกว่า 0');
+    checkSortQtyAvailable(updates.foundProcess || j.foundProcess, updates.jobOrderId !== undefined ? updates.jobOrderId : j.jobOrderId, tq, jobId);
+    upd.TotalQty = tq;
+  }
   if (updates.remark !== undefined) upd.Remark = updates.remark;
   if (updates.foundProcess) upd.FoundProcess = updates.foundProcess;
   if (updates.jobOrderId !== undefined) upd.JobOrderID = updates.jobOrderId;
@@ -77,15 +103,18 @@ function recordSortingResult(token, jobId, result) {
   var j = getSortingJob(jobId);
   if (j.status === 'completed') throw new Error('งานนี้เสร็จแล้ว');
   result = result || {};
-  var good = Math.max(0, toNumber(result.goodQty));
+  var good = toNumber(result.goodQty);
+  if (good < 0 || Math.floor(good) !== good) throw new Error('จำนวนงานดีต้องเป็นจำนวนเต็ม ไม่ติดลบ');
   var parts = {};
   var defect = 0;
   Object.keys(result.defectByPart || {}).forEach(function (k) {
-    var q = Math.max(0, toNumber(result.defectByPart[k]));
+    var q = toNumber(result.defectByPart[k]);
+    if (q < 0 || Math.floor(q) !== q) throw new Error('จำนวนรอแยกส่วนต้องเป็นจำนวนเต็ม ไม่ติดลบ');
     if (q > 0) { parts[k] = q; defect += q; }
   });
   if (good + defect <= 0) throw new Error('กรุณากรอกจำนวน');
-  if (j.goodQty + j.defectQty + good + defect > j.totalQty) throw new Error('จำนวนรวมเกินจำนวนที่ต้อง Sort');
+  var left = j.totalQty - j.goodQty - j.defectQty;
+  if (good + defect > left) throw new Error('งานดี ' + good + ' + รอแยกส่วน ' + defect + ' = ' + (good + defect) + ' เกินที่คงเหลือ ' + left + ' ชิ้น');
 
   var details = j.defectDetails || {};
   Object.keys(parts).forEach(function (k) { details[k] = toNumber(details[k]) + parts[k]; });

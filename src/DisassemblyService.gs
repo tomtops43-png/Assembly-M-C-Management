@@ -64,7 +64,8 @@ function submitDisassemblyJob(token, d) {
   var machineId = String(d.machineId || '');
   if (!getMachine(machineId)) throw new Error('กรุณาเลือกเครื่อง');
   if (!joAllowsMachine(jo.MachineID, machineId)) throw new Error('เครื่องนี้ไม่ได้อยู่ใน Job Order ' + jo.JobOrderID);
-  if (toNumber(d.totalQty) <= 0) throw new Error('กรุณากรอกจำนวนที่รอแยกส่วน');
+  var tq = toNumber(d.totalQty);
+  if (tq <= 0 || Math.floor(tq) !== tq) throw new Error('จำนวนรอแยกส่วนต้องเป็นจำนวนเต็มมากกว่า 0');
   var id = makeId('DS', date);
   appendRow('DisassemblyLog', {
     JobID: id, Timestamp: formatDate(), Date: date, Shift: d.shift === 'Day' || d.shift === 'Night' ? d.shift : detectShift(),
@@ -113,15 +114,23 @@ function recordDisassemblyResult(token, jobId, result) {
   var j = getDisassemblyJob(jobId);
   if (j.status === 'completed' || j.status === 'cancelled') throw new Error('งานนี้ปิดแล้ว');
   result = result || {};
-  var qty = Math.max(0, toNumber(result.qty));
-  if (qty <= 0) throw new Error('กรุณากรอกจำนวนที่แยกส่วน');
-  if (j.doneQty + qty > j.totalQty) throw new Error('จำนวนรวมเกินจำนวนที่รอแยกส่วน');
+  var qty = toNumber(result.qty);
+  if (qty <= 0 || Math.floor(qty) !== qty) throw new Error('จำนวนที่แยกส่วนต้องเป็นจำนวนเต็มมากกว่า 0');
+  if (j.doneQty + qty > j.totalQty) throw new Error('จำนวนเกินที่คงเหลือ (คงเหลือ ' + (j.totalQty - j.doneQty) + ' ชิ้น)');
 
+  // Interlock: MAT ต่อรหัส (ได้คืน + เสีย) ห้ามเกิน จำนวน FG รอบนี้ × จำนวนต่อ FG ตาม BOM ; รหัสต้องอยู่ใน BOM
+  var bom = {};
+  getProductBOM(j.productCode).forEach(function (c) { bom[c.componentCode] = c; });
   var details = j.matDetails || {};
   Object.keys(result.mats || {}).forEach(function (code) {
     var m = result.mats[code] || {};
-    var good = Math.max(0, toNumber(m.good)), scrap = Math.max(0, toNumber(m.scrap));
+    var good = toNumber(m.good), scrap = toNumber(m.scrap);
+    if (good < 0 || scrap < 0) throw new Error('จำนวน MAT ' + code + ' ต้องไม่ติดลบ');
     if (good + scrap <= 0) return;
+    var c = bom[code];
+    if (!c) throw new Error('MAT ' + code + ' ไม่อยู่ใน BOM ของ ' + j.productCode);
+    var max = Math.round(qty * toNumber(c.qtyPerUnit, 1) * 10000) / 10000;
+    if (good + scrap > max + 1e-9) throw new Error('MAT ' + code + ': ได้คืน ' + good + ' + เสีย ' + scrap + ' = ' + (good + scrap) + ' เกินที่ควรได้ ' + max + ' (FG ' + qty + ' × ' + c.qtyPerUnit + ')');
     var d = details[code] = details[code] || { name: m.name || '', good: 0, scrap: 0 };
     if (m.name) d.name = m.name;
     d.good = toNumber(d.good) + good; d.scrap = toNumber(d.scrap) + scrap;

@@ -64,8 +64,9 @@
   <button class="modal-close" data-close-modal>&times;</button>
   <h3 class="modal-title" id="rTitle"></h3>
   <div class="small text-gray mb-2" id="rInfo"></div>
-  <div class="form-group"><label class="form-label">งานดี (รอบนี้)</label><input type="number" class="form-input form-input-lg" id="rGood"></div>
+  <div class="form-group"><label class="form-label">งานดี (รอบนี้)</label><input type="number" min="0" step="1" inputmode="numeric" class="form-input form-input-lg" id="rGood"></div>
   <div class="form-row" id="rParts"></div>
+  <div class="small mb-2" id="rSum"></div>
   <button class="btn btn-success btn-full" id="rSave">บันทึกผล (บวกสะสม)</button>
 </div></div>
 
@@ -182,13 +183,32 @@
     $('rInfo').textContent = `คงเหลือ ${UI.formatNumber(j.totalQty - j.goodQty - j.defectQty)} ชิ้น · กระบวนการ ${j.foundProcess}`;
     $('rGood').value = '';
     $('rParts').innerHTML = parts().map((p) => `<div class="form-group"><label class="form-label">งานรอแยกส่วน${p.label ? ' ' + UI.esc(p.label) : ''} (รอบนี้)</label><input type="number" min="0" inputmode="numeric" class="form-input" data-part="${UI.esc(p.code)}"></div>`).join('');
+    syncSum();
     UI.openModal('resultModal');
   }
+  /** Interlock: งานดี + รอแยกส่วน (รอบนี้) ห้ามเกินที่คงเหลือ — backend ตรวจซ้ำ */
+  function syncSum() {
+    const left = current.totalQty - current.goodQty - current.defectQty;
+    const inputs = [$('rGood'), ...$('rParts').querySelectorAll('[data-part]')];
+    const vals = inputs.map((i) => Number(i.value) || 0);
+    const sum = vals.reduce((a, b) => a + b, 0);
+    let err = '';
+    if (vals.some((v) => v < 0 || !Number.isInteger(v))) err = 'กรอกเป็นจำนวนเต็ม ไม่ติดลบ';
+    else if (sum > left) err = `งานดี + รอแยกส่วน = ${UI.formatNumber(sum)} เกินที่คงเหลือ ${UI.formatNumber(left)} ชิ้น`;
+    inputs.forEach((i) => i.classList.toggle('input-invalid', !!err));
+    $('rSum').innerHTML = err ? `<span class="text-danger fw-bold">${UI.esc(err)}</span>`
+      : `รวมรอบนี้ <b>${UI.formatNumber(sum)}</b> / คงเหลือ ${UI.formatNumber(left)} ชิ้น`;
+    $('rSave').disabled = !!err;
+    return err;
+  }
+  $('rGood').addEventListener('input', syncSum);
+  $('rParts').addEventListener('input', syncSum);
   $('rSave').onclick = () => UI.withButton($('rSave'), async () => {
     const defectByPart = {};
     $('rParts').querySelectorAll('[data-part]').forEach((i) => { defectByPart[i.dataset.part] = Number(i.value) || 0; });
     const result = { goodQty: Number($('rGood').value) || 0, defectByPart };
     if (!result.goodQty && !Object.keys(defectByPart).some((k) => defectByPart[k] > 0)) return UI.showToast('กรุณากรอกจำนวนงานดี หรืองานรอแยกส่วน', 'warning');
+    const err = syncSum(); if (err) return UI.showToast(err, 'error');
     // ผลแบบบวกสะสม → ส่งซ้ำ (เน็ตหลุด) ต้องไม่บวกเบิ้ล
     const clientRequestId = resultIds.get({ jobId: current.jobId, result });
     const r = await API.post('recordSortingResult', { jobId: current.jobId, result, clientRequestId });
