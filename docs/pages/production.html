@@ -296,7 +296,7 @@
   function renderComponents(container, productCode, values, onChange) {
     const bom = (master.bom || {})[productCode] || [];
     container.innerHTML = bom.length ? `<div class="form-row">${bom.map((c) => `
-      <div class="form-group"><label class="form-label">NG ${UI.esc(c.componentName || c.componentCode)}</label>
+      <div class="form-group"><label class="form-label" title="${UI.esc(c.componentName || '')}">NG ${UI.esc(c.componentCode)}</label>
       <input type="number" min="0" inputmode="numeric" class="form-input" data-comp="${UI.esc(c.componentCode)}" data-name="${UI.esc(c.componentName)}" value="${(values[c.componentCode] || {}).qty || ''}"></div>`).join('')}</div>`
       : `<div class="form-group"><label class="form-label">NG (ยังไม่มี BOM)</label><input type="number" min="0" inputmode="numeric" class="form-input" data-comp="" value="${values.__total || ''}"></div>`;
     container.querySelectorAll('input').forEach((i) => i.addEventListener('input', onChange));
@@ -455,7 +455,7 @@
     const reasons = UI.ngReasonList(cfg, group);
     return `<div class="sf-ng" data-li="${li}" data-ni="${ni}">
       <select class="form-input" data-f="reason"><option value="">— อาการ —</option>${reasons.map((r) => `<option ${r === n.reason ? 'selected' : ''}>${UI.esc(r)}</option>`).join('')}</select>
-      ${bom.length ? `<select class="form-input" data-f="comp"><option value="">— ชิ้นส่วน —</option>${bom.map((c) => `<option value="${UI.esc(c.componentCode)}" ${c.componentCode === n.comp ? 'selected' : ''}>${UI.esc(c.componentName || c.componentCode)}</option>`).join('')}</select>` : ''}
+      ${bom.length ? `<select class="form-input" data-f="comp"><option value="">— ชิ้นส่วน —</option>${bom.map((c) => `<option value="${UI.esc(c.componentCode)}" ${c.componentCode === n.comp ? 'selected' : ''}>${UI.esc(c.componentCode)}</option>`).join('')}</select>` : ''}
       <input type="number" min="0" inputmode="numeric" class="form-input" data-f="qty" placeholder="จำนวน" value="${UI.esc(n.qty)}">
       <button class="btn btn-outline btn-sm" type="button" data-del-ng title="ลบ"><i class="bi bi-x-lg"></i></button>
       <input class="form-input sf-other ${n.reason === OTHER ? '' : 'hidden'}" data-f="other" placeholder="ระบุอาการ" value="${UI.esc(n.other || '')}">
