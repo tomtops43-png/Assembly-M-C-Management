@@ -29,7 +29,7 @@
         <div class="form-group"><label class="form-label">วันที่งาน</label><input type="date" class="form-input" id="date"></div>
         <div class="form-group"><label class="form-label">เครื่องที่พบ</label><select class="form-input" id="machine"></select></div>
         <div class="form-group"><label class="form-label">สินค้า</label><select class="form-input" id="product"></select></div>
-        <div class="form-group"><label class="form-label">Job Order (ไม่บังคับ)</label><select class="form-input" id="jo"><option value="">ไม่ระบุ</option></select></div>
+        <div class="form-group"><label class="form-label">Job Order <span class="req hidden" id="joReq">*</span><span class="text-gray small" id="joOpt">(ไม่บังคับ)</span></label><select class="form-input" id="jo"><option value="">ไม่ระบุ</option></select></div>
         <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="shift"><option value="Day">กะเช้า</option><option value="Night">กะดึก</option></select></div>
         <div class="form-group"><label class="form-label">จำนวนที่ต้อง Sort</label><input type="number" class="form-input" id="qty"></div>
       </div>
@@ -92,7 +92,10 @@
   const parts = () => cfg.defectPartGroups.length ? cfg.defectPartGroups : [{ code: 'NG', label: '' }];
 
   function renderProc() { $('procGrid').innerHTML = cfg.sortingProcesses.map((p) => `<button class="choice-btn ${proc === p ? 'active' : ''}" data-proc="${UI.esc(p)}">${UI.esc(p)}</button>`).join(''); }
-  $('procGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-proc]'); if (b) { proc = b.dataset.proc; renderProc(); } });
+  // งานที่พบที่ FG (กรอกยอดไปแล้ว) ต้องเลือก Job Order เสมอ — ใช้ตรวจยอดไม่ให้เกิน FG จริง
+  const joRequired = () => (cfg.sortingFgProcesses || []).includes(proc);
+  function syncJoRequired() { $('joReq').classList.toggle('hidden', !joRequired()); $('joOpt').classList.toggle('hidden', joRequired()); }
+  $('procGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-proc]'); if (b) { proc = b.dataset.proc; renderProc(); syncJoRequired(); } });
   // อาการที่เลือกแล้ว (หลายอาการ) แสดงเป็น chip — เลือกจาก dropdown ทีละอาการ
   const renderReasons = () => {
     $('reasonChips').innerHTML = reasons.map((r, i) => `<span class="chip">${UI.esc(r)}<button type="button" data-del-reason="${i}" title="เอาออก">&times;</button></span>`).join('');
@@ -130,6 +133,7 @@
     const remark = reasons.concat(other ? [other] : []).join(', ');
     if (!proc) return UI.showToast('กรุณาเลือกกระบวนการที่พบ', 'warning');
     if (!remark) return UI.showToast('กรุณาระบุหมายเหตุ', 'warning');
+    if (joRequired() && !$('jo').value) return UI.showToast('งานที่พบที่ ' + proc + ' ต้องเลือก Job Order', 'warning');
     const data = { date: $('date').value, machineId: $('machine').value, productCode: $('product').value, jobOrderId: $('jo').value,
       foundProcess: proc, shift: $('shift').value, totalQty: Number($('qty').value) || 0, remark };
     if (data.totalQty <= 0) return UI.showToast('กรุณากรอกจำนวนที่ต้อง Sort', 'warning');
@@ -137,7 +141,7 @@
     const r = await API.post('submitSortingJob', { data });
     if (!r.success) return UI.showToast(r.message, 'error');
     reqIds.reset();
-    UI.showToast('ลงทะเบียน ' + r.jobId, 'success'); $('qty').value = ''; proc = ''; renderProc();
+    UI.showToast('ลงทะเบียน ' + r.jobId, 'success'); $('qty').value = ''; proc = ''; renderProc(); syncJoRequired();
     reasons = []; renderReasons(); $('reason').value = ''; $('reasonOther').value = ''; $('reason').onchange(); loadJobs();
   });
 
