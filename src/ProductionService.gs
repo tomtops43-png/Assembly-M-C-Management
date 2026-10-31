@@ -42,14 +42,20 @@ function deleteNgReason(token, reasonId) {
   return { success: true };
 }
 
-/** {code:{componentName, qty}} → {details, defectQty} */
-function normalizeDefects(defectByComponent, fallbackQty) {
+/**
+ * {code:{componentName, qty}} → {details, defectQty}
+ * qty ราย component = จำนวน MAT ; NG รวม = จำนวนตัว (FG) → แปลง MAT เป็นตัวด้วย BOM (ceil(qty / จำนวนต่อ FG))
+ * แล้วรวมแบบ max/sum ตาม DEFECT_AGGREGATE (BOM 1:1 = เหมือนเดิม)
+ */
+function normalizeDefects(defectByComponent, fallbackQty, productCode) {
   var details = {};
   var qtys = [];
+  var per = {};
+  if (productCode) getProductBOM(productCode).forEach(function (c) { per[c.componentCode] = toNumber(c.qtyPerUnit, 1) || 1; });
   Object.keys(defectByComponent || {}).forEach(function (code) {
     var v = defectByComponent[code] || {};
     var q = Math.max(0, toNumber(v.qty));
-    if (q > 0) { details[code] = { componentName: v.componentName || '', qty: q }; qtys.push(q); }
+    if (q > 0) { details[code] = { componentName: v.componentName || '', qty: q }; qtys.push(Math.ceil(q / (per[code] || 1) - 1e-9)); }
   });
   var total;
   if (!qtys.length) total = Math.max(0, toNumber(fallbackQty));
@@ -181,7 +187,7 @@ function submitProduction(token, data) {
     }
   }
 
-  var ng = normalizeDefects(data.defectByComponent, data.defectQty);
+  var ng = normalizeDefects(data.defectByComponent, data.defectQty, data.productCode);
   var actual = toNumber(data.actualQty);
   if (ng.defectQty > 0 && !hasNgReason(data.remark)) throw new Error('กรุณาระบุอาการ NG');
   // แถว NG แยกจากแถว FG: กรอก FG + NG พร้อมกัน → บันทึกเป็น 2 แถว (FG แถวหนึ่ง, NG แถวหนึ่ง) ไม่ทิ้งยอด FG
@@ -344,7 +350,7 @@ function updateProductionEntry(token, logId, updates) {
   updates = updates || {};
   var upd = {};
   var ng = updates.defectByComponent !== undefined || updates.defectQty !== undefined
-    ? normalizeDefects(updates.defectByComponent, updates.defectQty) : null;
+    ? normalizeDefects(updates.defectByComponent, updates.defectQty, row.productCode) : null;
   var remark = updates.remark !== undefined ? updates.remark : row.remark;
   var actual = updates.actualQty !== undefined ? toNumber(updates.actualQty) : row.actualQty;
   if (ng) {
