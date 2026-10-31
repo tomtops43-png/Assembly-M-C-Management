@@ -1,5 +1,6 @@
 /**
- * SortingService.gs — คัดแยกงาน (ชนิดเสียแยกตาม LINE_CONFIG.DEFECT_PART_GROUPS)
+ * SortingService.gs — คัดแยกงาน: งานดี / งานรอแยกส่วน (เดิม = งานเสีย; แยกตาม LINE_CONFIG.DEFECT_PART_GROUPS)
+ * ยอดรอแยกส่วนจะถูกส่งเข้า DisassemblyLog อัตโนมัติ (ดู DisassemblyService.gs)
  */
 function sortingToObj(r) {
   return {
@@ -106,7 +107,9 @@ function recordSortingResult(token, jobId, result) {
     Remark: LINE_CONFIG.SORTING_ADJUST_NG_REASON + ' ' + jobId + ' (' + j.foundProcess + ')', Status: 'sort-adjust',
     ClientRequestID: '', JobOrderID: j.jobOrderId
   });
-  return { success: true, completed: done };
+  // ยอด "รอแยกส่วน" (เดิม = งานเสีย) → เข้าคิวรอแยกส่วน อ้างเลขงานคัดแยกเดิม (FIFO ตามวันที่งานคัดแยก)
+  var dsJobId = addDisassemblyFromSorting(u, j, defect);
+  return { success: true, completed: done, disassemblyJobId: dsJobId };
 }
 
 function querySortingJobs(f) {

@@ -196,6 +196,7 @@ function renameJobOrder(token, jobOrderId, newJobOrderId) {
     jobOrders: replaceColumnValue('JobOrders', 'JobOrderID', oldId, newId),
     production: replaceColumnValue('ProductionLog', 'JobOrderID', oldId, newId),
     sorting: replaceColumnValue('SortingLog', 'JobOrderID', oldId, newId),
+    disassembly: replaceColumnValue('DisassemblyLog', 'JobOrderID', oldId, newId) + replaceColumnValue('DisassemblyLog', 'SourceRef', oldId, newId),
     machines: replaceColumnValue('Machines', 'CurrentJobOrder', oldId, newId)
   };
   logAction(u, 'renameJobOrder', { from: oldId, to: newId, moved: moved });

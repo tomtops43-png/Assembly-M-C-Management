@@ -234,7 +234,7 @@ function migrateProductCodes() {
       return { rows: kept, changed: changed };
     });
 
-    ['ProductionLog', 'JobOrders', 'SortingLog', 'CostPLConfig'].forEach(function (name) {
+    ['ProductionLog', 'JobOrders', 'SortingLog', 'DisassemblyLog', 'CostPLConfig'].forEach(function (name) {
       var sh = getSheet(name);
       if (!sh || sh.getLastRow() < 2) { out[name] = 0; return; }
       var ci = getHeaders(name).indexOf('ProductCode');
