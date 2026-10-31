@@ -20,17 +20,18 @@
 <main class="main"><div class="container">
   <div class="card">
     <div class="card-title"><i class="bi bi-box-arrow-in-down"></i> ลงงานรอแยกส่วนจาก Job Order</div>
-    <div class="notice info">สำหรับงานที่ปั๊มออกมาแล้ว <b>ยังไม่ได้ลงยอด</b> และต้องนำไปแยกส่วน — ไม่นับเป็น FG และไม่นับยอด MO<br>
+    <div class="notice info">สำหรับงานที่ปั๊มออกมาแล้ว <b>ยังไม่ได้ลงยอด</b> และต้องนำไปแยกส่วน — <b>ลงเป็นจำนวน FG</b> แล้วระบบแตกเป็น MAT ตาม BOM ให้เอง (ไม่นับยอด FG / ไม่นับยอด MO)<br>
       งาน "รอแยกส่วน" จากหน้าคัดแยก จะเข้าคิวด้านล่างให้อัตโนมัติ (อ้างเลขงานคัดแยกเดิม)</div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Job Order *</label><select class="form-input" id="jo"></select></div>
       <div class="form-group"><label class="form-label">เครื่อง *</label><select class="form-input" id="machine"></select></div>
       <div class="form-group"><label class="form-label">วันที่ผลิต</label><input type="date" class="form-input" id="date"></div>
       <div class="form-group"><label class="form-label">กะ</label><select class="form-input" id="shift"><option value="Day">กะเช้า</option><option value="Night">กะดึก</option></select></div>
-      <div class="form-group"><label class="form-label">จำนวนรอแยกส่วน (ชิ้น) *</label><input type="number" min="1" inputmode="numeric" class="form-input" id="qty"></div>
+      <div class="form-group"><label class="form-label">จำนวน FG (ชิ้น) *</label><input type="number" min="1" step="1" inputmode="numeric" class="form-input" id="qty" placeholder="ลงเป็นจำนวน FG"></div>
       <div class="form-group"><label class="form-label">หมายเหตุ</label><input class="form-input" id="remark" placeholder="เช่น อาการ NG"></div>
     </div>
     <div class="small text-gray mb-2" id="joInfo"></div>
+    <div class="mb-2" id="joMat"></div>
     <button class="btn btn-primary btn-full btn-lg" id="register"><i class="bi bi-plus-lg"></i> ลงงานรอแยกส่วน</button>
   </div>
 
@@ -77,20 +78,37 @@
     const list = !ids.length || ids.includes('ALL') ? machines : machines.filter((m) => ids.includes(m.machineId));
     $('machine').innerHTML = UI.machineOptions(list) || '<option value="">ไม่มีเครื่อง</option>';
     $('joInfo').textContent = jo ? `สินค้า ${jo.productCode} · แผน ${fmt(jo.plannedQty)} · สถานะ ${UI.statusLabel(jo.status)}` : '';
+    renderJoMat();
+  }
+  /** ลงเป็นจำนวน FG → ระบบแตกเป็น MAT ตาม BOM ให้เอง (FG × จำนวนต่อ FG) */
+  function matBreakdown(productCode, fgQty) {
+    return (bomMap[productCode] || []).map((c) => ({ code: c.componentCode, name: c.componentName || '', per: Number(c.qtyPerUnit) || 0, qty: Math.round(fgQty * (Number(c.qtyPerUnit) || 0) * 10000) / 10000 }));
+  }
+  function renderJoMat() {
+    const jo = selJo();
+    if (!jo) { $('joMat').innerHTML = ''; return; }
+    const fg = Math.max(0, Number($('qty').value) || 0);
+    const rows = matBreakdown(jo.productCode, fg);
+    $('joMat').innerHTML = rows.length
+      ? `<div class="form-label">MAT ที่จะได้จากการแยก FG ${fmt(fg)} ชิ้น (ตาม BOM)</div>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>รหัส MAT</th><th>ชื่อ</th><th class="num">ต่อ FG</th><th class="num">รวม MAT</th></tr></thead><tbody>
+        ${rows.map((m) => `<tr><td class="fw-bold">${UI.esc(m.code)}</td><td class="small">${UI.esc(m.name)}</td><td class="num">${fmtQ(m.per)}</td><td class="num fw-bold">${fmtQ(m.qty)}</td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="notice">สินค้า ${UI.esc(jo.productCode)} ยังไม่มี BOM — ระบบแตกเป็น MAT ไม่ได้ (ตั้ง BOM ที่ จัดการ → สินค้า / BOM)</div>`;
   }
   $('jo').onchange = fillMachines;
+  $('qty').addEventListener('input', renderJoMat);
 
   $('register').onclick = () => UI.withButton($('register'), async () => {
     const data = { jobOrderId: $('jo').value, machineId: $('machine').value, date: $('date').value, shift: $('shift').value,
       totalQty: Number($('qty').value) || 0, remark: $('remark').value.trim() };
     if (!data.jobOrderId) return UI.showToast('กรุณาเลือก Job Order', 'warning');
     if (!data.machineId) return UI.showToast('กรุณาเลือกเครื่อง', 'warning');
-    if (data.totalQty <= 0) return UI.showToast('กรุณากรอกจำนวนรอแยกส่วน', 'warning');
+    if (data.totalQty <= 0 || !Number.isInteger(data.totalQty)) return UI.showToast('กรุณากรอกจำนวน FG เป็นจำนวนเต็ม', 'warning');
     data.clientRequestId = reqIds.get(data);
     const r = await API.post('submitDisassemblyJob', { data });
     if (!r.success) return UI.showToast(r.message, 'error');
     reqIds.reset();
-    UI.showToast('ลงงาน ' + r.jobId, 'success'); $('qty').value = ''; $('remark').value = '';
+    UI.showToast('ลงงาน ' + r.jobId, 'success'); $('qty').value = ''; $('remark').value = ''; renderJoMat();
     loadJobs();
   });
 
@@ -102,9 +120,13 @@
   }
   function matSummary(j) {
     const ks = Object.keys(j.matDetails || {});
-    if (!ks.length) return '';
+    const left = Math.max(0, j.totalQty - j.doneQty);
+    const todo = (j.status === 'pending' || j.status === 'in-progress') && left ? matBreakdown(j.productCode, left) : [];
+    const todoHtml = todo.length ? '<div class="small mt-1 text-gray">MAT ที่จะได้ (FG ' + fmt(left) + ' ชิ้น): ' +
+      todo.map((m) => `<span class="fw-bold">${UI.esc(m.code)}</span> ×${fmtQ(m.qty)}`).join(' · ') + '</div>' : '';
+    if (!ks.length) return todoHtml;
     return '<div class="small mt-1">' + ks.map((k) => { const m = j.matDetails[k];
-      return `<span class="fw-bold">${UI.esc(k)}</span> <span class="text-success">ได้คืน ${fmtQ(m.good)}</span>${Number(m.scrap) ? ` <span class="text-danger">เสีย ${fmtQ(m.scrap)}</span>` : ''}`; }).join(' · ') + '</div>';
+      return `<span class="fw-bold">${UI.esc(k)}</span> <span class="text-success">ได้คืน ${fmtQ(m.good)}</span>${Number(m.scrap) ? ` <span class="text-danger">เสีย ${fmtQ(m.scrap)}</span>` : ''}`; }).join(' · ') + '</div>' + todoHtml;
   }
   function renderJobs() {
     const q = $('fSearch').value.trim().toLowerCase();
