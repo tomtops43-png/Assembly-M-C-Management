@@ -6,14 +6,14 @@ var SESSION_EXPIRED_MSG = 'กรุณาเข้าสู่ระบบใ�
 
 // ต้องตรงกับ docs/js/auth.js (_roleDefaults)
 var PERMISSION_KEYS = ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin',
-  'joborders', 'cost', 'labor', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber'];
+  'joborders', 'cost', 'labor', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber'];
 
 var ROLE_DEFAULT_PERMISSIONS = {
   viewer:      ['inbox', 'dashboard'],
-  operator:    ['production', 'inbox', 'maintenance', 'machines', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
-  maintenance: ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
-  supervisor:  ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'joborders', 'cost', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber'],
-  admin:       ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin', 'joborders', 'cost', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber']
+  operator:    ['production', 'inbox', 'maintenance', 'machines', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
+  maintenance: ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
+  supervisor:  ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'joborders', 'cost', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber'],
+  admin:       ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin', 'joborders', 'cost', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber']
 };
 
 function resolvePermissions(role, overrideJson) {

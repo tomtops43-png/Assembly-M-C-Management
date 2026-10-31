@@ -34,7 +34,7 @@
         <div class="form-group"><label class="form-label">จำนวนที่ต้อง Sort</label><input type="number" class="form-input" id="qty"></div>
       </div>
       <div class="form-group"><label class="form-label">กระบวนการที่พบ</label><div class="choice-grid" id="procGrid"></div>
-        <div class="form-hint">FG = งานที่กรอกยอดไปแล้ว (งานเสียจะถูกหักออกจาก FG) · ไลน์ผลิต = ยังไม่ได้กรอกยอด (งานดีจะบวกเข้า FG)</div></div>
+        <div class="form-hint">FG = งานที่กรอกยอดไปแล้ว (งานรอแยกส่วนจะถูกหักออกจาก FG) · ไลน์ผลิต = ยังไม่ได้กรอกยอด (งานดีจะบวกเข้า FG) · งานรอแยกส่วนจะถูกส่งไปเมนู "รอแยกส่วน" อัตโนมัติ</div></div>
       <div class="form-group"><label class="form-label">หมายเหตุ / อาการ NG <span class="req">*</span> <span class="text-gray small">(เลือกได้มากกว่า 1 อาการ)</span></label>
         <div class="d-flex gap-2"><select class="form-input" id="reason"></select>
           <button class="btn btn-outline" type="button" id="reasonAdd"><i class="bi bi-plus-lg"></i> เพิ่มอาการ</button>
@@ -87,7 +87,8 @@
     document.querySelectorAll('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== b.dataset.tab));
     if (b.dataset.tab === 'dash') loadDash();
   });
-  const parts = () => cfg.defectPartGroups.length ? cfg.defectPartGroups : [{ code: 'NG', label: 'เสีย' }];
+  // ผลคัดแยก = งานดี / งานรอแยกส่วน (ยอดรอแยกส่วนส่งเข้าเมนู "รอแยกส่วน" อัตโนมัติ)
+  const parts = () => cfg.defectPartGroups.length ? cfg.defectPartGroups : [{ code: 'NG', label: '' }];
 
   function renderProc() { $('procGrid').innerHTML = cfg.sortingProcesses.map((p) => `<button class="choice-btn ${proc === p ? 'active' : ''}" data-proc="${UI.esc(p)}">${UI.esc(p)}</button>`).join(''); }
   $('procGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-proc]'); if (b) { proc = b.dataset.proc; renderProc(); } });
@@ -154,7 +155,7 @@
       return `<div class="entry-card">
         <div class="entry-head"><span>${UI.esc(j.jobId)}</span><span class="badge badge-${j.status}">${UI.statusLabel(j.status)}</span></div>
         <div class="entry-meta">${UI.formatDate(j.date)} · ${UI.esc(j.machineId)} · ${UI.esc(j.productCode)} · ${UI.esc(j.foundProcess)} · ${UI.esc(UI.shiftLabel(j.shift))} ${j.jobOrderId ? '· ' + UI.esc(j.jobOrderId) : ''}<br>${UI.esc(j.remark)} · ลงทะเบียนโดย ${UI.esc(j.registeredByName)} ${j.sortedByName ? '· คัดโดย ' + UI.esc(j.sortedByName) : ''}</div>
-        <div class="d-flex justify-between small mt-1"><span>คัดแล้ว ${UI.formatNumber(done)}/${UI.formatNumber(j.totalQty)}</span><span class="text-success">ดี ${UI.formatNumber(j.goodQty)}</span><span class="text-danger">เสีย ${UI.formatNumber(j.defectQty)}</span></div>
+        <div class="d-flex justify-between small mt-1"><span>คัดแล้ว ${UI.formatNumber(done)}/${UI.formatNumber(j.totalQty)}</span><span class="text-success">ดี ${UI.formatNumber(j.goodQty)}</span><span class="text-danger">รอแยกส่วน ${UI.formatNumber(j.defectQty)}</span></div>
         <div class="progress-bar-container mt-1"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
         <div class="entry-actions">
           ${j.status === 'pending' ? `<button class="btn btn-primary btn-sm" data-act="pull" data-id="${j.jobId}">ดึงงาน</button>` : ''}
@@ -180,20 +181,20 @@
     $('rTitle').textContent = 'บันทึกผล ' + j.jobId;
     $('rInfo').textContent = `คงเหลือ ${UI.formatNumber(j.totalQty - j.goodQty - j.defectQty)} ชิ้น · กระบวนการ ${j.foundProcess}`;
     $('rGood').value = '';
-    $('rParts').innerHTML = parts().map((p) => `<div class="form-group"><label class="form-label">เสีย ${UI.esc(p.label)}</label><input type="number" min="0" inputmode="numeric" class="form-input" data-part="${UI.esc(p.code)}"></div>`).join('');
+    $('rParts').innerHTML = parts().map((p) => `<div class="form-group"><label class="form-label">งานรอแยกส่วน${p.label ? ' ' + UI.esc(p.label) : ''} (รอบนี้)</label><input type="number" min="0" inputmode="numeric" class="form-input" data-part="${UI.esc(p.code)}"></div>`).join('');
     UI.openModal('resultModal');
   }
   $('rSave').onclick = () => UI.withButton($('rSave'), async () => {
     const defectByPart = {};
     $('rParts').querySelectorAll('[data-part]').forEach((i) => { defectByPart[i.dataset.part] = Number(i.value) || 0; });
     const result = { goodQty: Number($('rGood').value) || 0, defectByPart };
-    if (!result.goodQty && !Object.keys(defectByPart).some((k) => defectByPart[k] > 0)) return UI.showToast('กรุณากรอกจำนวนงานดี หรืองานเสีย', 'warning');
+    if (!result.goodQty && !Object.keys(defectByPart).some((k) => defectByPart[k] > 0)) return UI.showToast('กรุณากรอกจำนวนงานดี หรืองานรอแยกส่วน', 'warning');
     // ผลแบบบวกสะสม → ส่งซ้ำ (เน็ตหลุด) ต้องไม่บวกเบิ้ล
     const clientRequestId = resultIds.get({ jobId: current.jobId, result });
     const r = await API.post('recordSortingResult', { jobId: current.jobId, result, clientRequestId });
     if (!r.success) return UI.showToast(r.message, 'error');
     resultIds.reset();
-    UI.closeModal('resultModal'); UI.showToast(r.completed ? 'คัดแยกครบแล้ว' : 'บันทึกผลแล้ว', 'success'); loadJobs();
+    UI.closeModal('resultModal'); UI.showToast((r.completed ? 'คัดแยกครบแล้ว' : 'บันทึกผลแล้ว') + (r.disassemblyJobId ? ' · ส่งเข้ารอแยกส่วน ' + r.disassemblyJobId : ''), 'success'); loadJobs();
   });
 
   async function loadDash() {
@@ -206,8 +207,8 @@
       <div class="kpi-card success"><div class="kpi-value">${s.completed}</div><div class="kpi-label">เสร็จ</div></div>
       <div class="kpi-card"><div class="kpi-value">${UI.formatNumber(done)}/${UI.formatNumber(s.totalQty)}</div><div class="kpi-label">คัดแล้ว</div></div>
       <div class="kpi-card success"><div class="kpi-value">${done ? (s.goodQty / done * 100).toFixed(1) : 0}%</div><div class="kpi-label">% ดี</div></div>
-      <div class="kpi-card danger"><div class="kpi-value">${done ? (s.defectQty / done * 100).toFixed(1) : 0}%</div><div class="kpi-label">% เสีย ${Object.keys(s.defectByPart).map((k) => k + ' ' + s.defectByPart[k]).join(' / ')}</div></div>`;
-    const tbl = (obj) => '<thead><tr><th></th><th class="num">งาน</th><th class="num">ทั้งหมด</th><th class="num">ดี</th><th class="num">เสีย</th></tr></thead><tbody>' +
+      <div class="kpi-card danger"><div class="kpi-value">${done ? (s.defectQty / done * 100).toFixed(1) : 0}%</div><div class="kpi-label">% รอแยกส่วน ${Object.keys(s.defectByPart).map((k) => k + ' ' + s.defectByPart[k]).join(' / ')}</div></div>`;
+    const tbl = (obj) => '<thead><tr><th></th><th class="num">งาน</th><th class="num">ทั้งหมด</th><th class="num">ดี</th><th class="num">รอแยกส่วน</th></tr></thead><tbody>' +
       Object.keys(obj).map((k) => `<tr><td>${UI.esc(k)}</td><td class="num">${obj[k].jobs}</td><td class="num">${UI.formatNumber(obj[k].totalQty)}</td><td class="num">${UI.formatNumber(obj[k].goodQty)}</td><td class="num">${UI.formatNumber(obj[k].defectQty)}</td></tr>`).join('') + '</tbody>';
     $('dMachine').innerHTML = tbl(r.data.byMachine); $('dProc').innerHTML = tbl(r.data.byProcess);
   }

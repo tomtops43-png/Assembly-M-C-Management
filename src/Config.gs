@@ -279,6 +279,7 @@ var SHEET_SCHEMAS = {
   FiberRolls: ['RollID', 'CreatedAt', 'CreatedBy', 'PartCode', 'LotNumber', 'Oven', 'Status', 'Cycle', 'DryStart', 'ReadyAt', 'OutAt', 'ExpireAt', 'MachineID', 'Moisture', 'UpdatedAt', 'UpdatedBy', 'UpdatedByName', 'Remark'],
   FiberLog: ['LogID', 'Timestamp', 'RollID', 'Action', 'Cycle', 'MachineID', 'Moisture', 'ByID', 'ByName', 'Remark'],
   SortingLog: ['JobID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'MachineID', 'ProductCode', 'FoundProcess', 'TotalQty', 'GoodQty', 'DefectQty', 'DefectDetails', 'Status', 'RegisteredBy', 'RegisteredByName', 'SortedBy', 'SortedByName', 'PulledAt', 'CompletedAt', 'Remark', 'JobOrderID'],
+  DisassemblyLog: ['JobID', 'Timestamp', 'Date', 'Shift', 'MachineID', 'ProductCode', 'SourceType', 'SourceRef', 'JobOrderID', 'TotalQty', 'DoneQty', 'MatDetails', 'Status', 'RegisteredBy', 'RegisteredByName', 'WorkedBy', 'WorkedByName', 'PulledAt', 'CompletedAt', 'Remark'],
   WasteLog: ['WasteID', 'Timestamp', 'Date', 'RecordedBy', 'RecorderName', 'WasteType', 'WeightKg', 'Remark', 'Category'],
   NgIssues: ['IssueID', 'Title', 'Category', 'MachineID', 'ProductCode', 'Description', 'RootCause', 'Countermeasure', 'Status', 'CreatedAt', 'CreatedBy', 'CreatorName', 'UpdatedAt', 'UpdatedBy', 'ClosedAt', 'ClosedBy'],
   NgIssueLog: ['OccurrenceID', 'IssueID', 'Timestamp', 'Date', 'Shift', 'MachineID', 'ProductCode', 'NgQty', 'Detail', 'Photos', 'RecordedBy', 'RecorderName', 'ClientRequestID'],

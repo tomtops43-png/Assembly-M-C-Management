@@ -10,17 +10,17 @@ const Auth = (() => {
 
   const _roleDefaults = {
     viewer:      ['inbox', 'dashboard'],
-    operator:    ['production', 'inbox', 'maintenance', 'machines', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
-    maintenance: ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
-    supervisor:  ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'joborders', 'cost', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber'],
-    admin:       ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin', 'joborders', 'cost', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber']
+    operator:    ['production', 'inbox', 'maintenance', 'machines', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
+    maintenance: ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
+    supervisor:  ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'joborders', 'cost', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber'],
+    admin:       ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin', 'joborders', 'cost', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber']
   };
   const PERMISSION_KEYS = ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin',
-    'joborders', 'cost', 'labor', 'waste', 'sorting', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber'];
+    'joborders', 'cost', 'labor', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber'];
   const PERMISSION_LABELS = {
     production: 'กรอกยอด', inbox: 'Inbox', maintenance: 'แจ้งซ่อม', rawmaterial: 'รับวัตถุดิบ', fiber: 'อบไฟเบอร์', machines: 'เครื่องจักร',
     dashboard: 'Dashboard', admin: 'จัดการ', joborders: 'วางแผนการผลิต', cost: 'ต้นทุน', labor: 'ค่าแรง',
-    waste: 'ทิ้งขยะ', sorting: 'คัดแยก', alarm: 'Alarm', ngissue: 'ปัญหา NG', dailycheck: 'Daily Check', ngExport: 'ส่งออก NG (QC)'
+    waste: 'ทิ้งขยะ', sorting: 'คัดแยก', disassembly: 'รอแยกส่วน', alarm: 'Alarm', ngissue: 'ปัญหา NG', dailycheck: 'Daily Check', ngExport: 'ส่งออก NG (QC)'
   };
 
   const store = {
