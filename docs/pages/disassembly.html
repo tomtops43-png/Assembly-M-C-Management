@@ -47,9 +47,10 @@
   <button class="modal-close" data-close-modal>&times;</button>
   <h3 class="modal-title" id="rTitle"></h3>
   <div class="small text-gray mb-2" id="rInfo"></div>
-  <div class="form-group"><label class="form-label">จำนวน FG ที่แยกส่วนรอบนี้ (ชิ้น) *</label><input type="number" min="1" inputmode="numeric" class="form-input form-input-lg" id="rQty"></div>
+  <div class="form-group"><label class="form-label">จำนวน FG ที่แยกส่วนรอบนี้ (ชิ้น) *</label><input type="number" min="1" step="1" inputmode="numeric" class="form-input form-input-lg" id="rQty"></div>
   <div class="form-label">MAT ที่ได้จากการแยก (ตาม BOM)</div>
   <div id="rMats"></div>
+  <div class="notice danger hidden mt-2" id="rErr"></div>
   <button class="btn btn-success btn-full mt-2" id="rSave">บันทึกผล (บวกสะสม)</button>
 </div></div>
 
@@ -163,31 +164,53 @@
           <td class="num">${fmtQ(c.qtyPerUnit)}</td><td class="num" data-exp></td>
           <td><input type="number" min="0" step="any" inputmode="decimal" class="form-input" style="width:110px" data-good></td>
           <td><input type="number" min="0" step="any" inputmode="decimal" class="form-input" style="width:110px" data-scrap></td></tr>`).join('')}
-        </tbody></table></div><div class="form-hint">ช่อง "ได้คืน" เติมให้ตาม BOM อัตโนมัติ — แก้ได้ (ได้คืน + เสีย ควรเท่ากับ "ควรได้")</div>`
+        </tbody></table></div><div class="form-hint">กรอก "MAT เสีย" แล้ว "ได้คืน" จะคำนวณให้ = ควรได้ − เสีย · ได้คืน + เสีย ห้ามเกิน "ควรได้"</div>`
       : '<div class="notice">สินค้านี้ยังไม่มี BOM — บันทึกได้เฉพาะจำนวนที่แยก (ตั้ง BOM ที่ จัดการ → สินค้า / BOM)</div>';
     syncExpected(true);
     UI.openModal('resultModal');
   }
-  /** ควรได้ = จำนวน FG × ต่อ FG ; เติม "ได้คืน" อัตโนมัติจนกว่าผู้ใช้จะแก้เอง */
+  const r4 = (n) => Math.round(n * 10000) / 10000;
+  const left = () => Math.max(0, current.totalQty - current.doneQty);
+  /**
+   * Interlock (ฝั่งหน้าเว็บ — backend ตรวจซ้ำ):
+   *  - จำนวน FG รอบนี้ ต้องเป็นจำนวนเต็ม 1..คงเหลือ
+   *  - ต่อ MAT: ได้คืน + เสีย ≤ ควรได้ (= FG × ต่อ FG) ; "ได้คืน" คำนวณให้ = ควรได้ − เสีย จนกว่าจะแก้เอง
+   * คืนค่า ข้อความ error แรก (หรือ '' ถ้าผ่าน)
+   */
   function syncExpected(reset) {
     const qty = Number($('rQty').value) || 0;
+    const errs = [];
+    if ($('rQty').value !== '' && (qty <= 0 || !Number.isInteger(qty))) errs.push('จำนวน FG ต้องเป็นจำนวนเต็มมากกว่า 0');
+    if (qty > left()) errs.push(`จำนวน FG ${fmt(qty)} เกินที่คงเหลือ ${fmt(left())} ชิ้น`);
+    $('rQty').classList.toggle('input-invalid', errs.length > 0);
     $('rMats').querySelectorAll('tr[data-code]').forEach((tr) => {
-      const exp = qty * Number(tr.dataset.per);
+      const exp = r4(Math.min(qty, left()) * Number(tr.dataset.per));
       tr.querySelector('[data-exp]').textContent = fmtQ(exp);
       const g = tr.querySelector('[data-good]'), s = tr.querySelector('[data-scrap]');
       if (reset) { g.dataset.touched = ''; s.value = ''; }
-      if (!g.dataset.touched) g.value = Math.max(0, exp - (Number(s.value) || 0)) || '';
+      g.max = exp; s.max = exp;
+      const scrap = Number(s.value) || 0;
+      if (!g.dataset.touched) g.value = exp - scrap > 0 ? r4(exp - scrap) : (exp ? 0 : '');
+      const good = Number(g.value) || 0;
+      const bad = good < 0 || scrap < 0 || r4(good + scrap) > exp;
+      g.classList.toggle('input-invalid', bad); s.classList.toggle('input-invalid', bad);
+      if (bad) errs.push(`${tr.dataset.code}: ได้คืน ${fmtQ(good)} + เสีย ${fmtQ(scrap)} = ${fmtQ(r4(good + scrap))} เกินที่ควรได้ ${fmtQ(exp)}`);
     });
+    $('rErr').innerHTML = errs.map(UI.esc).join('<br>');
+    $('rErr').classList.toggle('hidden', !errs.length);
+    $('rSave').disabled = errs.length > 0;
+    return errs[0] || '';
   }
   $('rQty').addEventListener('input', () => syncExpected(false));
   $('rMats').addEventListener('input', (e) => {
     if (e.target.matches('[data-good]')) e.target.dataset.touched = '1';
-    if (e.target.matches('[data-scrap]')) syncExpected(false);
+    syncExpected(false);
   });
   $('rSave').onclick = () => UI.withButton($('rSave'), async () => {
     const qty = Number($('rQty').value) || 0;
     if (qty <= 0) return UI.showToast('กรุณากรอกจำนวนที่แยกส่วน', 'warning');
-    if (qty > current.totalQty - current.doneQty) return UI.showToast('จำนวนเกินที่คงเหลือ', 'warning');
+    const err = syncExpected(false);
+    if (err) return UI.showToast(err, 'error');
     const mats = {};
     $('rMats').querySelectorAll('tr[data-code]').forEach((tr) => {
       const good = Number(tr.querySelector('[data-good]').value) || 0, scrap = Number(tr.querySelector('[data-scrap]').value) || 0;
