@@ -117,8 +117,21 @@
 <div class="modal-overlay" id="bomModal"><div class="modal-content wide">
   <button class="modal-close" data-close-modal>&times;</button>
   <h3 class="modal-title" id="bomTitle"></h3>
-  <div class="table-wrap"><table class="data-table"><thead><tr><th>Component Code</th><th>ชื่อ</th><th>Qty/Unit</th><th>Supplier</th><th></th></tr></thead><tbody id="bomRows"></tbody></table></div>
-  <div class="btn-group mt-2"><button class="btn btn-outline" id="bomAdd"><i class="bi bi-plus"></i> เพิ่มแถว</button><button class="btn btn-primary" id="bomSave">บันทึก BOM</button></div>
+  <div class="notice info" id="bomHint">ใส่ MAT (ชิ้นส่วน/วัตถุดิบ) ที่ใช้ประกอบ FG นี้ และ <b>จำนวน MAT ที่ใช้ต่อ FG 1 ชิ้น</b> — พิมพ์รหัส MAT ที่เคยใช้ใน BOM อื่น ระบบจะเติมชื่อ/Supplier ให้</div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">คัดลอก BOM จาก FG อื่น</label><select class="form-input" id="bomCopyFrom"></select></div>
+  </div>
+  <datalist id="matList"></datalist>
+  <div class="table-wrap"><table class="data-table"><thead><tr><th>#</th><th>รหัส MAT *</th><th>ชื่อ MAT</th><th class="num">จำนวน / FG 1 ชิ้น *</th><th>Supplier</th><th></th></tr></thead><tbody id="bomRows"></tbody></table></div>
+  <div class="btn-group mt-2"><button class="btn btn-outline" id="bomAdd"><i class="bi bi-plus"></i> เพิ่ม MAT</button></div>
+  <div class="card mt-3">
+    <div class="card-title"><i class="bi bi-calculator"></i> คำนวณ MAT ที่ต้องใช้</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">จำนวน FG ที่จะผลิต (ชิ้น)</label><input type="number" min="0" inputmode="numeric" class="form-input" id="bomCalcQty" value="1"></div>
+    </div>
+    <div class="small" id="bomSummary"></div>
+  </div>
+  <button class="btn btn-primary btn-full mt-2" id="bomSave"><i class="bi bi-save"></i> บันทึก BOM</button>
 </div></div>
 
 <script src="../js/config.js"></script>
@@ -258,7 +271,7 @@
     products = r.data;
     $('pTable').innerHTML = '<thead><tr><th>รหัส</th><th>ชื่อ</th><th class="num">Capacity/ชม.</th><th class="num">DefaultQty</th><th>BOM</th><th>สถานะ</th><th></th></tr></thead><tbody>' +
       (products.map((p) => `<tr><td>${UI.esc(p.productCode)}</td><td>${UI.esc(p.productName)}</td><td class="num">${UI.formatNumber(p.capacity)}</td><td class="num">${p.defaultQty}</td>
-        <td class="small">${p.bom.map((b) => UI.esc(b.componentCode)).join(', ') || '<span class="text-danger">ยังไม่มี</span>'}</td>
+        <td class="small">${p.bom.length ? p.bom.map((b) => `<div><span class="fw-bold">${UI.esc(b.componentCode)}</span>${b.componentName ? ' ' + UI.esc(b.componentName) : ''} <span class="text-gray">×${fmtQty(b.qtyPerUnit)}</span></div>`).join('') : '<span class="text-danger">ยังไม่มี</span>'}</td>
         <td><span class="badge ${p.active ? 'badge-running' : 'badge-closed'}">${p.active ? 'ใช้งาน' : 'ปิด'}</span></td>
         <td><button class="btn btn-outline btn-sm" data-pedit="${UI.esc(p.productCode)}"><i class="bi bi-pencil"></i></button>
             <button class="btn btn-outline btn-sm" data-bom="${UI.esc(p.productCode)}">BOM</button>
@@ -283,26 +296,85 @@
     if (ed) { const p = products.find((x) => x.productCode === ed.dataset.pedit); $('pCode').value = p.productCode; $('pName').value = p.productName; $('pQty').value = p.defaultQty; $('pCap').value = p.capacity || ''; window.scrollTo(0, 0); }
     if (bom) openBom(bom.dataset.bom);
   });
+  const fmtQty = (v) => { const n = Number(v); return isFinite(n) ? n.toLocaleString('th-TH', { maximumFractionDigits: 4 }) : '-'; };
+  /** MAT ทั้งหมดที่เคยใช้ใน BOM ใดๆ — ใช้เติมชื่อ/Supplier อัตโนมัติ */
+  function knownMats() {
+    const m = {};
+    products.forEach((p) => p.bom.forEach((b) => { if (!m[b.componentCode]) m[b.componentCode] = b; }));
+    return m;
+  }
   function bomRow(b = {}) {
-    return `<tr><td><input class="form-input" data-f="componentCode" value="${UI.esc(b.componentCode || '')}"></td><td><input class="form-input" data-f="componentName" value="${UI.esc(b.componentName || '')}"></td>
-      <td><input type="number" class="form-input" style="width:80px" data-f="qtyPerUnit" value="${b.qtyPerUnit || 1}"></td><td><input class="form-input" data-f="supplier" value="${UI.esc(b.supplier || '')}"></td>
-      <td><button class="btn btn-outline btn-sm" data-rmrow><i class="bi bi-x"></i></button></td></tr>`;
+    return `<tr><td class="small text-gray" data-idx></td>
+      <td><input class="form-input" data-f="componentCode" list="matList" placeholder="รหัส MAT" value="${UI.esc(b.componentCode || '')}"></td>
+      <td><input class="form-input" data-f="componentName" placeholder="ชื่อ MAT" value="${UI.esc(b.componentName || '')}"></td>
+      <td><input type="number" min="0" step="any" inputmode="decimal" class="form-input num" style="width:110px" data-f="qtyPerUnit" value="${b.qtyPerUnit || 1}"></td>
+      <td><input class="form-input" data-f="supplier" value="${UI.esc(b.supplier || '')}"></td>
+      <td><button class="btn btn-outline btn-sm" data-rmrow title="ลบ MAT"><i class="bi bi-x"></i></button></td></tr>`;
+  }
+  function readBomRows() {
+    return [...$('bomRows').querySelectorAll('tr')].map((tr) => {
+      const o = {}; tr.querySelectorAll('[data-f]').forEach((i) => { o[i.dataset.f] = i.value.trim(); }); return o;
+    });
+  }
+  /** เลขลำดับ + สรุป "FG 1 ชิ้น = MAT อะไรกี่ตัว" + คำนวณตามจำนวน FG */
+  function refreshBom() {
+    $('bomRows').querySelectorAll('[data-idx]').forEach((td, i) => { td.textContent = i + 1; });
+    const rows = readBomRows().filter((c) => c.componentCode);
+    const fgQty = Math.max(0, Number($('bomCalcQty').value) || 0);
+    if (!rows.length) { $('bomSummary').innerHTML = '<span class="text-gray">ยังไม่มี MAT</span>'; return; }
+    const total = rows.reduce((s, c) => s + (Number(c.qtyPerUnit) || 0), 0);
+    $('bomSummary').innerHTML = `<div class="mb-2">FG <b>${UI.esc(editingProduct.productCode)}</b> 1 ชิ้น ใช้ MAT <b>${rows.length}</b> รายการ รวม <b>${fmtQty(total)}</b> ตัว</div>
+      <div class="table-wrap"><table class="data-table"><thead><tr><th>รหัส MAT</th><th>ชื่อ</th><th class="num">ต่อ 1 FG</th><th class="num">ใช้สำหรับ FG ${fmtQty(fgQty)} ชิ้น</th></tr></thead><tbody>
+      ${rows.map((c) => `<tr><td>${UI.esc(c.componentCode)}</td><td>${UI.esc(c.componentName)}</td><td class="num">${fmtQty(c.qtyPerUnit)}</td><td class="num fw-bold">${fmtQty((Number(c.qtyPerUnit) || 0) * fgQty)}</td></tr>`).join('')}
+      </tbody></table></div>`;
   }
   function openBom(code) {
     editingProduct = products.find((p) => p.productCode === code);
-    $('bomTitle').textContent = 'BOM — ' + code;
+    $('bomTitle').textContent = 'BOM — ' + code + (editingProduct.productName ? ' (' + editingProduct.productName + ')' : '');
+    const mats = knownMats();
+    $('matList').innerHTML = Object.values(mats).map((b) => `<option value="${UI.esc(b.componentCode)}">${UI.esc(b.componentName || '')}</option>`).join('');
+    $('bomCopyFrom').innerHTML = '<option value="">— เลือก FG ที่มี BOM แล้ว —</option>' + products.filter((p) => p.productCode !== code && p.bom.length)
+      .map((p) => `<option value="${UI.esc(p.productCode)}">${UI.esc(p.productCode)} — ${UI.esc(p.productName)} (${p.bom.length} MAT)</option>`).join('');
     $('bomRows').innerHTML = (editingProduct.bom.length ? editingProduct.bom : [{}]).map(bomRow).join('');
+    $('bomCalcQty').value = 1;
+    refreshBom();
     UI.openModal('bomModal');
   }
-  $('bomAdd').onclick = () => $('bomRows').insertAdjacentHTML('beforeend', bomRow());
-  $('bomRows').addEventListener('click', (e) => { const b = e.target.closest('[data-rmrow]'); if (b) b.closest('tr').remove(); });
+  $('bomAdd').onclick = () => { $('bomRows').insertAdjacentHTML('beforeend', bomRow()); refreshBom(); $('bomRows').lastElementChild.querySelector('input').focus(); };
+  $('bomRows').addEventListener('click', (e) => { const b = e.target.closest('[data-rmrow]'); if (b) { b.closest('tr').remove(); refreshBom(); } });
+  $('bomRows').addEventListener('input', refreshBom);
+  $('bomRows').addEventListener('change', (e) => {
+    // เลือกรหัส MAT ที่รู้จัก → เติมชื่อ/Supplier ถ้ายังว่าง
+    if (e.target.dataset.f !== 'componentCode') return;
+    const m = knownMats()[e.target.value.trim()]; if (!m) return;
+    const tr = e.target.closest('tr');
+    const nm = tr.querySelector('[data-f="componentName"]'), sp = tr.querySelector('[data-f="supplier"]');
+    if (!nm.value) nm.value = m.componentName || '';
+    if (!sp.value) sp.value = m.supplier || '';
+    refreshBom();
+  });
+  $('bomCalcQty').addEventListener('input', refreshBom);
+  $('bomCopyFrom').onchange = async () => {
+    const src = products.find((p) => p.productCode === $('bomCopyFrom').value);
+    if (!src) return;
+    if (readBomRows().some((c) => c.componentCode) && !await UI.confirm({ title: 'คัดลอก BOM จาก ' + src.productCode + '?', message: 'MAT ที่กรอกไว้ในหน้านี้จะถูกแทนที่ (ยังไม่บันทึกจนกว่าจะกด "บันทึก BOM")' })) { $('bomCopyFrom').value = ''; return; }
+    $('bomRows').innerHTML = src.bom.map(bomRow).join('');
+    $('bomCopyFrom').value = '';
+    refreshBom();
+  };
   $('bomSave').onclick = () => UI.withButton($('bomSave'), async () => {
-    const components = [...$('bomRows').querySelectorAll('tr')].map((tr) => {
-      const o = {}; tr.querySelectorAll('[data-f]').forEach((i) => { o[i.dataset.f] = i.value.trim(); }); return o;
-    }).filter((c) => c.componentCode);
+    const components = readBomRows().filter((c) => c.componentCode);
+    const seen = {};
+    for (const c of components) {
+      const q = Number(c.qtyPerUnit);
+      if (!(q > 0)) return UI.showToast('จำนวนของ ' + c.componentCode + ' ต้องมากกว่า 0', 'error');
+      if (seen[c.componentCode]) return UI.showToast('รหัส MAT ' + c.componentCode + ' ซ้ำ — รวมเป็นแถวเดียว', 'error');
+      seen[c.componentCode] = true;
+      c.qtyPerUnit = q;
+    }
     const r = await API.post('saveProductBOM', { productCode: editingProduct.productCode, components });
     if (!check(r)) return;
-    UI.closeModal('bomModal'); UI.showToast('บันทึก BOM แล้ว', 'success'); loadProducts();
+    UI.closeModal('bomModal'); UI.showToast('บันทึก BOM แล้ว (' + components.length + ' MAT)', 'success'); loadProducts();
   });
 
   // ---------- alias ----------
