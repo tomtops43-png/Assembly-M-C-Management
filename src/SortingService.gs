@@ -46,7 +46,8 @@ function submitSortingJob(token, d) {
  * ที่ยังไม่ได้อยู่ในงานคัดแยก FG อื่นที่ยังค้าง (ไลน์ผลิต = ยังไม่ลงยอด จึงตรวจกับยอดไม่ได้)
  */
 function checkSortQtyAvailable(foundProcess, jobOrderId, qty, excludeJobId) {
-  if (!jobOrderId || LINE_CONFIG.SORTING_FG_PROCESSES.indexOf(foundProcess) < 0) return;
+  if (LINE_CONFIG.SORTING_FG_PROCESSES.indexOf(foundProcess) < 0) return;
+  if (!jobOrderId) throw new Error('งานที่พบที่ ' + foundProcess + ' ต้องเลือก Job Order (ใช้ตรวจยอด FG)');
   var jo = findRow('JobOrders', 'JobOrderID', jobOrderId);
   if (!jo) throw new Error('ไม่พบ Job Order ' + jobOrderId);
   var fg = computeJobOrderProgress([jobOrderToObj(jo)])[0].actualQty;
@@ -67,12 +68,12 @@ function updateSortingJob(token, jobId, updates) {
   if (j.registeredBy !== u.employeeId && roleLevel(u.role) < roleLevel('supervisor')) throw new Error('ไม่มีสิทธิ์แก้ไข');
   var upd = {};
   updates = updates || {};
-  if (updates.totalQty !== undefined) {
-    var tq = toNumber(updates.totalQty);
-    if (tq <= 0 || Math.floor(tq) !== tq) throw new Error('จำนวนที่ต้อง Sort ต้องเป็นจำนวนเต็มมากกว่า 0');
+  var tq = updates.totalQty !== undefined ? toNumber(updates.totalQty) : j.totalQty;
+  if (tq <= 0 || Math.floor(tq) !== tq) throw new Error('จำนวนที่ต้อง Sort ต้องเป็นจำนวนเต็มมากกว่า 0');
+  if (updates.totalQty !== undefined || updates.foundProcess || updates.jobOrderId !== undefined) {
     checkSortQtyAvailable(updates.foundProcess || j.foundProcess, updates.jobOrderId !== undefined ? updates.jobOrderId : j.jobOrderId, tq, jobId);
-    upd.TotalQty = tq;
   }
+  if (updates.totalQty !== undefined) upd.TotalQty = tq;
   if (updates.remark !== undefined) upd.Remark = updates.remark;
   if (updates.foundProcess) upd.FoundProcess = updates.foundProcess;
   if (updates.jobOrderId !== undefined) upd.JobOrderID = updates.jobOrderId;
