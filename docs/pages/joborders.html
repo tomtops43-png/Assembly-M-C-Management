@@ -119,6 +119,7 @@
   $('joId').addEventListener('input', () => { $('joId').value = $('joId').value.toUpperCase(); });
 
 
+  const joReq = UI.requestIdKeeper(); // กดซ้ำ (เน็ตช้า/timeout) ด้วยข้อมูลเดิม = id เดิม → server ไม่สร้างแผนเบิ้ล
   $('joCreate').onclick = () => UI.withButton($('joCreate'), async () => {
     const real = $('joType').value === 'real';
     if (real && !$('joId').value.trim()) return UI.showToast('กรุณากรอกเลข JO จริง หรือเลือกแบบ Manual ชั่วคราว', 'warning');
@@ -127,9 +128,12 @@
       machineIds: pickedMachines($('joMachine')), shift: $('joShift').value, dueDate: $('joDue').value, priority: $('joPrio').value, remark: $('joRemark').value.trim() };
     if (!data.machineIds.length) return UI.showToast('กรุณาเลือกเครื่องจักรอย่างน้อย 1 เครื่อง', 'warning');
     if (data.dueDate && data.dueDate < data.workDate) return UI.showToast('กำหนดส่งต้องไม่ก่อนวันที่แผน', 'warning');
+    data.clientRequestId = joReq.get(data);
     const r = await API.post('createJobOrder', { data });
-    if (!r.success) return UI.showToast(r.message, 'error');
-    UI.showToast('สร้าง ' + r.jobOrderId + ' แล้ว' + (real ? '' : ' (ชั่วคราว — รอเปลี่ยนเป็นเลขจริง)'), 'success');
+    if (!r.success) { if (r.network || r.pending) load(); return UI.showToast(r.message, 'error'); }
+    joReq.reset();
+    if (r.duplicate) UI.showToast(r.jobOrderId + ' สร้างไว้แล้ว — ไม่สร้างซ้ำ', 'info');
+    else UI.showToast('สร้าง ' + r.jobOrderId + ' แล้ว' + (real ? '' : ' (ชั่วคราว — รอเปลี่ยนเป็นเลขจริง)'), 'success');
     ['joId', 'joQty', 'joDue', 'joRemark'].forEach((id) => { $(id).value = ''; });
     load();
   });
