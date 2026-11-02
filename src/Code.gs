@@ -103,6 +103,7 @@ var WRITE_ACTIONS = {
   deleteMaterialAlias: function (b) { return deleteMaterialAlias(b.token, b.alias); },
   createJobOrder: function (b) { return createJobOrder(b.token, b.data); },
   updateJobOrder: function (b) { return updateJobOrder(b.token, b.jobOrderId, b.updates); },
+  deleteJobOrder: function (b) { return deleteJobOrder(b.token, b.jobOrderId, b.row); },
   renameJobOrder: function (b) { return renameJobOrder(b.token, b.jobOrderId, b.newJobOrderId); },
   submitRawMaterial: function (b) { return submitRawMaterial(b.token, b.data); },
   registerFiberRoll: function (b) { return registerFiberRoll(b.token, b.data); },
