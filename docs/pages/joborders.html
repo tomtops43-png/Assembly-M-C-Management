@@ -159,11 +159,26 @@
           <span>NG <b class="text-danger">${UI.formatNumber(j.defectQty)}</b></span><span>คงเหลือ <b>${UI.formatNumber(j.remaining)}</b></span><span><b>${j.completionRate}%</b></span></div>
         <div class="progress-bar-container mt-1"><div class="progress-bar-fill ${pct >= 100 ? 'over' : pct >= 90 ? 'near' : ''}" style="width:${pct}%"></div></div>
         ${j.sortedGood || j.sortedDefect ? `<div class="small text-gray mt-1">คัดแยก: ดี ${UI.formatNumber(j.sortedGood)} · เสีย ${UI.formatNumber(j.sortedDefect)}</div>` : ''}
-        <div class="entry-actions"><button class="btn btn-outline btn-sm" data-edit="${UI.esc(j.jobOrderId)}"><i class="bi bi-pencil"></i> แก้ไข</button>${j.status === 'open' || j.status === 'in-progress' ? `<button class="btn btn-outline btn-sm" style="margin-left:auto" data-close="${UI.esc(j.jobOrderId)}"><i class="bi bi-check2-circle"></i> ปิด Job Order</button>` : ''}</div>
+        <div class="entry-actions"><button class="btn btn-outline btn-sm" data-edit="${UI.esc(j.jobOrderId)}"><i class="bi bi-pencil"></i> แก้ไข</button><button class="btn btn-outline btn-sm text-danger" data-del="${j.row}"><i class="bi bi-trash"></i> ลบ</button>${j.status === 'open' || j.status === 'in-progress' ? `<button class="btn btn-outline btn-sm" style="margin-left:auto" data-close="${UI.esc(j.jobOrderId)}"><i class="bi bi-check2-circle"></i> ปิด Job Order</button>` : ''}</div>
       </div>`;
     }).join('') : UI.emptyState('bi-calendar2-x', 'ไม่มี Job Order');
   }
   $('list').addEventListener('click', async (e) => {
+    const d = e.target.closest('[data-del]');
+    if (d) {
+      const j = list.find((x) => String(x.row) === d.dataset.del);
+      if (!j) return;
+      const dupCount = list.filter((x) => x.jobOrderId === j.jobOrderId).length;
+      if (j.actualQty && dupCount < 2) return UI.showToast(`ลบไม่ได้ — ${j.jobOrderId} มียอดผลิตแล้ว ให้ใช้ "ปิด Job Order" แทน`, 'warning');
+      if (!await UI.confirm({ title: `ลบ Job Order ${j.jobOrderId}?`, icon: 'bi-trash',
+        message: `${j.productCode} · แผน ${UI.formatNumber(j.plannedQty)} · วันที่ ${UI.formatDate(j.workDate)}${dupCount > 1 ? `\nเลขนี้มี ${dupCount} รายการ (แผนเบิ้ล) — ลบเฉพาะรายการนี้` : ''}\nลบแล้วกู้คืนไม่ได้`,
+        okText: 'ลบ', danger: true })) return;
+      return UI.withButton(d, async () => {
+        const r = await API.post('deleteJobOrder', { jobOrderId: j.jobOrderId, row: j.row });
+        if (!r.success) { load(); return UI.showToast(r.message, 'error'); }
+        UI.showToast(`ลบ ${j.jobOrderId} แล้ว`, 'success'); load();
+      });
+    }
     const c = e.target.closest('[data-close]');
     if (c) {
       const j = list.find((x) => x.jobOrderId === c.dataset.close);

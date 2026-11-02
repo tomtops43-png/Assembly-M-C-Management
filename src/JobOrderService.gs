@@ -41,7 +41,7 @@ function jobOrderToObj(r) {
     jobOrderId: String(r.JobOrderID), createdAt: r.CreatedAt, createdBy: r.CreatedBy, createdByName: r.CreatedByName,
     workDate: r.WorkDate, dueDate: r.DueDate, machineId: String(r.MachineID), machineIds: joMachineList(r.MachineID), productCode: String(r.ProductCode),
     shift: r.Shift || 'ALL', plannedQty: toNumber(r.PlannedQty), priority: r.Priority || 'normal',
-    status: r.Status || 'open', remark: r.Remark || '', isTemp: isTempJobOrderId(r.JobOrderID)
+    status: r.Status || 'open', remark: r.Remark || '', isTemp: isTempJobOrderId(r.JobOrderID), row: r._row
   };
 }
 
@@ -237,6 +237,39 @@ function renameJobOrder(token, jobOrderId, newJobOrderId) {
   };
   logAction(u, 'renameJobOrder', { from: oldId, to: newId, moved: moved });
   return { success: true, jobOrderId: newId, moved: moved };
+}
+
+/**
+ * ลบ Job Order (ใช้ลบแผนที่สร้างผิด/เบิ้ล) — ระบุแถวในชีต (row) เพราะแผนเบิ้ลอาจมีเลขซ้ำกัน
+ * ห้ามลบถ้ามียอดผลิต/คัดแยกผูกอยู่ (เว้นแต่ยังเหลือแถวอื่นที่ใช้เลขเดียวกัน → ยอดยังมีที่อยู่)
+ */
+function deleteJobOrder(token, jobOrderId, row) {
+  var u = requireRole(token, 'supervisor');
+  var id = String(jobOrderId || '');
+  if (!id) throw new Error('ไม่พบ Job Order');
+  row = toNumber(row);
+  var res = withLock(function () {
+    var rows = getAllRows('JobOrders');
+    var same = rows.filter(function (r) { return String(r.JobOrderID) === id; });
+    if (!same.length) throw new Error('ไม่พบ Job Order ' + id);
+    var target = row ? same.filter(function (r) { return r._row === row; })[0] : same[same.length - 1];
+    if (!target) throw new Error('ข้อมูลเปลี่ยนไปแล้ว — กรุณารีเฟรชหน้าแล้วลองใหม่');
+    if (same.length === 1) {
+      var used = getAllRows('ProductionLog').some(function (r) { return String(r.JobOrderID) === id && r.Status !== 'cancelled'; }) ||
+        getAllRows('SortingLog').some(function (r) { return String(r.JobOrderID) === id; });
+      if (used) throw new Error('ลบไม่ได้ — ' + id + ' มียอดผลิต/คัดแยกแล้ว ให้ใช้ "ปิด Job Order" หรือเปลี่ยนสถานะเป็น cancelled แทน');
+    }
+    getSheet('JobOrders').deleteRow(target._row);
+    return { last: same.length === 1 };
+  });
+  afterWrite('JobOrders');
+  if (res.last) {
+    getMachines().forEach(function (m) {
+      if (m.currentJobOrder === id) updateRow('Machines', 'MachineID', m.machineId, { CurrentJobOrder: '' });
+    });
+  }
+  logAction(u, 'deleteJobOrder', { jobOrderId: id, row: row });
+  return { success: true };
 }
 
 function updateJobOrder(token, jobOrderId, updates) {
