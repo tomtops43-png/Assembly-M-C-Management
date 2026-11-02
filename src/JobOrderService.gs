@@ -26,10 +26,10 @@ function normalizeJoMachines(v) {
 function isTempJobOrderId(id) { return String(id || '').indexOf(JO_TEMP_PREFIX) === 0; }
 
 /** TMO-yyyyMMdd-NNN (เลขวิ่งต่อวัน) */
-function nextTempJobOrderId(workDate) {
+function nextTempJobOrderId(workDate, rows) {
   var base = JO_TEMP_PREFIX + String(workDate).replace(/-/g, '') + '-';
   var max = 0;
-  getAllRows('JobOrders').forEach(function (r) {
+  (rows || getAllRows('JobOrders')).forEach(function (r) {
     var id = String(r.JobOrderID);
     if (id.indexOf(base) === 0) max = Math.max(max, toNumber(id.substring(base.length)));
   });
@@ -145,26 +145,62 @@ function createJobOrder(token, d) {
   if (toNumber(d.plannedQty) <= 0) throw new Error('กรุณากรอกจำนวนเป้าหมาย');
   var machineIds = normalizeJoMachines(d.machineIds || d.machineId);
   if (d.dueDate && d.dueDate < workDate) throw new Error('กำหนดส่งต้องไม่ก่อนวันที่แผน');
-  var id = String(d.jobOrderId || '').trim().toUpperCase();
-  if (id) {
-    validateRealJobOrderId(id);
-  } else {
-    id = nextTempJobOrderId(workDate); // ไม่กรอกเลข = JO ชั่วคราว (Manual)
-  }
-  appendRow('JobOrders', {
-    JobOrderID: id, CreatedAt: formatDate(), CreatedBy: u.employeeId, CreatedByName: u.name, WorkDate: workDate,
+  var row = {
+    JobOrderID: '', CreatedAt: formatDate(), CreatedBy: u.employeeId, CreatedByName: u.name, WorkDate: workDate,
     DueDate: d.dueDate || '', MachineID: machineIds, ProductCode: d.productCode, Shift: d.shift || 'ALL',
     PlannedQty: toNumber(d.plannedQty), Priority: JO_PRIORITY_RANK[d.priority] !== undefined ? d.priority : 'normal',
     Status: 'open', Remark: d.remark || ''
+  };
+  ensureSheetExists('JobOrders');
+  var headers = getHeaders('JobOrders');
+  // ออกเลข + ตรวจซ้ำ + append ภายใต้ lock เดียว — กัน request พร้อมกันได้เลขเดียวกัน / แผนเบิ้ล
+  var res = withLock(function () {
+    var rows = getAllRows('JobOrders');
+    var dup = findRecentDuplicateJobOrder(rows, row, d.jobOrderId);
+    if (dup) return { success: true, duplicate: true, jobOrderId: String(dup.JobOrderID) };
+    var id = String(d.jobOrderId || '').trim().toUpperCase();
+    if (id) {
+      validateRealJobOrderId(id, rows);
+    } else {
+      id = nextTempJobOrderId(workDate, rows); // ไม่กรอกเลข = JO ชั่วคราว (Manual)
+    }
+    row.JobOrderID = id;
+    getSheet('JobOrders').appendRow(headers.map(function (h) { var v = row[h]; return v === undefined || v === null ? '' : v; }));
+    return { success: true, jobOrderId: id };
   });
+  afterWrite('JobOrders');
+  if (res.duplicate) return res;
+  var id = res.jobOrderId;
   logAction(u, 'createJobOrder', { jobOrderId: id });
   return { success: true, jobOrderId: id };
 }
 
-function validateRealJobOrderId(id) {
+/**
+ * กันแผนเบิ้ล (รวมถึงหน้าเว็บเวอร์ชันเก่าที่ยังไม่ส่ง clientRequestId): ผู้ใช้คนเดิมสร้าง JO ชั่วคราว
+ * ที่ข้อมูลเหมือนกันทุกช่องภายใน 3 นาที → ถือเป็นการกดซ้ำ คืน JO เดิม
+ */
+var JO_DUP_WINDOW_MS = 3 * 60 * 1000;
+function findRecentDuplicateJobOrder(rows, row, requestedId) {
+  if (String(requestedId || '').trim()) return null; // เลขจริงกันซ้ำด้วย validateRealJobOrderId อยู่แล้ว
+  var cutoff = formatDate(new Date(Date.now() - JO_DUP_WINDOW_MS)); // 'yyyy-MM-dd HH:mm:ss' (BKK) เทียบแบบ string ได้
+  for (var i = rows.length - 1; i >= 0; i--) {
+    var r = rows[i];
+    if (!isTempJobOrderId(r.JobOrderID) || String(r.CreatedAt) < cutoff) continue;
+    var same = String(r.CreatedBy) === String(row.CreatedBy) && String(r.WorkDate) === String(row.WorkDate) &&
+      String(r.MachineID) === String(row.MachineID) && String(r.ProductCode) === String(row.ProductCode) &&
+      String(r.Shift || 'ALL') === String(row.Shift) && toNumber(r.PlannedQty) === row.PlannedQty &&
+      String(r.DueDate || '') === String(row.DueDate) && String(r.Priority || 'normal') === String(row.Priority) &&
+      String(r.Remark || '') === String(row.Remark);
+    if (same) return r;
+  }
+  return null;
+}
+
+function validateRealJobOrderId(id, rows) {
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{2,39}$/.test(id)) throw new Error('รูปแบบเลข Job Order ไม่ถูกต้อง');
   if (isTempJobOrderId(id)) throw new Error('เลขขึ้นต้น ' + JO_TEMP_PREFIX + ' สงวนไว้สำหรับ JO ชั่วคราว');
-  if (findRow('JobOrders', 'JobOrderID', id)) throw new Error('เลข Job Order นี้มีอยู่แล้ว');
+  var exists = rows ? rows.some(function (r) { return String(r.JobOrderID) === id; }) : findRow('JobOrders', 'JobOrderID', id);
+  if (exists) throw new Error('เลข Job Order นี้มีอยู่แล้ว');
 }
 
 /** แทนค่าในคอลัมน์ทั้งคอลัมน์ (อ่าน-เขียนครั้งเดียว) → จำนวนแถวที่เปลี่ยน */
