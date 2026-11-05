@@ -36,6 +36,7 @@ var READ_ACTIONS = {
   getActionLogs: function (p) { return getActionLogs(p.token, p.limit); },
   getDashboardData: function (p) { return getDashboardData(p.token, p.dateRange, p.shiftAB, p.shiftDN, p.productCode, p.jobOrderId); },
   getSortedProductionData: function (p) { return getSortedProductionData(p.token, p.sortField, p.sortOrder, p.filters); },
+  getManpowerReport: function (p) { return getManpowerReport(p.token, p.dateRange); },
   exportProductionCSV: function (p) { return exportProductionCSV(p.token, p.dateFrom, p.dateTo); },
   exportQCDefectCSV: function (p) { return exportQCDefectCSV(p.token, p.dateFrom, p.dateTo, p.dateMode, p.timeFrom, p.timeTo); },
   getAllUsers: function (p) { return getAllUsers(p.token); },
