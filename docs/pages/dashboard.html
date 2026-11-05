@@ -393,6 +393,14 @@
     catch (err) { return { error: err.message }; }
   }
 
+  /** แถวสรุป Manpower ใน KPI Summary หน้าแรก */
+  function manpowerKpi(mp) {
+    if (!mp || mp.error || mp.missing) return '';
+    const sub = esc(mp.subDepartment);
+    return `<div>Manpower ${sub} เข้างาน: <b>${mp.workCount}</b> คน</div><div>Manpower ${sub} OT: <b>${mp.otCount}</b> คน</div>` +
+      `<div>OT ratio: <b>${mp.workCount ? Math.round(mp.otCount / mp.workCount * 100) : 0}%</b> (${mp.otCount}/${mp.workCount})</div>`;
+  }
+
   function manpowerHtml(mp) {
     if (!mp) return '';
     const title = `<h2>Manpower — ${esc((mp.subDepartment || 'Cut chamber'))} (เข้างาน / OT)</h2>`;
@@ -421,7 +429,7 @@
       <div class="rp-meta">สร้างรายงานเมื่อ: ${esc(fmtStamp(reportAt || new Date()))}<br>ช่วงข้อมูล: ${esc(rangeTxt())}<br>${esc(shiftTxt())}${$('fProduct').value ? ' | รุ่น: ' + esc($('fProduct').value) : ''}</div>
       <div class="rp-section"><h2>KPI Summary</h2><div class="rp-kpi">
         <div>Total FG: <b>${n(k.actual)}</b></div><div>OEE: <b>${pctTxt(k.oee)}</b></div><div>NG Rate: <b>${k.defectRate}%</b> (${n(k.defect)})</div>
-        <div>Plan: <b>${n(k.plan)}</b></div><div>Open tickets: <b>${mt.open}</b> (ยกมา ${mt.carriedOver})</div><div>Completed: <b>${mt.resolved}</b> · DT ${n(mt.downtime)} นาที</div>
+        <div>Plan: <b>${n(k.plan)}</b></div><div>Open tickets: <b>${mt.open}</b> (ยกมา ${mt.carriedOver})</div><div>Completed: <b>${mt.resolved}</b> · DT ${n(mt.downtime)} นาที</div>${manpowerKpi(mp)}
       </div></div>
       <h2>Production report by product</h2>
       ${tbl('', '<th>Product</th><th class="n">Plan</th><th class="n">FG</th><th class="n">NG</th><th class="n">%Yield</th><th class="n">%NG</th>',
