@@ -89,6 +89,11 @@
   </div>
 
   <div class="card">
+    <div class="card-title"><i class="bi bi-people"></i> Manpower — <span id="mpTitle">เข้างาน / OT</span></div>
+    <div id="tMp" data-skeleton="list"></div>
+  </div>
+
+  <div class="card">
     <div class="card-title">ข้อมูลการผลิต <span class="spacer"></span>
       <button class="btn btn-outline btn-sm" id="exportCsv"><i class="bi bi-filetype-csv"></i> Export CSV</button></div>
     <div class="table-wrap" style="max-height:420px"><table class="data-table" id="tData"></table></div>
@@ -152,6 +157,7 @@
       if (!d.success) return UI.showToast(d.message, 'error');
       data = d.data; rows = t.success ? t.data : [];
       render();
+      refreshManpower();
     } catch (err) {
       if (!err.cancelled) UI.showToast(err.message, 'error');
     } finally {
@@ -387,6 +393,37 @@
   }
 
   /** พนักงานเข้างาน/OT (Cut chamber) ช่วงเดียวกับรายงาน — ดึงตอนสร้าง PDF */
+  // ---------- Manpower (เข้างาน / OT จาก Attendance_JR) ----------
+  let mpCache = null, mpSeq = 0;
+  const mpKey = () => (data ? `${data.range.from}|${data.range.to}` : '');
+  async function refreshManpower() {
+    const seq = ++mpSeq, key = mpKey();
+    if (!mpCache || mpCache.key !== key) $('tMp').innerHTML = '<div class="small text-gray">กำลังโหลด...</div>';
+    const mp = await loadManpower();
+    if (seq !== mpSeq) return;
+    mpCache = { key, mp };
+    renderManpower(mp);
+  }
+  function renderManpower(mp) {
+    $('mpTitle').textContent = `${(mp && mp.subDepartment) || ''} (เข้างาน / OT)`;
+    if (mp.error) { $('tMp').innerHTML = `<div class="small text-gray">โหลดข้อมูลพนักงานไม่ได้: ${esc(mp.error)}</div>`; return; }
+    if (mp.missing) { $('tMp').innerHTML = `<div class="small text-gray">${esc(mp.message || `ยังไม่มีแท็บ ${mp.sheet} (IMPORTRANGE จากไฟล์ JR Organize) ใน Spreadsheet ของไลน์`)}</div>`; return; }
+    const oneDay = mp.byDate.length <= 1;
+    const ratio = mp.workCount ? Math.round(mp.otCount / mp.workCount * 100) : 0;
+    const ck = (v) => (v ? '<i class="bi bi-check-lg"></i>' : '');
+    $('tMp').innerHTML = `<div class="kpi-grid">
+        <div class="kpi-card success"><div class="kpi-value">${mp.workCount}</div><div class="kpi-label">เข้างาน (คน)</div></div>
+        <div class="kpi-card warning"><div class="kpi-value">${mp.otCount}</div><div class="kpi-label">เข้า OT (คน)</div></div>
+        <div class="kpi-card"><div class="kpi-value">${ratio}%</div><div class="kpi-label">OT ratio (${mp.otCount}/${mp.workCount})</div></div></div>
+      <div class="table-wrap" style="max-height:360px"><table class="data-table"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>ตำแหน่ง</th>` +
+      (oneDay ? '<th class="num">เข้างาน</th><th class="num">OT</th>' : '<th class="num">วันทำงาน</th><th class="num">วัน OT</th>') + '</tr></thead><tbody>' +
+      (mp.people.map((p) => `<tr><td>${esc(p.employeeId)}</td><td>${esc(p.name)}</td><td>${esc(p.position)}</td>` +
+        (oneDay ? `<td class="num">${ck(p.workDays)}</td><td class="num">${ck(p.otDays)}</td>` : `<td class="num">${n(p.workDays)}</td><td class="num">${n(p.otDays)}</td>`) + '</tr>').join('') ||
+        '<tr><td colspan="5" class="text-gray">ไม่มีพนักงานเช็คชื่อในช่วงนี้</td></tr>') + '</tbody></table></div>' +
+      (oneDay ? '' : '<div class="table-wrap mt-2"><table class="data-table"><thead><tr><th>วันที่</th><th class="num">เข้างาน</th><th class="num">OT</th></tr></thead><tbody>' +
+        mp.byDate.map((d) => `<tr><td>${esc(d.date)}</td><td class="num">${d.work}</td><td class="num">${d.ot}</td></tr>`).join('') + '</tbody></table></div>');
+  }
+
   async function loadManpower() {
     const dr = data.range.from ? JSON.stringify({ from: data.range.from, to: data.range.to || data.range.from }) : 'all';
     try { const r = await API.get('getManpowerReport', { dateRange: dr }, { long: true }); return r.success ? r.data : { error: r.message }; }
@@ -495,7 +532,7 @@
     const holder = document.createElement('div');
     // วางไว้มุมบนซ้ายของเอกสาร (หลังเนื้อหา) — html2canvas อ้างอิงตำแหน่ง scroll ถ้าวางแบบ fixed/เลื่อนจออยู่ จะได้ขอบขาวด้านบนและท้ายรายงานขาด
     holder.style.cssText = 'position:absolute;left:0;top:0;width:794px;z-index:-1;pointer-events:none';
-    const [logo, mp] = await Promise.all([logoPng(), loadManpower()]);
+    const [logo, mp] = await Promise.all([logoPng(), mpCache && mpCache.key === mpKey() ? mpCache.mp : loadManpower()]);
     holder.innerHTML = reportHtml(logo, mp);
     // หัวข้อ + ตารางของหัวข้อนั้นอยู่หน้าเดียวกัน (ไม่ให้หัวตารางค้างท้ายหน้า)
     holder.querySelectorAll('.rp > h2').forEach((h) => {
