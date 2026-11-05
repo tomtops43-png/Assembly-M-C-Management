@@ -386,7 +386,32 @@
       .sort((a, b) => (a.jobOrderId === '__unassigned__') - (b.jobOrderId === '__unassigned__') || b.rangeActual - a.rangeActual);
   }
 
-  function reportHtml(logoSrc) {
+  /** พนักงานเข้างาน/OT (Cut chamber) ช่วงเดียวกับรายงาน — ดึงตอนสร้าง PDF */
+  async function loadManpower() {
+    const dr = data.range.from ? JSON.stringify({ from: data.range.from, to: data.range.to || data.range.from }) : 'all';
+    try { const r = await API.get('getManpowerReport', { dateRange: dr }, { long: true }); return r.success ? r.data : { error: r.message }; }
+    catch (err) { return { error: err.message }; }
+  }
+
+  function manpowerHtml(mp) {
+    if (!mp) return '';
+    const title = `<h2>Manpower — ${esc((mp.subDepartment || 'Cut chamber'))} (เข้างาน / OT)</h2>`;
+    if (mp.error) return `${title}<div>โหลดข้อมูลพนักงานไม่ได้: ${esc(mp.error)}</div>`;
+    if (mp.missing) return `${title}<div>${esc(mp.message || `ยังไม่มีแท็บ ${mp.sheet} (IMPORTRANGE จากไฟล์ JR Organize) ใน Spreadsheet ของไลน์`)}</div>`;
+    const oneDay = mp.byDate.length <= 1;
+    const ck = (v) => (v ? '✓' : '');
+    const head = oneDay
+      ? '<th style="width:16%">รหัส</th><th>ชื่อ</th><th style="width:26%">ตำแหน่ง</th><th class="n" style="width:12%">เข้างาน</th><th class="n" style="width:10%">OT</th>'
+      : '<th style="width:16%">รหัส</th><th>ชื่อ</th><th style="width:26%">ตำแหน่ง</th><th class="n" style="width:12%">วันทำงาน</th><th class="n" style="width:10%">วัน OT</th>';
+    const body = mp.people.map((p) => `<tr><td>${esc(p.employeeId)}</td><td>${esc(p.name)}</td><td>${esc(p.position)}</td>` +
+      (oneDay ? `<td class="n">${ck(p.workDays)}</td><td class="n">${ck(p.otDays)}</td>` : `<td class="n">${n(p.workDays)}</td><td class="n">${n(p.otDays)}</td>`) + '</tr>').join('');
+    const sum = `<div class="rp-kpi"><div>เข้างาน: <b>${mp.workCount}</b> คน</div><div>เข้า OT: <b>${mp.otCount}</b> คน</div><div>รวมรายชื่อ: <b>${mp.people.length}</b> คน</div></div>`;
+    const daily = oneDay ? '' : `<h2>Manpower by day — ${esc(mp.subDepartment)}</h2>${tbl('', '<th>วันที่</th><th class="n">เข้างาน (คน)</th><th class="n">OT (คน)</th>',
+      mp.byDate.map((d) => `<tr><td>${esc(d.date)}</td><td class="n">${d.work}</td><td class="n">${d.ot}</td></tr>`).join(''), 3)}`;
+    return `${title}${sum}<h2>Manpower list — ${esc(mp.subDepartment)}</h2>${tbl('rp-fixed', head, body, 5)}${daily}`;
+  }
+
+  function reportHtml(logoSrc, mp) {
     const k = data.kpi, mt = data.maintenance, dc = data.dailyCheck;
     const logo = logoSrc ? `<img class="rp-logo" src="${logoSrc}" alt="logo">` : '';
     const reasons = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a]);
@@ -416,6 +441,7 @@
       ${tbl('rp-fixed', '<th style="width:17%">Ticket</th><th style="width:9%">Machine</th><th style="width:17%">Issue / Problem</th><th>Resolution</th><th style="width:11%">Resolved</th><th class="n" style="width:6%">DT(m)</th>',
         (mt.completedList || []).map((t) => `<tr><td>${esc(t.ticketId)}</td><td>${esc(mNameOf(t.machineId))}</td><td>${esc(issueTxt(t))}</td><td>${esc(fixTxt(t))}</td><td>${esc(t.resolvedAt || '-')}</td><td class="n">${n(t.downtimeMinutes)}</td></tr>`).join(''), 6)}
       ${dc ? `<h2>Daily Check</h2><div>Compliance <b>${pctTxt(dc.compliance)}</b> (${dc.checked}/${dc.expected}) · Accept ${dc.accept} · Reject ${dc.reject}</div>` : ''}
+      ${manpowerHtml(mp)}
       <h2>Shift breakdown</h2>
       ${tbl('', '<th>Shift</th><th>Product</th><th class="n">FG</th><th class="n">NG</th>',
         Object.keys(data.byShift).map((s) => `<tr><td><b>${esc(s)}</b></td><td><b>Total</b></td><td class="n"><b>${n(data.byShift[s].actual)}</b></td><td class="n"><b>${n(data.byShift[s].defect)}</b></td></tr>` +
@@ -461,7 +487,8 @@
     const holder = document.createElement('div');
     // วางไว้มุมบนซ้ายของเอกสาร (หลังเนื้อหา) — html2canvas อ้างอิงตำแหน่ง scroll ถ้าวางแบบ fixed/เลื่อนจออยู่ จะได้ขอบขาวด้านบนและท้ายรายงานขาด
     holder.style.cssText = 'position:absolute;left:0;top:0;width:794px;z-index:-1;pointer-events:none';
-    holder.innerHTML = reportHtml(await logoPng());
+    const [logo, mp] = await Promise.all([logoPng(), loadManpower()]);
+    holder.innerHTML = reportHtml(logo, mp);
     // หัวข้อ + ตารางของหัวข้อนั้นอยู่หน้าเดียวกัน (ไม่ให้หัวตารางค้างท้ายหน้า)
     holder.querySelectorAll('.rp > h2').forEach((h) => {
       const next = h.nextElementSibling, w = document.createElement('div');

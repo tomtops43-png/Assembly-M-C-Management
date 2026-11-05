@@ -292,6 +292,57 @@ function exportProductionCSV(token, dateFrom, dateTo) {
   return { success: true, csv: '﻿' + lines.join('\n'), filename: LINE_CONFIG.LINE_CODE + '_production_' + dateFrom + '_' + dateTo + '.csv' };
 }
 
+/**
+ * พนักงานที่เช็คเข้างาน (work) / เข้า OT (ot) ของ SubDepartment ที่ตั้งไว้ (LINE_CONFIG.ATTENDANCE)
+ * อ่านจากแท็บ IMPORTRANGE ใน Spreadsheet ของไลน์ — ใช้ใน Production Report PDF
+ */
+function getManpowerReport(token, dateRange) {
+  requireLogin(token);
+  var cfg = LINE_CONFIG.ATTENDANCE || {};
+  var range = resolveDateRange(dateRange);
+  var out = { sheet: cfg.SHEET, subDepartment: cfg.SUB_DEPARTMENT, range: range, missing: false, people: [], byDate: [], workCount: 0, otCount: 0 };
+  var sh = cfg.SHEET ? getSheet(cfg.SHEET) : null;
+  if (!sh || sh.getLastRow() < 2) { out.missing = true; return { success: true, data: out }; }
+  var values = sh.getDataRange().getValues();
+  var norm = function (v) { return String(v === null || v === undefined ? '' : v).replace(/\s+/g, '').toLowerCase(); };
+  var head = values[0].map(norm);
+  var col = function (name) { return head.indexOf(norm(name)); };
+  var c = { date: col('WorkDate'), id: col('Username'), name: col('Name'), type: col('Type'), sub: col('SubDepartment'), pos: col('Position') };
+  if (c.date < 0 || c.type < 0 || c.sub < 0) { out.missing = true; out.message = 'ไม่พบคอลัมน์ WorkDate/Type/SubDepartment ในแท็บ ' + cfg.SHEET; return { success: true, data: out }; }
+  var want = norm(cfg.SUB_DEPARTMENT);
+  var toDate = function (v) {
+    if (v instanceof Date) return formatDateOnly(v);
+    var s = String(v || '').trim(), m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    return m ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) : s.substring(0, 10);
+  };
+  var cell = function (r, i) { return i < 0 ? '' : String(r[i] === null || r[i] === undefined ? '' : r[i]).trim(); };
+  var people = {}, byDate = {}, seen = {};
+  for (var i = 1; i < values.length; i++) {
+    var r = values[i];
+    if (norm(r[c.sub]) !== want) continue;
+    var type = norm(r[c.type]);
+    if (type !== 'work' && type !== 'ot') continue;
+    var d = toDate(r[c.date]);
+    if (!d || (range.from && d < range.from) || (range.to && d > range.to)) continue;
+    var id = cell(r, c.id) || cell(r, c.name);
+    var key = d + '|' + id + '|' + type;
+    if (seen[key]) continue;
+    seen[key] = true;
+    var p = people[id] = people[id] || { employeeId: cell(r, c.id), name: cell(r, c.name), position: cell(r, c.pos), workDays: 0, otDays: 0 };
+    if (type === 'work') p.workDays++; else p.otDays++;
+    var b = byDate[d] = byDate[d] || { date: d, work: 0, ot: 0 };
+    b[type === 'work' ? 'work' : 'ot']++;
+  }
+  out.people = Object.keys(people).map(function (k) { return people[k]; }).sort(function (a, b) {
+    var la = /leader/i.test(a.position) ? 0 : 1, lb = /leader/i.test(b.position) ? 0 : 1;
+    return la - lb || (a.name > b.name ? 1 : a.name < b.name ? -1 : 0);
+  });
+  out.byDate = Object.keys(byDate).sort().map(function (k) { return byDate[k]; });
+  out.workCount = out.people.filter(function (p) { return p.workDays > 0; }).length;
+  out.otCount = out.people.filter(function (p) { return p.otDays > 0; }).length;
+  return { success: true, data: out };
+}
+
 /** ส่งออก NG แยก component (สำหรับ QC) */
 function exportQCDefectCSV(token, dateFrom, dateTo, dateMode, timeFrom, timeTo) {
   requireLogin(token);

@@ -57,6 +57,15 @@ var LINE_CONFIG = {
     SYNC_SECONDS: 120                                        // ดึงสถานะจาก MMS ได้ไม่ถี่กว่านี้
   },
 
+  // ---- พนักงานเข้างาน/OT (จากไฟล์ JR Organize) → แสดงใน Production Report PDF ----
+  // ไม่อ่านไฟล์อื่นตรงๆ: สร้างแท็บ SHEET ใน Spreadsheet นี้ แล้วใส่ที่ A1
+  //   =IMPORTRANGE("1LxRYOtg0LL6_VSuNsaNuNuBUHal_T4eOYgy4tOrHNfE","Attendance!A:J")   (กด "อนุญาตการเข้าถึง" ครั้งแรก)
+  // ห้ามใส่แท็บนี้ใน SHEET_SCHEMAS — หัวคอลัมน์มาจาก IMPORTRANGE
+  ATTENDANCE: {
+    SHEET: 'Attendance_JR',
+    SUB_DEPARTMENT: 'Cutchamber' // คอลัม I (SubDepartment)
+  },
+
   // ---- เวลา / กะ ----
   WORKDAY_START_HOUR: 8,   // วันทำงานตัดรอบ 08:00
   DAY_SHIFT_START: 8,      // Day = 08:00-19:59
