@@ -37,7 +37,9 @@ function mmsPayloadForTicket(t, photo) {
     symptom: (issue ? '[' + issue.label + '] ' : '') + t.description + ' (ใบ ' + t.ticketId + ' จาก ' + LINE_CONFIG.LINE_NAME + ')',
     priority: (c.PRIORITY_MAP || {})[t.priority] || 'ปกติ',
     machineStop: stop,
-    reporter: t.reporterName
+    reporter: t.reporterName,
+    // ไลน์นี้ไม่มีกะ A/B — ส่งกะ Day/Night (ตามเวลาที่พบปัญหา) ไปแทน ไม่งั้น MMS จะเดากะ A/B จากเวลาที่ใบมาถึงเอง
+    shift: t.shiftDN || detectShift(parseDate(t.timestamp) || new Date())
   };
   var dataUrl = photo && (typeof photo === 'string' ? photo : photo.dataUrl);
   if (dataUrl && /^data:image\//.test(dataUrl)) payload.photoBase64 = dataUrl;
