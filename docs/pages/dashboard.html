@@ -288,7 +288,7 @@
     const lastFG = Number(fit[anchor].actual) || 0, lastNG = Number(fit[anchor].defectRate) || 0;
     const datasets = [].concat(
       build(fFG, 'actual', 'Projection FG', lastFG, 'rgba(13,148,136,.9)', 'ช่วงคาดการณ์ 95% (FG)', 'y', Infinity, 0),
-      build(fNG, 'defectRate', 'Projection % NG', lastNG, 'rgba(232,163,23,.9)', 'ช่วงคาดการณ์ 95% (% NG)', 'y1', 100, 2));
+      build(fNG, 'defectRate', 'Projection % NG', lastNG, 'rgba(13,148,136,.9)', 'ช่วงคาดการณ์ 95% (% NG)', 'y1', 100, 2));
     return {
       labels, datasets, tooltip: { filter: (it) => {
         if (it.dataset._band || it.raw === null) return false;
