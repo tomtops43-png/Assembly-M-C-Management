@@ -103,8 +103,11 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     bs.actual += r.actualQty; bs.defect += r.defectQty;
     var bsp = bs.products[r.productCode] = bs.products[r.productCode] || { actual: 0, defect: 0 };
     bsp.actual += r.actualQty; bsp.defect += r.defectQty;
-    var dd = daily[r.date] = daily[r.date] || { date: r.date, actual: 0, defect: 0 };
+    var dd = daily[r.date] = daily[r.date] || { date: r.date, actual: 0, defect: 0, products: {} };
     dd.actual += r.actualQty; dd.defect += r.defectQty;
+    // แยกรุ่นรายวัน (ตัวกรองรุ่นในกราฟแนวโน้ม)
+    var ddp = dd.products[r.productCode] = dd.products[r.productCode] || { actual: 0, defect: 0 };
+    ddp.actual += r.actualQty; ddp.defect += r.defectQty;
 
     if (r.defectQty > 0) {
       var reason = ngReasonOf(r.remark);
