@@ -62,6 +62,7 @@ const ChartTools = (() => {
   /**
    * รวมแถวรายวัน [{date, ...}] เป็นช่วง
    * opt.sum = ['actual', 'defect', ...] (บวกกัน) ; opt.rates = { name: (agg) => ค่า } (คำนวณจากผลรวม ห้ามเฉลี่ย % รายวัน)
+   * opt.countIf(row) = นับวันนั้นเป็นวันทำงานไหม (ค่าเริ่มต้น นับทุกแถว) เช่น วันที่ไม่มียอดผลิตไม่นับ
    * ผลลัพธ์: [{ id, start, end, days (จำนวนวันที่มีข้อมูล), lastDate, ...sum, ...rates }]
    */
   function aggregate(rows, p, opt) {
@@ -70,7 +71,8 @@ const ChartTools = (() => {
       const id = periodStart(r.date, p);
       let a = map.get(id);
       if (!a) { a = { id, start: id, end: periodEnd(id, p), days: 0, lastDate: r.date }; opt.sum.forEach((f) => { a[f] = 0; }); map.set(id, a); }
-      a.days++; a.lastDate = r.date;
+      if (!opt.countIf || opt.countIf(r)) a.days++; // days = จำนวนวันทำงาน (ใช้หา "ยอดต่อวันทำงาน")
+      a.lastDate = r.date;
       opt.sum.forEach((f) => { a[f] += Number(r[f]) || 0; });
     });
     const out = [...map.values()];

@@ -15,6 +15,8 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 <link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <style>
   /* ---- วิเคราะห์ NG ---- */
   .an-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -23,12 +25,8 @@
   .an-target input { width: 80px; }
   .an-kpi .kpi-sub { font-size: 12px; margin-top: 4px; color: var(--gray); }
   .an-kpi .kpi-sub.bad { color: var(--primary); } .an-kpi .kpi-sub.good { color: var(--success); }
-  .an-chart { position: relative; width: 100%; }
-  .an-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
-  .an-chart .grid { stroke: var(--line); stroke-width: 1; }
-  .an-chart .axis-t { fill: var(--gray); font-size: 11px; font-family: var(--mono); }
-  .an-chart .hit { fill: transparent; cursor: pointer; }
-  .an-chart .hit:hover, .an-chart .hit.sel { fill: rgba(22,23,27,.05); }
+  .an-chart { position: relative; width: 100%; height: 260px; }
+  .an-chart.an-vol { height: 170px; }
   .an-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-3); margin: 4px 0 8px; }
   .an-legend i { display: inline-block; vertical-align: middle; margin-right: 5px; }
   .an-tip { position: fixed; z-index: 2000; pointer-events: none; background: var(--ink); color: #fff; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.5; box-shadow: 0 6px 18px rgba(0,0,0,.2); max-width: 260px; display: none; }
@@ -115,11 +113,12 @@
     <div class="kpi-grid an-kpi" id="aKpi"></div>
 
     <div class="card">
-      <div class="card-title"><i class="bi bi-graph-up"></i> แนวโน้ม NG% รายวัน <span class="small text-gray" style="font-weight:400">· คลิกวันเพื่อดูว่าเจออะไร</span></div>
+      <div class="card-title"><i class="bi bi-graph-up"></i> แนวโน้ม NG% <span class="small text-gray" style="font-weight:400" id="aTrendHint">· คลิกวันเพื่อดูว่าเจออะไร</span></div>
+      <div class="ct-controls" id="aTrendCtl"></div>
       <div class="an-legend" id="aTrendLegend"></div>
-      <div class="an-chart" id="aTrend"></div>
-      <div class="form-label mt-3">ยอดผลิตรายวัน (FG + NG, ชิ้น)</div>
-      <div class="an-chart" id="aVolume"></div>
+      <div class="an-chart"><canvas id="aTrend"></canvas></div>
+      <div class="form-label mt-3" id="aVolumeTitle">ยอดผลิต (FG + NG, ชิ้น)</div>
+      <div class="an-chart an-vol"><canvas id="aVolume"></canvas></div>
       <details class="mt-2"><summary class="small text-gray" style="cursor:pointer">ดูเป็นตาราง</summary><div class="table-wrap mt-2"><table class="data-table" id="aDailyTable"></table></div></details>
       <div id="aDay" class="mt-3"></div>
     </div>
@@ -186,6 +185,7 @@
 <script src="../js/api.js"></script>
 <script src="../js/auth.js"></script>
 <script src="../js/ui.js"></script>
+<script src="../js/chart-tools.js"></script>
 <script>
 (async function () {
   if (!UI.initPage('ngissue', 'ปัญหา NG', 'bi-exclamation-triangle')) return;
@@ -489,75 +489,133 @@
       <div class="kpi-card warning"><div class="kpi-value">${s.issues}</div><div class="kpi-label">ปัญหาที่พบ (${s.occurrences} ครั้ง · NG ${UI.formatNumber(s.ngQty)} ชิ้น)</div><div class="kpi-sub">${s.open} ปัญหายังไม่ปิด</div></div>`;
   }
 
-  // กราฟเส้น NG% + เส้นเป้า และกราฟแท่งยอดผลิต — ใช้แกน X ร่วมกัน (แยกกราฟ ไม่ใช้ 2 แกน Y)
-  function chartGeom(el) {
-    const W = Math.max(320, el.clientWidth || 600), padL = 44, padR = 12;
-    const n = an.daily.length, step = (W - padL - padR) / n;
-    return { W, padL, padR, n, step, cx: (i) => padL + step * i + step / 2 };
+  // ---------- กราฟ NG% + ยอดผลิต (Chart.js) — ช่วงเวลา / ตัวเลข / ตีเส้น / Projection 95% ----------
+  // ใช้แกน X ร่วมกัน (แยกกราฟ ไม่ใช้ 2 แกน Y) ; คลิกวัน (มุมมองรายวัน) เพื่อดูรายละเอียดของวันนั้น
+  const hasChart = typeof Chart !== 'undefined';
+  if (hasChart) Chart.defaults.font.family = "'IBM Plex Sans Thai', sans-serif";
+  const anCharts = {};
+  const INK = '#16171B', RED = '#C8102E', GRAY = '#9A9EA9', TEAL = 'rgba(13,148,136,.9)', BAR = '#C9CDD4';
+  const DL = () => (typeof ChartDataLabels !== 'undefined' ? [ChartDataLabels] : []);
+  const anPeriod = ChartTools.periodSwitcher($('aTrendCtl'), { key: 'ngTrend', onChange: () => { anSel = ''; renderTrend(); renderDay(); } });
+  const anValues = ChartTools.valuesToggle($('aTrendCtl'), { key: 'ngTrend', onChange: (on) => Object.values(anCharts).forEach((c) => ChartTools.setValueMode(c, on)) });
+  const PERIOD_TXT = { day: 'รายวัน', week: 'รายสัปดาห์', month: 'รายเดือน', quarter: 'รายไตรมาส', year: 'รายปี' };
+
+  function anChart(id, cfg) {
+    if (!hasChart) return null;
+    if (anCharts[id]) anCharts[id].destroy();
+    return (anCharts[id] = new Chart($(id), cfg));
   }
-  function xLabels(g, H) {
-    const every = Math.max(1, Math.ceil(g.n / Math.floor((g.W - g.padL) / 46)));
-    // ทุก ๆ `every` วัน นับถอยจากวันล่าสุด (วันล่าสุดมีป้ายเสมอ ไม่ชนกัน)
-    const show = (i) => (g.n - 1 - i) % every === 0;
-    return an.daily.map((d, i) => (show(i) ? `<text class="axis-t" x="${g.cx(i)}" y="${H - 4}" text-anchor="middle">${shortD(d.date)}</text>` : '')).join('');
+  function periodTip(a, period) {
+    const over = a.total > 0 && a.ngPct > an.target;
+    const head = period === 'day' ? UI.formatDate(a.id) : `${ChartTools.periodLabel(a.id, period)} (${UI.formatDate(a.start)} – ${UI.formatDate(a.end)})`;
+    return [head].concat(a.total
+      ? [`NG ${fmtPct(a.ngPct)}${over ? ' — เกินเป้า' : ''}`, `NG ${UI.formatNumber(a.ng)} / ${UI.formatNumber(a.total)} ชิ้น`]
+      : ['ไม่มียอดผลิต'], [`แจ้งปัญหา ${a.issueCount} ครั้ง${a.issueNg ? ' (NG ' + UI.formatNumber(a.issueNg) + ')' : ''}`]);
   }
-  function niceMax(v) {
-    if (v <= 0) return 1;
-    const p = Math.pow(10, Math.floor(Math.log10(v))), m = v / p;
-    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
-  }
-  function dayTip(d) {
-    const over = d.total > 0 && d.ngPct > an.target;
-    return `<div>${UI.formatDate(d.date)}</div>` + (d.total
-      ? `NG <b>${fmtPct(d.ngPct)}</b> ${over ? '— <b>เกินเป้า</b>' : ''}<br>NG ${UI.formatNumber(d.ng)} / ${UI.formatNumber(d.total)} ชิ้น`
-      : 'ไม่มียอดผลิต') + `<br>แจ้งปัญหา ${d.issueCount} ครั้ง${d.issueNg ? ' (NG ' + UI.formatNumber(d.issueNg) + ')' : ''}`;
-  }
+
+  // ปลั๊กอินเฉพาะกราฟนี้: แถบไฮไลต์วันที่เลือก + ▼ วันที่มีการแจ้งปัญหา
+  const anMarks = {
+    id: 'anMarks',
+    beforeDatasetsDraw(c) {
+      const idx = c.data.labels.indexOf(anSel); if (!anSel || idx < 0) return;
+      const a = c.chartArea, x = c.scales.x, w = Math.max(6, (x.width / Math.max(1, c.data.labels.length)));
+      c.ctx.save(); c.ctx.fillStyle = 'rgba(22,23,27,.07)'; c.ctx.fillRect(x.getPixelForValue(idx) - w / 2, a.top, w, a.bottom - a.top); c.ctx.restore();
+    },
+    afterDatasetsDraw(c) {
+      if (!c.$issues) return;
+      const ctx = c.ctx, a = c.chartArea;
+      ctx.save(); ctx.fillStyle = RED; ctx.font = "11px 'IBM Plex Sans Thai', sans-serif"; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      c.$issues.forEach((has, i) => { if (has) ctx.fillText('▼', c.scales.x.getPixelForValue(i), a.top + 1); });
+      ctx.restore();
+    }
+  };
+
   function renderTrend() {
-    const tg = an.target;
-    $('aTrendLegend').innerHTML = `<span><i style="width:18px;height:2px;background:var(--ink)"></i>NG% รายวัน</span>
-      <span><i style="width:18px;border-top:2px dashed var(--gray)"></i>เป้า ${tg}%</span>
-      <span><i style="width:10px;height:10px;border-radius:50%;background:var(--primary)"></i>วันที่เกินเป้า</span>
-      <span><b style="color:var(--primary);margin-right:5px">▼</b>วันที่มีการแจ้งปัญหา</span>`;
-    // NG%
-    let el = $('aTrend'), g = chartGeom(el), H = 220, top = 10, bottom = H - 22;
-    const maxV = niceMax(Math.max(tg * 1.5, ...an.daily.map((d) => d.ngPct)));
-    const y = (v) => bottom - (v / maxV) * (bottom - top);
-    const ticks = [0, maxV / 4, maxV / 2, maxV * 3 / 4, maxV];
-    let svg = ticks.map((t) => `<line class="grid" x1="${g.padL}" x2="${g.W - g.padR}" y1="${y(t)}" y2="${y(t)}"/><text class="axis-t" x="${g.padL - 6}" y="${y(t) + 4}" text-anchor="end">${+t.toFixed(2)}%</text>`).join('');
-    svg += `<line x1="${g.padL}" x2="${g.W - g.padR}" y1="${y(tg)}" y2="${y(tg)}" stroke="var(--gray)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
-    // เส้น: ข้ามวันที่ไม่มียอดผลิต (ไม่ลากผ่าน)
-    let path = '', pen = false;
-    an.daily.forEach((d, i) => { if (!d.total) { pen = false; return; } path += (pen ? 'L' : 'M') + g.cx(i).toFixed(1) + ' ' + y(d.ngPct).toFixed(1); pen = true; });
-    svg += `<path d="${path}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
-    an.daily.forEach((d, i) => {
-      if (!d.total) return;
-      const over = d.ngPct > tg;
-      svg += `<circle cx="${g.cx(i)}" cy="${y(d.ngPct)}" r="${over ? 5 : 3.5}" fill="${over ? 'var(--primary)' : 'var(--ink)'}" stroke="#fff" stroke-width="2"/>`;
+    if (!an) return;
+    const tg = an.target, period = anPeriod.value;
+    $('aTrendHint').textContent = period === 'day' ? '· คลิกวันเพื่อดูว่าเจออะไร' : `· ${PERIOD_TXT[period]} (กด "วัน" เพื่อคลิกดูรายวัน)`;
+    $('aVolumeTitle').textContent = `ยอดผลิต${PERIOD_TXT[period]} (FG + NG, ชิ้น)`;
+    $('aTrendLegend').innerHTML = `<span><i style="width:10px;height:10px;border-radius:50%;background:var(--primary)"></i>ช่วงที่เกินเป้า</span>
+      <span><b style="color:var(--primary);margin-right:5px">▼</b>มีการแจ้งปัญหา</span>`;
+    if (!hasChart) { $('aTrendLegend').insertAdjacentHTML('beforeend', '<span class="text-danger">โหลดไลบรารีกราฟไม่ได้ — ดูข้อมูลจากตารางด้านล่าง</span>'); return; }
+
+    // รวมรายวันเป็นช่วง — NG% = NG รวม ÷ ยอดผลิตรวมของช่วง (ไม่เฉลี่ย % รายวัน) ; วันที่ไม่มียอดผลิตไม่นับเป็นวันทำงาน
+    const agg = ChartTools.aggregate(an.daily, period, {
+      sum: ['ok', 'ng', 'total', 'issueCount', 'issueNg'],
+      rates: { ngPct: (a) => (a.total > 0 ? Math.round(a.ng / a.total * 10000) / 100 : null) },
+      countIf: (r) => r.total > 0
     });
-    an.daily.forEach((d, i) => { if (d.issueCount) svg += `<text x="${g.cx(i)}" y="${top + 2}" text-anchor="middle" font-size="11" fill="var(--primary)">▼</text>`; });
-    svg += xLabels(g, H);
-    svg += an.daily.map((d, i) => `<rect class="hit${anSel === d.date ? ' sel' : ''}" data-day="${d.date}" x="${g.padL + g.step * i}" y="${top}" width="${g.step}" height="${bottom - top}"/>`).join('');
-    el.innerHTML = `<svg viewBox="0 0 ${g.W} ${H}" role="img" aria-label="แนวโน้ม NG% รายวัน">${svg}</svg>`;
-    // ยอดผลิต
-    el = $('aVolume'); g = chartGeom(el); H = 120; top = 6; bottom = H - 22;
-    const maxT = niceMax(Math.max(...an.daily.map((d) => d.total)));
-    const yv = (v) => bottom - (v / maxT) * (bottom - top);
-    const bw = Math.max(2, Math.min(28, g.step - 2));
-    let svg2 = [0, maxT / 2, maxT].map((t) => `<line class="grid" x1="${g.padL}" x2="${g.W - g.padR}" y1="${yv(t)}" y2="${yv(t)}"/><text class="axis-t" x="${g.padL - 6}" y="${yv(t) + 4}" text-anchor="end">${t >= 1000 ? +(t / 1000).toFixed(1) + 'k' : t}</text>`).join('');
-    an.daily.forEach((d, i) => {
-      if (!d.total) return;
-      const x = g.cx(i) - bw / 2, h = bottom - yv(d.total), r = Math.min(4, bw / 2, h);
-      svg2 += `<path d="M${x} ${bottom}V${bottom - h + r}Q${x} ${bottom - h} ${x + r} ${bottom - h}H${x + bw - r}Q${x + bw} ${bottom - h} ${x + bw} ${bottom - h + r}V${bottom}Z" fill="var(--gray-light)"/>`;
+    const prodDates = an.daily.filter((d) => d.total > 0).map((d) => d.date);
+    const pj = ChartTools.buildProjection(agg, period, [
+      { field: 'ngPct', kind: 'rate', label: 'Projection NG%', band: 'ช่วงคาดการณ์ 95% (NG%)', yAxisID: 'y', color: TEAL, clampHi: 100, decimals: 2 }
+    ], prodDates);
+    const pjV = ChartTools.buildProjection(agg, period, [
+      { field: 'total', kind: 'total', label: 'Projection ยอดผลิต', band: 'ช่วงคาดการณ์ 95% (ยอดผลิต)', yAxisID: 'y', color: TEAL, decimals: 0 }
+    ], prodDates);
+    const ids = pj.ids.length >= pjV.ids.length ? pj.ids : pjV.ids; // แกน X เดียวกันทั้งสองกราฟ
+    const pad = (arr) => arr.concat(new Array(ids.length - arr.length).fill(null));
+    const fit = (ds) => ds.map((d) => Object.assign({}, d, { data: pad(d.data) }));
+    const lab = (id) => ChartTools.periodLabel(id, period);
+    const byId = {}; agg.forEach((a) => { byId[a.id] = a; });
+    const issues = ids.map((id) => !!(byId[id] && byId[id].issueCount));
+    const over = agg.map((a) => a.total > 0 && a.ngPct > tg);
+    const fmtRange = (meta, f) => (ds, idx, v, short) => {
+      const m = meta[ds.label], r = m && m.rng[idx];
+      return f(v) + (r && !short ? ` (95%: ${f(r[0])} – ${f(r[1])})` : '');
+    };
+    const tooltip = (meta, fmtPoint) => ({
+      filter: (it) => !(it.dataset._band || it.raw === null || it.dataset._noTip || (meta[it.dataset.label] && meta[it.dataset.label].anchor === it.dataIndex)),
+      callbacks: {
+        title: (items) => (items.length ? lab(items[0].label) : ''),
+        label: (it) => (it.dataset._main ? null : `${it.dataset.label}: ${fmtPoint(it.dataset, it.dataIndex, it.raw)}`),
+        afterBody: (items) => { const a = items.length && byId[items[0].label]; return a ? periodTip(a, period).slice(1) : []; }
+      }
     });
-    svg2 += xLabels(g, H);
-    svg2 += an.daily.map((d, i) => `<rect class="hit${anSel === d.date ? ' sel' : ''}" data-day="${d.date}" x="${g.padL + g.step * i}" y="${top}" width="${g.step}" height="${bottom - top}"/>`).join('');
-    el.innerHTML = `<svg viewBox="0 0 ${g.W} ${H}" role="img" aria-label="ยอดผลิตรายวัน">${svg2}</svg>`;
+    const onClick = (evt, els, c) => {
+      if (period !== 'day' || (c.$draw && c.$draw.mode)) return;
+      const i = Math.round(c.scales.x.getValueForPixel(evt.x)), d = ids[i];
+      if (!d || !byId[d]) return;
+      anSel = anSel === d ? '' : d;
+      Object.values(anCharts).forEach((x) => x.draw());
+      renderDay();
+      if (anSel) $('aDay').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+    const xScale = { ticks: { callback(v) { return lab(this.getLabelForValue(v)); }, maxRotation: 0, autoSkip: true, autoSkipPadding: 8 } };
+    const legend = { labels: { filter: (i) => !i.text.startsWith('_'), boxHeight: 8 } };
+
+    // --- NG% ---
+    const fmtNg = fmtRange(pj.meta, (v) => fmtPct(v));
+    const ngData = agg.map((a) => a.ngPct);
+    anChart('aTrend', { type: 'line',
+      data: { labels: ids, datasets: fit([
+        { label: 'NG%', data: ngData, borderColor: INK, backgroundColor: INK, borderWidth: 2, spanGaps: false,
+          pointBackgroundColor: over.map((o) => (o ? RED : INK)), pointBorderColor: '#fff', pointBorderWidth: 1.5, pointRadius: over.map((o) => (o ? 5 : 3.5)) },
+        { label: `เป้า ${tg}%`, data: ids.map(() => tg), borderColor: GRAY, backgroundColor: GRAY, borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, pointHitRadius: 0, _noLabel: true, _noTip: true }
+      ].concat(pj.datasets)) },
+      plugins: DL().concat([anMarks]),
+      options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, layout: { padding: { top: 26 } }, onClick,
+        plugins: { legend, tooltip: tooltip(pj.meta, fmtNg), datalabels: ChartTools.dataLabelOptions() },
+        scales: { x: xScale, y: { min: 0, suggestedMax: tg * 1.5, ticks: { callback: (v) => +Number(v).toFixed(2) + '%' } } } } });
+    const c1 = anCharts.aTrend;
+    Object.assign(c1, { $period: period, $projMeta: pj.meta, $fmtLabel: lab, $fmtPoint: fmtNg, $issues: issues, $axisFmt: { y: (v) => fmtPct(v) } });
+    ChartTools.initChartDrawTool(c1, 'ngTrend_' + period, { toolbarKey: 'ngTrend' });
+    ChartTools.setValueMode(c1, anValues.value);
+
+    // --- ยอดผลิต ---
+    const fmtVol = fmtRange(pjV.meta, (v) => UI.formatNumber(Math.round(v)));
+    anChart('aVolume', { type: 'bar',
+      data: { labels: ids, datasets: fit([
+        { type: 'bar', label: 'ยอดผลิต', data: agg.map((a) => (a.total > 0 ? a.total : null)), backgroundColor: BAR, borderRadius: 4, maxBarThickness: 28 }
+      ].concat(pjV.datasets.map((d) => Object.assign({ type: 'line' }, d)))) },
+      plugins: DL().concat([anMarks]),
+      options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, layout: { padding: { top: 26 } }, onClick,
+        plugins: { legend, tooltip: tooltip(pjV.meta, fmtVol), datalabels: ChartTools.dataLabelOptions({ color: (ctx) => (ctx.dataset.type === 'bar' ? '#6B6F7A' : TEAL) }) },
+        scales: { x: xScale, y: { min: 0, ticks: { callback: (v) => (v >= 1000 ? +(v / 1000).toFixed(1) + 'k' : v) } } } } });
+    const c2 = anCharts.aVolume;
+    Object.assign(c2, { $period: period, $projMeta: pjV.meta, $fmtLabel: lab, $fmtPoint: fmtVol, $axisFmt: { y: (v) => UI.formatNumber(Math.round(v)) } });
+    ChartTools.initChartDrawTool(c2, 'ngVolume_' + period, { toolbarKey: 'ngVolume', tools: ['trend', 'hline', 'range', 'select', 'erase', 'color', 'undo', 'clear'] });
+    ChartTools.setValueMode(c2, anValues.value);
   }
-  ['aTrend', 'aVolume'].forEach((id) => {
-    $(id).addEventListener('mousemove', (e) => { const h = e.target.closest('[data-day]'); if (!h) return hideTip(); showTip(e, dayTip(an.daily.find((d) => d.date === h.dataset.day))); });
-    $(id).addEventListener('mouseleave', hideTip);
-    $(id).addEventListener('click', (e) => { const h = e.target.closest('[data-day]'); if (!h) return; anSel = anSel === h.dataset.day ? '' : h.dataset.day; hideTip(); renderTrend(); renderDay(); if (anSel) $('aDay').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
-  });
 
   function renderDailyTable() {
     $('aDailyTable').innerHTML = '<thead><tr><th>วันที่</th><th class="num">ยอดผลิต</th><th class="num">NG</th><th class="num">NG%</th><th class="num">แจ้งปัญหา (ครั้ง)</th></tr></thead><tbody>' +
@@ -649,8 +707,6 @@
     loadStats();
   }));
   $('aGo').onclick = () => UI.withButton($('aGo'), loadStats);
-  let anResize = null;
-  window.addEventListener('resize', () => { clearTimeout(anResize); anResize = setTimeout(() => { if (an && !$('aTrend').closest('.hidden')) renderTrend(); }, 200); });
 
   const today = UI.getToday();
   $('at').value = UI.nowLocalInput();
