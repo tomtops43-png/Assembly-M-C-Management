@@ -17,6 +17,8 @@
 <link rel="stylesheet" href="../css/style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
 <style>
   .auto-report { margin: 0; padding: 14px 16px; background: var(--bg); border-radius: 8px; font-family: var(--font); font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; max-height: 520px; overflow: auto; }
   /* ---- หน้า PDF (A4 กว้าง 794px) ---- */
@@ -223,6 +225,10 @@
   const machineValues = ChartTools.valuesToggle($('machineCtl'), { key: 'cMachine', onChange: (on) => ChartTools.setValueMode(charts.cMachine, on) });
   const productValues = ChartTools.valuesToggle($('productCtl'), { key: 'cProduct', onChange: (on) => ChartTools.setValueMode(charts.cProduct, on) });
   const reasonValues = ChartTools.valuesToggle($('reasonCtl'), { key: 'cReason', onChange: (on) => ChartTools.setValueMode(charts.cReason, on) });
+  // ซูม/เลื่อน + ขยายเต็มจอ
+  const machineZoom = ChartTools.zoomReset($('machineCtl'), () => [charts.cMachine]);
+  const reasonZoom = ChartTools.zoomReset($('reasonCtl'), () => [charts.cReason]);
+  ['machineCtl', 'productCtl', 'reasonCtl'].forEach((id) => ChartTools.expandButton($(id), $(id).closest('.card')));
 
   function renderMachineChart() {
     chart('cMachine', { type: 'bar', data: { labels: data.byMachine.map((m) => m.machineName), datasets: [
@@ -231,13 +237,14 @@
       { label: '% OEE', type: 'line', data: data.byMachine.map((m) => m.oee), borderColor: '#16171B', backgroundColor: '#16171B', yAxisID: 'y1' }] },
       plugins: DL(),
       options: { maintainAspectRatio: false, layout: { padding: { top: 26 } },
-        plugins: { datalabels: ChartTools.dataLabelOptions({ anchor: 'end', align: 'end' }) },
+        plugins: { datalabels: ChartTools.dataLabelOptions({ anchor: 'end', align: 'end' }), zoom: ChartTools.zoomOptions('x', () => machineZoom.sync()) },
         scales: { y1: { position: 'right', min: 0, grid: { display: false } } } } });
     const c = charts.cMachine; if (!c) return;
     Object.assign(c, { $fmtPoint: (ds, idx, v) => (ds.yAxisID === 'y1' ? UI.formatNumber(v, 1) + '%' : n(v)),
       $axisFmt: { y: (v) => n(v), y1: (v) => UI.formatNumber(v, 1) + '%' } });
     ChartTools.initChartDrawTool(c, 'cMachine', { tools: BAR_TOOLS });
     ChartTools.setValueMode(c, machineValues.value);
+    machineZoom.sync();
   }
 
   function renderProductChart() {
@@ -257,11 +264,12 @@
     chart('cReason', { type: 'bar', data: { labels: reasons, datasets: [{ label: 'NG', data: reasons.map((r) => data.ngByReason[r]), backgroundColor: '#C8102E' }] },
       plugins: DL(),
       options: { maintainAspectRatio: false, indexAxis: 'y', layout: { padding: { top: 26, right: 12 } },
-        plugins: { datalabels: ChartTools.dataLabelOptions({ anchor: 'end', align: 'end' }) } } });
+        plugins: { datalabels: ChartTools.dataLabelOptions({ anchor: 'end', align: 'end' }), zoom: ChartTools.zoomOptions('y', () => reasonZoom.sync()) } } });
     const c = charts.cReason; if (!c) return;
     Object.assign(c, { $fmtPoint: (ds, idx, v) => `${n(v)} (${total ? UI.formatNumber(v * 100 / total, 1) : 0}%)`, $axisFmt: { x: (v) => n(v) } });
     ChartTools.initChartDrawTool(c, 'cReason', { tools: BAR_TOOLS });
     ChartTools.setValueMode(c, reasonValues.value);
+    reasonZoom.sync();
   }
 
   // ---------- กราฟแนวโน้ม: ช่วงเวลา / ตัวกรองรุ่น / ตัวเลข / ตีเส้น / Projection 95% ----------
@@ -272,6 +280,8 @@
   $('trendCtl').appendChild(trendSel);
   const trendPeriod = ChartTools.periodSwitcher($('trendCtl'), { key: 'cTrend', onChange: () => renderTrend() });
   const trendValues = ChartTools.valuesToggle($('trendCtl'), { key: 'cTrend', onChange: (on) => ChartTools.setValueMode(charts.cTrend, on) });
+  const trendZoom = ChartTools.zoomReset($('trendCtl'), () => [charts.cTrend]);
+  ChartTools.expandButton($('trendCtl'), $('trendCtl').closest('.card'));
 
   function fillTrendProducts() {
     const codes = data.byProduct.slice().sort((a, b) => b.actual - a.actual).map((p) => p.productCode);
@@ -318,7 +328,8 @@
             filter: (it) => !(it.dataset._band || it.raw === null || (pj.meta[it.dataset.label] && pj.meta[it.dataset.label].anchor === it.dataIndex)),
             callbacks: { title: (items) => (items.length ? lab(items[0].label) : ''), label: (it) => `${it.dataset.label}: ${fmtPoint(it.dataset, it.dataIndex, it.raw)}` }
           },
-          datalabels: ChartTools.dataLabelOptions()
+          datalabels: ChartTools.dataLabelOptions(),
+          zoom: ChartTools.zoomOptions('x', () => trendZoom.sync())
         },
         scales: {
           x: { ticks: { callback(v) { return lab(this.getLabelForValue(v)); } } },
@@ -331,6 +342,7 @@
       $axisFmt: { y: (v) => n(v), y1: (v) => UI.formatNumber(v, 2) + '%' } });
     ChartTools.initChartDrawTool(c, 'cTrend_' + period, { toolbarKey: 'cTrend' });
     ChartTools.setValueMode(c, trendValues.value);
+    trendZoom.sync();
   }
 
   // ---------- Auto Generated Report (ข้อความ + PDF) ----------
