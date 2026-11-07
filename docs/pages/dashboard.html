@@ -192,12 +192,17 @@
       { label: 'NG', data: data.byMachine.map((m) => m.defect), backgroundColor: '#C8102E', yAxisID: 'y' },
       { label: '% OEE', type: 'line', data: data.byMachine.map((m) => m.oee), borderColor: '#16171B', yAxisID: 'y1' }] },
       options: { maintainAspectRatio: false, scales: { y1: { position: 'right', min: 0, grid: { display: false } } } } });
-    chart('cTrend', { type: 'line', data: { labels: data.trend.map((t) => t.date.slice(5)), datasets: [
-      { label: 'FG', data: data.trend.map((t) => t.actual), borderColor: '#1E9E5A', yAxisID: 'y' },
-      { label: 'NG', data: data.trend.map((t) => t.defect), borderColor: '#C8102E', yAxisID: 'y' },
-      { label: 'แผน', data: data.trend.map((t) => t.plan), borderColor: '#9A9EA9', borderDash: [6, 4], yAxisID: 'y' },
-      { label: '% NG', data: data.trend.map((t) => t.defectRate), borderColor: '#E8A317', yAxisID: 'y1' }] },
-      options: { maintainAspectRatio: false, scales: { y1: { position: 'right', min: 0, grid: { display: false } } } } });
+    const pj = trendProjection(data.trend);
+    const pad = (arr) => arr.concat(new Array(pj.labels.length - arr.length).fill(null));
+    chart('cTrend', { type: 'line', data: { labels: pj.labels, datasets: [
+      { label: 'FG', data: pad(data.trend.map((t) => t.actual)), borderColor: '#1E9E5A', yAxisID: 'y' },
+      { label: 'NG', data: pad(data.trend.map((t) => t.defect)), borderColor: '#C8102E', yAxisID: 'y' },
+      { label: 'แผน', data: pad(data.trend.map((t) => t.plan)), borderColor: '#9A9EA9', borderDash: [6, 4], yAxisID: 'y' },
+      { label: '% NG', data: pad(data.trend.map((t) => t.defectRate)), borderColor: '#E8A317', yAxisID: 'y1' }].concat(pj.datasets) },
+      options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { labels: { filter: (i) => !i.text.startsWith('_') } },
+          tooltip: pj.tooltip },
+        scales: { y: { min: 0 }, y1: { position: 'right', min: 0, grid: { display: false } } } } });
     chart('cProduct', { type: 'doughnut', data: { labels: data.byProduct.map((p) => p.productCode), datasets: [{ data: data.byProduct.map((p) => p.actual) }] }, options: { maintainAspectRatio: false } });
     const reasons = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a]);
     chart('cReason', { type: 'bar', data: { labels: reasons, datasets: [{ label: 'NG', data: reasons.map((r) => data.ngByReason[r]), backgroundColor: '#C8102E' }] }, options: { maintainAspectRatio: false, indexAxis: 'y' } });
@@ -222,6 +227,81 @@
       Object.keys(data.byShift).map((s) => `<tr><td><b>${UI.esc(UI.shiftLabel(s))}</b></td><td><b>รวม</b></td><td class="num"><b>${n(data.byShift[s].actual)}</b></td><td class="num"><b>${n(data.byShift[s].defect)}</b></td></tr>` +
         shiftProducts(s).map(([pc, v]) => `<tr><td></td><td>${UI.esc(pc)}</td><td class="num">${n(v.actual)}</td><td class="num">${n(v.defect)}</td></tr>`).join('')).join('') + '</tbody>';
     renderTable();
+  }
+
+  // ---------- Projection (แนวโน้ม) + ช่วงคาดการณ์ 95% ต่อท้ายกราฟแนวโน้มรายวัน ----------
+  // ข้อมูลรายวัน → ทำนาย 7 วันทำงานถัดไป ; วันทำงานปัจจุบัน (ยังไม่จบ) ไม่ป้อนให้โมเดล
+  // แต่ประเมินแยก = ยอดจริงถึงตอนนี้ + (สัดส่วนเวลาที่เหลือ × ค่าที่ทำนาย)
+  function trendProjection(trend) {
+    const labels = trend.map((t) => t.date.slice(5));
+    const empty = { labels, datasets: [], tooltip: {} };
+    if (!trend.length) return empty;
+    const today = UI.getToday();
+    const partial = trend[trend.length - 1].date === today;
+    const fit = partial ? trend.slice(0, -1) : trend;
+    const H = UI.FORECAST_HORIZON.daily;
+    const fFG = UI.holtForecast(fit.map((t) => Number(t.actual)), H);
+    const fNG = UI.holtForecast(fit.map((t) => (t.defectRate === null || t.defectRate === undefined ? NaN : Number(t.defectRate))), H);
+    if (!fFG && !fNG) return empty;
+
+    // วันในอนาคต: ข้ามวันในสัปดาห์ที่ไม่เคยมีการผลิตเลย (เช่นวันอาทิตย์) เมื่อมีข้อมูลย้อนหลัง ≥ 14 วัน
+    const dow = (d) => new Date(d + 'T00:00:00Z').getUTCDay();
+    const first = trend[0].date, last = fit[fit.length - 1].date;
+    const spanDays = (Date.parse(last) - Date.parse(first)) / 864e5;
+    const workDow = new Set(trend.map((t) => dow(t.date)));
+    const isWork = (d) => spanDays < 14 || workDow.has(dow(d));
+    const steps = [];
+    let d = last;
+    while (steps.length < H) {
+      d = partial && !steps.length ? today : UI.addDays(d, 1);
+      if (partial && !steps.length) { steps.push(d); continue; }
+      if (isWork(d)) steps.push(d);
+    }
+    steps.forEach((x, k) => { if (!(partial && k === 0)) labels.push(x.slice(5)); });
+
+    const L = labels.length, anchor = fit.length - 1, el = UI.workdayElapsed();
+    const meta = {}; // datasetLabel -> { idx -> [lo, hi] }
+    const build = (fc, key, name, lastVal, color, band, yAxisID, clampHi, decimals) => {
+      if (!fc) return [];
+      const clamp = (v) => Math.min(clampHi, Math.max(0, v));
+      const proj = new Array(L).fill(null), lo = new Array(L).fill(null), hi = new Array(L).fill(null), rng = {};
+      proj[anchor] = lo[anchor] = hi[anchor] = lastVal;
+      fc.forecast.forEach((f, h) => {
+        const idx = anchor + 1 + h, w = 1.96 * fc.sd[h];
+        let p = f, a = f - w, b = f + w;
+        if (partial && h === 0) { // วันนี้ยังไม่จบ: ยอดจริงถึงตอนนี้ + ส่วนที่เหลือของวัน
+          const now = Number(trend[trend.length - 1][key]) || 0;
+          const rem = 1 - el;
+          if (key === 'actual') { p = now + rem * f; a = now + rem * a; b = now + rem * b; }
+          else { p = el * now + rem * f; a = el * now + rem * a; b = el * now + rem * b; }
+        }
+        proj[idx] = +clamp(p).toFixed(decimals); lo[idx] = +clamp(a).toFixed(decimals); hi[idx] = +clamp(b).toFixed(decimals);
+        rng[idx] = [lo[idx], hi[idx]];
+      });
+      meta[name] = { anchor, rng, decimals };
+      return [
+        { label: name, data: proj, borderColor: color, backgroundColor: color, borderDash: [2, 4], pointStyle: 'rectRot', pointRadius: 4, spanGaps: true, fill: false, yAxisID },
+        { label: '_lo ' + name, data: lo, borderColor: 'transparent', pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 0, fill: false, spanGaps: true, yAxisID, _band: true },
+        { label: band, data: hi, borderColor: 'transparent', pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 0, backgroundColor: color.replace(/[\d.]+\)$/, '.12)'), fill: '-1', spanGaps: true, yAxisID, _band: true }
+      ];
+    };
+    const lastFG = Number(fit[anchor].actual) || 0, lastNG = Number(fit[anchor].defectRate) || 0;
+    const datasets = [].concat(
+      build(fFG, 'actual', 'Projection FG', lastFG, 'rgba(13,148,136,.9)', 'ช่วงคาดการณ์ 95% (FG)', 'y', Infinity, 0),
+      build(fNG, 'defectRate', 'Projection % NG', lastNG, 'rgba(232,163,23,.9)', 'ช่วงคาดการณ์ 95% (% NG)', 'y1', 100, 2));
+    return {
+      labels, datasets, tooltip: { filter: (it) => {
+        if (it.dataset._band || it.raw === null) return false;
+        const m = meta[it.dataset.label];
+        return !(m && it.dataIndex === m.anchor); // จุดเชื่อม = ค่าจริง ไม่ต้องแสดงซ้ำ
+      }, callbacks: { label: (it) => {
+        const m = meta[it.dataset.label];
+        if (!m) return `${it.dataset.label}: ${UI.formatNumber(it.raw, it.dataset.yAxisID === 'y1' ? 2 : 0)}`;
+        const r = m.rng[it.dataIndex] || [it.raw, it.raw];
+        const f = (v) => UI.formatNumber(v, m.decimals);
+        return `${it.dataset.label}: ${f(it.raw)} (95%: ${f(r[0])} – ${f(r[1])})`;
+      } } }
+    };
   }
 
   // ---------- Auto Generated Report (ข้อความ + PDF) ----------
