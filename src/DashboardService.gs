@@ -400,3 +400,66 @@ function exportQCDefectCSV(token, dateFrom, dateTo, dateMode, timeFrom, timeTo) 
   });
   return { success: true, csv: '﻿' + lines.join('\n'), filename: LINE_CONFIG.LINE_CODE + '_NG_' + dateFrom + '_' + dateTo + '.csv', rows: n, totals: totals };
 }
+
+// ---------- ตามรายการต้นทางของอาการ NG (คลิกแท่ง Pareto) + ย้ายอาการที่ลงผิด ----------
+/** แหล่งของอาการ: แถว sort-adjust → งานคัดแยก ST-... ; อื่น ๆ → แถวกรอกยอดเอง */
+function sortJobIdOfRemark_(remark) {
+  var r = String(remark || '').trim(), adj = LINE_CONFIG.SORTING_ADJUST_NG_REASON;
+  if (r.indexOf(adj) !== 0) return '';
+  var m = r.substring(adj.length).match(/ST-[0-9A-Za-z-]+/);
+  return m ? m[0] : '';
+}
+
+/** รายการ NG ที่นับเข้าอาการ reason (ตัวกรองเดียวกับ Dashboard; productCode ว่าง = ทุกรุ่น) */
+function getNgReasonEntries(token, dateRange, reason, productCode, shiftDN, jobOrderId) {
+  requireLogin(token);
+  reason = String(reason || '');
+  var range = resolveDateRange(dateRange);
+  var rows = queryProduction({ dateFrom: range.from, dateTo: range.to, shiftDN: shiftDN || '', productCode: productCode || '', jobOrderId: jobOrderId || '' });
+  var out = rows.filter(function (r) { return r.defectQty > 0 && ngReasonOf(r.remark) === reason; }).map(function (r) {
+    var st = r.status === 'sort-adjust' ? sortJobIdOfRemark_(r.remark) : '';
+    return {
+      logId: r.logId, date: r.date, timestamp: r.timestamp, shiftDN: r.shiftDN, timePeriod: r.timePeriod, machineId: r.machineId,
+      productCode: r.productCode, jobOrderId: r.jobOrderId, defectQty: r.defectQty, employeeName: r.employeeName,
+      remark: st ? ngReasonOf(r.remark) : r.remark, source: st ? 'sorting' : 'production', sortJobId: st
+    };
+  });
+  out.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : String(b.timestamp).localeCompare(String(a.timestamp)); });
+  return { success: true, data: out };
+}
+
+/**
+ * ย้ายอาการ NG ที่ลงผิด (หัวหน้าขึ้นไป)
+ * items: [{ source:'production', logId } | { source:'sorting', sortJobId }] — แถวกรอกยอดแก้ Remark ตรง ;
+ * ยอดจากการคัดแยกแก้หมายเหตุของงานคัดแยกต้นทาง (แถวปรับยอดยังอ้างเลขงานเดิม)
+ */
+function reassignNgReason(token, items, newReason) {
+  var u = requireRole(token, 'supervisor');
+  newReason = String(newReason || '').trim();
+  if (!hasNgReason(newReason)) throw new Error('กรุณาเลือกอาการใหม่');
+  if (newReason.length > 200) throw new Error('อาการยาวเกินไป');
+  items = safeJson(items, items) || [];
+  if (!items.length) throw new Error('กรุณาเลือกรายการ');
+  if (items.length > 500) throw new Error('เลือกได้ไม่เกิน 500 รายการต่อครั้ง');
+  var done = 0, seenJob = {}, changes = [];
+  items.forEach(function (it) {
+    if (it.source === 'sorting') {
+      var jid = String(it.sortJobId || '');
+      if (!jid || seenJob[jid]) return;
+      seenJob[jid] = true;
+      var s = findRow('SortingLog', 'JobID', jid);
+      if (!s) throw new Error('ไม่พบงานคัดแยก ' + jid);
+      updateRow('SortingLog', 'JobID', jid, { Remark: newReason });
+      changes.push({ sortJobId: jid, before: String(s.Remark || '') });
+    } else {
+      var row = getProductionRow(String(it.logId || ''));
+      if (row.status === 'cancelled') throw new Error('รายการ ' + row.logId + ' ถูกยกเลิกแล้ว');
+      if (row.status === 'sort-adjust') throw new Error('รายการ ' + row.logId + ' มาจากงานคัดแยก — ต้องแก้ที่งานคัดแยก');
+      updateRow('ProductionLog', 'LogID', row.logId, { Remark: newReason });
+      changes.push({ logId: row.logId, before: row.remark });
+    }
+    done++;
+  });
+  logAction(u, 'reassignNgReason', { newReason: newReason, changes: changes });
+  return { success: true, updated: done };
+}

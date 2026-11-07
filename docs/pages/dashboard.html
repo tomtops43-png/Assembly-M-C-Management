@@ -113,6 +113,21 @@
   </div>
 </div></main>
 
+<div class="modal-overlay" id="ngTraceModal"><div class="modal-content wide">
+  <button class="modal-close" data-close-modal>&times;</button>
+  <h3 class="modal-title" id="ntTitle">รายการ NG</h3>
+  <div class="small text-gray" id="ntSub"></div>
+  <div class="table-wrap" style="max-height:52vh;margin-top:10px"><table class="data-table" id="ntTable"></table></div>
+  <div id="ntFix" class="hidden" style="margin-top:12px">
+    <div class="form-label">ย้ายรายการที่เลือกไปอาการ <span class="text-gray small" id="ntSel"></span></div>
+    <div class="d-flex gap-2" style="flex-wrap:wrap">
+      <select class="form-input" id="ntReason" style="flex:1;min-width:200px"></select>
+      <button class="btn btn-primary" type="button" id="ntApply"><i class="bi bi-arrow-left-right"></i> ย้ายอาการ</button>
+    </div>
+    <div class="small text-gray" style="margin-top:6px">ยอดจากการคัดแยก (ST-…) จะแก้ที่หมายเหตุของงานคัดแยกต้นทาง — ทุกยอดที่มาจากงานนั้นย้ายไปด้วย</div>
+  </div>
+</div></div>
+
 <script src="../js/config.js"></script>
 <script src="../js/api.js"></script>
 <script src="../js/auth.js"></script>
@@ -305,7 +320,9 @@
     chart('cReason', { type: 'bar', data: { labels: reasons, datasets },
       plugins: DL(),
       options: { maintainAspectRatio: false, indexAxis: 'y', layout: { padding: { top: 26, right: 12 } },
-        scales: { x: { stacked, suggestedMax: Math.max(0, ...rowTotal) * 1.2 }, y: { stacked } },
+        scales: { x: { stacked, suggestedMax: Math.max(0, ...rowTotal) * 1.3 }, y: { stacked } },
+        onClick: (evt, els, ch) => onReasonClick(evt, ch, reasons, stacked),
+        onHover: (evt, els) => { if (evt.native && evt.native.target) evt.native.target.style.cursor = els.length ? 'pointer' : ''; },
         plugins: { datalabels: labels, zoom: ChartTools.zoomOptions('y', () => reasonZoom.sync()),
           tooltip: stacked ? { callbacks: { footer: (items) => items.length ? 'รวม ' + n(rowTotal[items[0].dataIndex]) : '' } } : {} } } });
     const c = charts.cReason; if (!c) return;
@@ -314,6 +331,86 @@
     ChartTools.setValueMode(c, reasonValues.value);
     reasonZoom.sync();
   }
+
+  // ---------- คลิกแท่ง Pareto → รายการต้นทาง (ตามหา/ย้ายอาการที่ลงผิด) ----------
+  const canFixNg = Auth.hasRole('supervisor');
+  let ntItems = [], ntReasonName = '';
+  function onReasonClick(evt, ch, reasons, stacked) {
+    if (ch.$drawing || (ch.$panAt && Date.now() - ch.$panAt < 400)) return;
+    const els = ch.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+    let idx, pc = reasonProduct || $('fProduct').value;
+    if (els.length) {
+      idx = els[0].index;
+      const ds = ch.data.datasets[els[0].datasetIndex];
+      if (stacked && ds.label !== 'รุ่นอื่น') pc = ds.label;
+    } else {
+      // คลิกที่ชื่ออาการบนแกน Y
+      const y = ch.scales.y;
+      if (!y || evt.x > y.right) return;
+      idx = Math.round(y.getValueForPixel(evt.y));
+      if (!(idx >= 0 && idx < reasons.length)) return;
+    }
+    openNgTrace(reasons[idx], pc);
+  }
+
+  async function openNgTrace(reason, productCode) {
+    ntReasonName = reason;
+    const act = document.querySelector('[data-range].active');
+    $('ntTitle').textContent = 'รายการ NG: ' + reason;
+    $('ntSub').textContent = (productCode ? 'รุ่น ' + productCode : 'ทุกรุ่น') + (act ? ' · ' + act.textContent.trim() : '');
+    $('ntTable').innerHTML = '<tbody><tr><td>' + UI.loadingBlock() + '</td></tr></tbody>';
+    $('ntFix').classList.add('hidden');
+    UI.openModal('ngTraceModal');
+    const r = await API.get('getNgReasonEntries', { dateRange: rangeParam(), reason, productCode: productCode || '', shiftDN: $('fShiftDN').value, jobOrderId: $('fJo').value }, { long: true });
+    if (!r.success) { $('ntTable').innerHTML = ''; return UI.showToast(r.message, 'error'); }
+    ntItems = r.data;
+    renderNgTrace();
+    if (canFixNg && ntItems.length) {
+      await UI.loadNgReasons();
+      const cfg = await UI.getLineConfig().catch(() => null);
+      UI.fillNgSelect($('ntReason'), cfg, '', '— เลือกอาการที่ถูกต้อง —');
+      [...$('ntReason').options].forEach((o) => { if (o.value === reason || o.value === UI.NG_OTHER) o.remove(); });
+      $('ntFix').classList.remove('hidden');
+      syncNtSel();
+    }
+  }
+
+  function renderNgTrace() {
+    const total = ntItems.reduce((s, x) => s + x.defectQty, 0);
+    const chk = (i) => (canFixNg ? `<td><input type="checkbox" class="nt-chk" data-i="${i}"></td>` : '');
+    $('ntTable').innerHTML = '<thead><tr>' + (canFixNg ? '<th><input type="checkbox" id="ntAll" title="เลือกทั้งหมด"></th>' : '') +
+      '<th>วันที่</th><th>กะ / ช่วง</th><th>เครื่อง</th><th>รุ่น</th><th class="num">NG</th><th>ผู้ลง</th><th>ที่มา</th><th>หมายเหตุที่ลงไว้</th></tr></thead><tbody>' +
+      (ntItems.length ? ntItems.map((x, i) => `<tr>${chk(i)}<td>${UI.esc(x.date)}</td><td>${UI.esc(UI.shiftLabel(x.shiftDN))}<div class="small text-gray">${UI.esc(x.timePeriod || '')}</div></td>
+        <td>${UI.esc(x.machineId)}</td><td>${UI.esc(x.productCode)}</td><td class="num"><b>${n(x.defectQty)}</b></td><td>${UI.esc(x.employeeName || '')}</td>
+        <td>${x.source === 'sorting' ? `<span class="badge badge-pending">คัดแยก ${UI.esc(x.sortJobId)}</span>` : `<span class="badge">กรอกยอด</span><div class="small text-gray">${UI.esc(x.logId)}</div>`}</td>
+        <td class="small">${UI.esc(x.remark)}</td></tr>`).join('') : '<tr><td colspan="9" class="text-gray">ไม่พบรายการ</td></tr>') +
+      `</tbody><tfoot><tr>${canFixNg ? '<td></td>' : ''}<td colspan="4"><b>รวม ${n(ntItems.length)} รายการ</b></td><td class="num"><b>${n(total)}</b></td><td colspan="3"></td></tr></tfoot>`;
+    if (!canFixNg || !ntItems.length) return;
+    $('ntAll').onchange = (e) => { document.querySelectorAll('.nt-chk').forEach((c) => { c.checked = e.target.checked; }); syncNtSel(); };
+    document.querySelectorAll('.nt-chk').forEach((c) => { c.onchange = syncNtSel; });
+  }
+
+  const ntSelected = () => [...document.querySelectorAll('.nt-chk:checked')].map((c) => ntItems[+c.dataset.i]);
+  function syncNtSel() {
+    const s = ntSelected();
+    $('ntSel').textContent = s.length ? `(${n(s.length)} รายการ · NG ${n(s.reduce((a, x) => a + x.defectQty, 0))} ชิ้น)` : '(ติ๊กเลือกรายการในตารางก่อน)';
+    $('ntApply').disabled = !s.length;
+  }
+
+  $('ntApply').onclick = async () => {
+    const sel = ntSelected(), to = $('ntReason').value;
+    if (!sel.length) return UI.showToast('เลือกรายการก่อน', 'warning');
+    if (!to) return UI.showToast('เลือกอาการที่ถูกต้อง', 'warning');
+    const jobs = [...new Set(sel.filter((x) => x.source === 'sorting').map((x) => x.sortJobId))];
+    const msg = `ย้าย ${n(sel.length)} รายการ จาก "${ntReasonName}" ไปเป็น "${to}"` + (jobs.length ? ` (แก้หมายเหตุงานคัดแยก ${jobs.length} งาน)` : '');
+    if (!await UI.confirm({ title: 'ยืนยันย้ายอาการ NG', message: msg, okText: 'ย้ายอาการ' })) return;
+    const items = sel.map((x) => (x.source === 'sorting' ? { source: 'sorting', sortJobId: x.sortJobId } : { source: 'production', logId: x.logId }));
+    const r = await UI.withButton($('ntApply'), () => API.postLarge('reassignNgReason', { items, newReason: to }));
+    if (!r || !r.success) return UI.showToast((r && r.message) || 'ไม่สำเร็จ', 'error');
+    UI.showToast(`ย้ายอาการแล้ว ${n(r.updated)} รายการ`, 'success');
+    UI.closeModal('ngTraceModal');
+    load();
+  };
 
   // ---------- กราฟแนวโน้ม: ช่วงเวลา / ตัวกรองรุ่น / ตัวเลข / ตีเส้น / Projection 95% ----------
   let trendProduct = '';
