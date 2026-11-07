@@ -152,6 +152,17 @@ const ChartTools = (() => {
     return { ids, datasets, meta };
   }
 
+  // ---------- แกนของกราฟ (รองรับกราฟแนวนอน indexAxis: 'y') ----------
+  // พิกัด "logical": u = ตามแกนหมวดหมู่ (label), w = ตามแกนค่า
+  const isHoriz = (chart) => !!(chart.options && chart.options.indexAxis === 'y');
+  const catScale = (chart) => chart.scales[isHoriz(chart) ? 'y' : 'x'];
+  const valScale = (chart) => chart.scales[isHoriz(chart) ? 'x' : 'y'];
+  const valAxisIds = (chart) => (isHoriz(chart) ? ['x', 'x1'] : ['y', 'y1']);
+  const toLogical = (chart, px, py) => (isHoriz(chart) ? { px: py, py: px } : { px, py });   // จอ → logical
+  const toScreen = (chart, u, w) => (isHoriz(chart) ? [w, u] : [u, w]);                     // logical → จอ [x, y]
+  const logicalArea = (chart) => { const a = chart.chartArea; return isHoriz(chart) ? { left: a.top, right: a.bottom, top: a.left, bottom: a.right } : a; };
+  const dsColor = (ds) => { const c = ds.borderColor && ds.borderColor !== 'transparent' ? ds.borderColor : ds.backgroundColor; return typeof c === 'string' ? c : '#16171B'; };
+
   // ---------- ตัวเลขบนจุด / crosshair ----------
   /** ข้อความค่าของจุด (ใช้ทั้ง datalabels และ crosshair) — chart.$fmtPoint(ds, idx, v) กำหนดเองได้ */
   const pointText = (chart, ds, idx, v, short) => (chart.$fmtPoint ? chart.$fmtPoint(ds, idx, v, short) : fmtNum(v, Number.isInteger(v) ? 0 : 2));
@@ -163,14 +174,14 @@ const ChartTools = (() => {
     return true;
   };
   /** ใส่ใน options.plugins.datalabels ของกราฟ */
-  function dataLabelOptions() {
-    return {
+  function dataLabelOptions(extra) {
+    return Object.assign({
       display: (ctx) => (ctx.chart.$valuesOn && !ctx.dataset._noLabel && ctx.chart.isDatasetVisible(ctx.datasetIndex) && showPoint(ctx.chart, ctx.dataset, ctx.dataIndex) ? 'auto' : false),
       formatter: (v, ctx) => pointText(ctx.chart, ctx.dataset, ctx.dataIndex, v, true), // ช่วง 95% ดูได้ที่ tooltip/crosshair
-      color: (ctx) => (ctx.dataset.borderColor && ctx.dataset.borderColor !== 'transparent' ? ctx.dataset.borderColor : '#16171B'),
+      color: (ctx) => dsColor(ctx.dataset),
       align: 'top', anchor: 'end', offset: 2, clamp: true,
       font: { size: 10, weight: '600' }
-    };
+    }, extra || {});
   }
   function syncTooltip(chart) {
     const tt = chart.options.plugins && chart.options.plugins.tooltip;
@@ -179,7 +190,7 @@ const ChartTools = (() => {
   /** on = แสดงตัวเลขทุกจุด ; off = ซ่อนตัวเลข แสดงเฉพาะค่าที่ crosshair พาดผ่าน */
   function setValueMode(chart, on) {
     if (!chart) return;
-    chart.$valuesOn = !!on; chart.$crosshair = !on;
+    chart.$valuesOn = !!on; chart.$crosshair = !on && !!catScale(chart); // กราฟวงกลม: ปิดตัวเลข = tooltip ปกติ
     syncTooltip(chart);
     chart.update('none');
   }
@@ -242,12 +253,13 @@ const ChartTools = (() => {
   const HIT = 8; // px
   const TOOLS = [
     ['trend', '✏️', 'เส้นแนวโน้ม — กดจุดแรกแล้วลาก (หรือคลิก) ไปจุดที่สอง'],
-    ['hline', '━', 'เส้นแนวนอน — คลิกครั้งเดียว'],
+    ['hline', '━', 'เส้นระดับค่า (แนวนอน) — คลิกครั้งเดียว'],
     ['range', '⏱️', 'วัดช่วงเวลา — คลิกวันเริ่ม แล้วคลิกวันสิ้นสุด'],
     ['cycle', '🔁', 'เส้นคาบซ้ำ — คลิกจุดเริ่ม แล้วคลิกจุดสิ้นสุดของคาบแรก'],
     ['select', '✋', 'เลือก/แก้ไข — ลากย้ายเส้นหรือจุดปลาย, Delete = ลบเส้นที่เลือก']
   ];
-  const hasInteractive = (c) => c && c.scales && c.scales.x && c.scales.y && c.chartArea;
+  const ALL_TOOLS = ['trend', 'hline', 'range', 'cycle', 'select', 'erase', 'color', 'undo', 'clear'];
+  const hasInteractive = (c) => c && c.scales && c.scales.x && c.scales.y && c.chartArea && catScale(c) && catScale(c).type === 'category';
 
   function distSeg(px, py, ax, ay, bx, by) {
     const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
@@ -259,12 +271,14 @@ const ChartTools = (() => {
   /**
    * แถบเครื่องมือตีเส้น — เรียกทุกครั้งหลังสร้างกราฟใหม่ (destroy/new Chart) บน canvas เดิมได้
    * key: ชื่อกราฟ (เส้นเก็บใน localStorage 'amc_chartDrawings_<key>') ; opts.toolbarKey: ใช้จำตำแหน่ง toolbar
+   * opts.tools: ปุ่มที่ต้องการ (ค่าเริ่มต้น = ทั้งหมด) เช่น ['trend', 'hline', 'select', 'erase', 'color', 'undo', 'clear']
+   *   — 'range' / 'cycle' เหมาะกับกราฟที่แกนหมวดหมู่เป็นเวลา ; รองรับกราฟแนวนอน (indexAxis: 'y')
    */
   function initChartDrawTool(chart, key, opts = {}) {
     if (!chart || !chart.canvas) return null;
     const canvas = chart.canvas;
     let st = canvas.__ctDraw;
-    if (!st) st = canvas.__ctDraw = createDrawState(canvas, opts.toolbarKey || key);
+    if (!st) st = canvas.__ctDraw = createDrawState(canvas, opts.toolbarKey || key, opts.tools || ALL_TOOLS);
     if (st.key !== key) { st.key = key; st.shapes = store.get('chartDrawings_' + key, []); st.selected = -1; st.pending = null; }
     st.chart = chart;
     chart.$draw = st;
@@ -295,17 +309,18 @@ const ChartTools = (() => {
     try { c.update('none'); } catch (e) { /* ถูก destroy แล้ว */ }
   }
 
-  function createDrawState(canvas, tbKey) {
+  function createDrawState(canvas, tbKey, tools) {
     const st = { canvas, chart: null, key: null, shapes: [], mode: null, color: COLORS[0][0], pending: null, hover: null, selected: -1, drag: null, tb: null };
     const save = () => store.set('chartDrawings_' + st.key, st.shapes);
     const redraw = () => { if (st.chart) st.chart.draw(); };
 
     // --- แปลงพิกัด pixel ↔ ข้อมูล ---
     const labels = () => (st.chart.data.labels || []);
-    const xIdxAt = (px) => { const n = labels().length; const v = Math.round(st.chart.scales.x.getValueForPixel(px)); return Math.max(0, Math.min(n - 1, v)); };
-    const toData = (px, py) => ({ x: labels()[xIdxAt(px)], y: st.chart.scales.y.getValueForPixel(py) });
-    const xPix = (lab) => { const i = labels().indexOf(lab); return i < 0 ? null : st.chart.scales.x.getPixelForValue(i); };
-    const yPix = (v) => st.chart.scales.y.getPixelForValue(v);
+    // (px, py) ในส่วนนี้เป็นพิกัด logical: px = ตามแกนหมวดหมู่, py = ตามแกนค่า
+    const xIdxAt = (px) => { const n = labels().length; const v = Math.round(catScale(st.chart).getValueForPixel(px)); return Math.max(0, Math.min(n - 1, v)); };
+    const toData = (px, py) => ({ x: labels()[xIdxAt(px)], y: valScale(st.chart).getValueForPixel(py) });
+    const xPix = (lab) => { const i = labels().indexOf(lab); return i < 0 ? null : catScale(st.chart).getPixelForValue(i); };
+    const yPix = (v) => valScale(st.chart).getPixelForValue(v);
     const shiftLab = (lab, d) => { const L = labels(), i = L.indexOf(lab); return i < 0 ? lab : L[Math.max(0, Math.min(L.length - 1, i + d))]; };
 
     // --- toolbar ---
@@ -314,11 +329,11 @@ const ChartTools = (() => {
     const tb = st.tb = document.createElement('div');
     tb.className = 'ct-draw-tb';
     tb.innerHTML = `<span class="ct-handle" title="ลากเพื่อย้ายแถบเครื่องมือ">⠿</span>` +
-      TOOLS.map(([k, ic, t]) => `<button type="button" data-tool="${k}" title="${t}">${ic}</button>`).join('') +
+      TOOLS.filter(([k]) => tools.includes(k)).map(([k, ic, t]) => `<button type="button" data-tool="${k}" title="${t}">${ic}</button>`).join('') +
       `<button type="button" data-act="color" title="สีเส้น (กดเพื่อเปลี่ยน)"><i></i></button>` +
-      `<button type="button" data-tool="erase" title="ยางลบ — คลิกใกล้เส้นเพื่อลบ">🧽</button>` +
-      `<button type="button" data-act="undo" title="Undo — ลบเส้นล่าสุด">↩️</button>` +
-      `<button type="button" data-act="clear" title="ลบเส้นทั้งหมด">🗑️</button>`;
+      (tools.includes('erase') ? `<button type="button" data-tool="erase" title="ยางลบ — คลิกใกล้เส้นเพื่อลบ">🧽</button>` : '') +
+      (tools.includes('undo') ? `<button type="button" data-act="undo" title="Undo — ลบเส้นล่าสุด">↩️</button>` : '') +
+      (tools.includes('clear') ? `<button type="button" data-act="clear" title="ลบเส้นทั้งหมด">🗑️</button>` : '');
     host.appendChild(tb);
     const pos = store.get('drawToolbarPos_' + tbKey, null);
     if (pos) { tb.style.left = pos.left + 'px'; tb.style.top = pos.top + 'px'; }
@@ -364,7 +379,7 @@ const ChartTools = (() => {
 
     // --- hit test ---
     function hitTest(px, py) {
-      const c = st.chart, a = c.chartArea;
+      const a = logicalArea(st.chart);
       for (let i = st.shapes.length - 1; i >= 0; i--) {
         const s = st.shapes[i];
         if (s.t === 'trend') {
@@ -391,16 +406,16 @@ const ChartTools = (() => {
       const L = labels(); let i1 = L.indexOf(s.a), i2 = L.indexOf(s.b);
       if (i1 < 0 || i2 < 0) return null;
       if (i2 < i1) [i1, i2] = [i2, i1];
-      const n = i2 - i1; if (!n) return [st.chart.scales.x.getPixelForValue(i1)];
+      const cs = catScale(st.chart), n = i2 - i1; if (!n) return [cs.getPixelForValue(i1)];
       const xs = [];
-      for (let i = i1; i < L.length; i += n) xs.push(st.chart.scales.x.getPixelForValue(i));
+      for (let i = i1; i < L.length; i += n) xs.push(cs.getPixelForValue(i));
       return xs;
     }
     st.cycleXs = cycleXs; st.xPix = xPix; st.yPix = yPix;
 
     // --- pointer events บน canvas ---
-    const ptOf = (e) => { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; };
-    const inArea = (p) => { const a = st.chart.chartArea; return p.px >= a.left - 4 && p.px <= a.right + 4 && p.py >= a.top - 4 && p.py <= a.bottom + 4; };
+    const ptOf = (e) => { const r = canvas.getBoundingClientRect(); return toLogical(st.chart, e.clientX - r.left, e.clientY - r.top); };
+    const inArea = (p) => { const a = logicalArea(st.chart); return p.px >= a.left - 4 && p.px <= a.right + 4 && p.py >= a.top - 4 && p.py <= a.bottom + 4; };
     let downAt = null;
 
     function finish(p) {
@@ -479,7 +494,7 @@ const ChartTools = (() => {
   }
   function axisText(chart, py) {
     const parts = [];
-    ['y', 'y1'].forEach((id) => {
+    valAxisIds(chart).forEach((id) => {
       const sc = chart.scales[id]; if (!sc) return;
       const v = sc.getValueForPixel(py);
       parts.push(chart.$axisFmt && chart.$axisFmt[id] ? chart.$axisFmt[id](v) : fmtNum(v, Math.abs(v) < 100 ? 2 : 0));
@@ -494,7 +509,11 @@ const ChartTools = (() => {
     return Math.round((Date.parse(e) - Date.parse(s)) / 864e5) + 1;
   }
   function drawShape(chart, st, s, sel, preview) {
-    const ctx = chart.ctx, a = chart.chartArea;
+    const ctx = chart.ctx, a = logicalArea(chart), H = isHoriz(chart);
+    // วาดด้วยพิกัด logical แล้วแปลงเป็นพิกัดจอ (กราฟแนวนอนสลับแกน)
+    const P = (u, w) => toScreen(chart, u, w);
+    const mv = (u, w) => ctx.moveTo(...P(u, w)), ln = (u, w) => ctx.lineTo(...P(u, w));
+    const lbl = (text, u, w, color, align) => { const [x, y] = P(u, w); label(ctx, text, x, y, color, H ? (align === 'right' ? 'center' : align) : align); };
     ctx.save();
     ctx.strokeStyle = s.c; ctx.fillStyle = s.c; ctx.lineWidth = sel ? 2.5 : 1.75;
     if (preview) ctx.setLineDash([5, 4]);
@@ -502,33 +521,33 @@ const ChartTools = (() => {
       const ax = st.xPix(s.a.x), bx = st.xPix(s.b.x);
       if (ax !== null && bx !== null) {
         const ay = st.yPix(s.a.y), by = st.yPix(s.b.y);
-        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
-        [[ax, ay], [bx, by]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, sel ? 4.5 : 3, 0, Math.PI * 2); sel ? (ctx.fillStyle = '#fff', ctx.fill(), ctx.stroke(), ctx.fillStyle = s.c) : ctx.fill(); });
+        ctx.beginPath(); mv(ax, ay); ln(bx, by); ctx.stroke();
+        [P(ax, ay), P(bx, by)].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, sel ? 4.5 : 3, 0, Math.PI * 2); sel ? (ctx.fillStyle = '#fff', ctx.fill(), ctx.stroke(), ctx.fillStyle = s.c) : ctx.fill(); });
       }
     } else if (s.t === 'hline') {
       const y = st.yPix(s.y);
       if (y >= a.top && y <= a.bottom) {
-        ctx.beginPath(); ctx.moveTo(a.left, y); ctx.lineTo(a.right, y); ctx.stroke();
-        label(ctx, axisText(chart, y), a.right, y, s.c, 'right');
+        ctx.beginPath(); mv(a.left, y); ln(a.right, y); ctx.stroke();
+        lbl(axisText(chart, y), H ? a.right - 9 : a.right, y, s.c, 'right');
       }
     } else if (s.t === 'range') {
       const ax = st.xPix(s.a), bx = st.xPix(s.b);
       if (ax !== null && bx !== null) {
         const l = Math.min(ax, bx), r = Math.max(ax, bx);
-        ctx.globalAlpha = 0.14; ctx.fillRect(l, a.top, Math.max(2, r - l), a.bottom - a.top); ctx.globalAlpha = 1;
-        ctx.beginPath(); ctx.moveTo(l, a.top); ctx.lineTo(l, a.bottom); ctx.moveTo(r, a.top); ctx.lineTo(r, a.bottom); ctx.stroke();
+        ctx.globalAlpha = 0.14; ctx.beginPath(); mv(l, a.top); ln(r, a.top); ln(r, a.bottom); ln(l, a.bottom); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+        ctx.beginPath(); mv(l, a.top); ln(l, a.bottom); mv(r, a.top); ln(r, a.bottom); ctx.stroke();
         const n = daysBetween(chart, s.a, s.b);
         const per = chart.data.labels.indexOf(s.b) - chart.data.labels.indexOf(s.a);
         const txt = n === null ? `${Math.abs(per) + 1} ช่วง` : `${n} วัน` + ((chart.$period || 'day') !== 'day' ? ` (${Math.abs(per) + 1} ช่วง)` : '');
-        label(ctx, txt, (l + r) / 2, a.top + 10, s.c, 'center');
+        lbl(txt, (l + r) / 2, a.top + 10, s.c, 'center');
       }
     } else if (s.t === 'cycle') {
       const xs = st.cycleXs(s);
       if (xs) {
         ctx.setLineDash(preview ? [5, 4] : [6, 3]);
-        xs.forEach((x, k) => { ctx.globalAlpha = k < 2 ? 1 : 0.7; ctx.beginPath(); ctx.moveTo(x, a.top); ctx.lineTo(x, a.bottom); ctx.stroke(); });
+        xs.forEach((x, k) => { ctx.globalAlpha = k < 2 ? 1 : 0.7; ctx.beginPath(); mv(x, a.top); ln(x, a.bottom); ctx.stroke(); });
         ctx.globalAlpha = 1;
-        if (xs.length > 1) { ctx.beginPath(); ctx.setLineDash([]); ctx.moveTo(xs[0], a.bottom - 6); ctx.lineTo(xs[1], a.bottom - 6); ctx.stroke(); }
+        if (xs.length > 1) { ctx.beginPath(); ctx.setLineDash([]); mv(xs[0], a.bottom - 6); ln(xs[1], a.bottom - 6); ctx.stroke(); }
       }
     }
     ctx.restore();
@@ -552,41 +571,54 @@ const ChartTools = (() => {
     }
   };
 
-  // crosshair แนวตั้งตามเมาส์ + ค่าของจุดที่เส้นพาดผ่าน (เมื่อปิดตัวเลข)
+  // crosshair ตามเมาส์ (ตั้งฉากกับแกนหมวดหมู่) + ค่าของจุดที่เส้นพาดผ่าน (เมื่อปิดตัวเลข)
   const crosshairPlugin = {
     id: 'amcCrosshair',
     afterEvent(chart, args) {
       if (!chart.$crosshair) return;
       const e = args.event;
       if (e.type === 'mouseout') { if (chart.$hoverIdx !== null) { chart.$hoverIdx = null; args.changed = true; } return; }
-      if (e.type !== 'mousemove' || !chart.scales.x) return;
-      const a = chart.chartArea;
-      const idx = e.x >= a.left && e.x <= a.right && e.y >= a.top && e.y <= a.bottom ? Math.round(chart.scales.x.getValueForPixel(e.x)) : null;
+      const cs = catScale(chart);
+      if (e.type !== 'mousemove' || !cs) return;
+      const a = chart.chartArea, n = (chart.data.labels || []).length;
+      const p = toLogical(chart, e.x, e.y);
+      let idx = e.x >= a.left && e.x <= a.right && e.y >= a.top && e.y <= a.bottom ? Math.round(cs.getValueForPixel(p.px)) : null;
+      if (idx !== null && (idx < 0 || idx >= n)) idx = null;
       if (idx !== chart.$hoverIdx) { chart.$hoverIdx = idx; args.changed = true; }
     },
     afterDatasetsDraw(chart) {
-      const idx = chart.$hoverIdx;
-      if (!chart.$crosshair || idx === null || idx === undefined || !chart.scales.x || idx < 0 || idx >= (chart.data.labels || []).length) return;
-      const ctx = chart.ctx, a = chart.chartArea, x = chart.scales.x.getPixelForValue(idx);
+      const idx = chart.$hoverIdx, cs = catScale(chart);
+      if (!chart.$crosshair || idx === null || idx === undefined || !cs || idx < 0 || idx >= (chart.data.labels || []).length) return;
+      const ctx = chart.ctx, a = logicalArea(chart), H = isHoriz(chart), u = cs.getPixelForValue(idx);
+      const P = (uu, ww) => toScreen(chart, uu, ww);
       ctx.save();
       ctx.strokeStyle = 'rgba(22,23,27,.45)'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
-      ctx.beginPath(); ctx.moveTo(x, a.top); ctx.lineTo(x, a.bottom); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(...P(u, a.top)); ctx.lineTo(...P(u, a.bottom)); ctx.stroke(); ctx.setLineDash([]);
       const title = chart.$fmtLabel ? chart.$fmtLabel(chart.data.labels[idx]) : String(chart.data.labels[idx]);
-      label(ctx, title, x, a.bottom - 9, '#16171B', 'center');
+      if (H) label(ctx, title, chart.chartArea.right, u - 12, '#16171B', 'right');
+      else label(ctx, title, u, a.bottom - 9, '#16171B', 'center');
       const items = [];
       chart.data.datasets.forEach((ds, di) => {
         if (!chart.isDatasetVisible(di) || !showPoint(chart, ds, idx)) return;
-        const sc = chart.scales[ds.yAxisID || 'y']; if (!sc) return;
-        items.push({ y: sc.getPixelForValue(ds.data[idx]), text: pointText(chart, ds, idx, ds.data[idx]), color: ds.borderColor && ds.borderColor !== 'transparent' ? ds.borderColor : '#16171B' });
+        const sc = chart.scales[(H ? ds.xAxisID : ds.yAxisID) || (H ? 'x' : 'y')]; if (!sc) return;
+        items.push({ w: sc.getPixelForValue(ds.data[idx]), text: pointText(chart, ds, idx, ds.data[idx]), color: dsColor(ds) });
       });
-      items.sort((p, q) => p.y - q.y);
-      let lastY = -Infinity; // กันป้ายทับกัน
-      const right = x + 8 + 140 < a.right;
-      items.forEach((it) => {
-        const y = Math.max(it.y, lastY + 17); lastY = y;
-        ctx.beginPath(); ctx.fillStyle = it.color; ctx.arc(x, it.y, 3.5, 0, Math.PI * 2); ctx.fill();
-        label(ctx, it.text, right ? x + 8 : x - 8, Math.min(y, a.bottom - 26), it.color, right ? 'left' : 'right');
-      });
+      if (H) {
+        // แนวนอน: ป้ายเรียงใต้เส้น crosshair
+        items.forEach((it, k) => {
+          ctx.beginPath(); ctx.fillStyle = it.color; ctx.arc(it.w, u, 3.5, 0, Math.PI * 2); ctx.fill();
+          label(ctx, it.text, Math.min(it.w + 8, chart.chartArea.right - 60), u + 12 + k * 17, it.color, 'left');
+        });
+      } else {
+        items.sort((p, q) => p.w - q.w);
+        let last = -Infinity; // กันป้ายทับกัน
+        const right = u + 8 + 140 < a.right;
+        items.forEach((it) => {
+          const y = Math.max(it.w, last + 17); last = y;
+          ctx.beginPath(); ctx.fillStyle = it.color; ctx.arc(u, it.w, 3.5, 0, Math.PI * 2); ctx.fill();
+          label(ctx, it.text, right ? u + 8 : u - 8, Math.min(y, a.bottom - 26), it.color, right ? 'left' : 'right');
+        });
+      }
       ctx.restore();
     }
   };
