@@ -258,15 +258,58 @@
     ChartTools.setValueMode(c, productValues.value);
   }
 
+  // ตัวเลือกรุ่น: '' = รวมทุกรุ่น แยกสีตามรุ่น (stacked) ; รหัสรุ่น = ดูเฉพาะรุ่นนั้น
+  let reasonProduct = '';
+  const reasonSel = document.createElement('select');
+  reasonSel.className = 'ct-select'; reasonSel.title = 'รุ่น';
+  reasonSel.onchange = () => { reasonProduct = reasonSel.value; renderReasonChart(); };
+  $('reasonCtl').prepend(reasonSel);
+  const REASON_TOP_PRODUCTS = 7; // รุ่นที่แสดงแยกสี — ที่เหลือรวมเป็น "รุ่นอื่น"
+
+  function fillReasonProducts() {
+    const byRp = data.ngByReasonProduct || {}, tot = {};
+    Object.keys(byRp).forEach((r) => Object.keys(byRp[r]).forEach((pc) => { tot[pc] = (tot[pc] || 0) + byRp[r][pc]; }));
+    const codes = Object.keys(tot).sort((a, b) => tot[b] - tot[a]);
+    if (reasonProduct && !codes.includes(reasonProduct)) reasonProduct = '';
+    reasonSel.innerHTML = '<option value="">ทุกรุ่น (แยกสีตามรุ่น)</option>' + codes.map((c) => `<option value="${UI.esc(c)}">${UI.esc(c)} (${n(tot[c])})</option>`).join('');
+    reasonSel.value = reasonProduct;
+    return codes;
+  }
+
   function renderReasonChart() {
-    const reasons = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a]);
-    const total = reasons.reduce((s, r) => s + data.ngByReason[r], 0);
-    chart('cReason', { type: 'bar', data: { labels: reasons, datasets: [{ label: 'NG', data: reasons.map((r) => data.ngByReason[r]), backgroundColor: '#C8102E' }] },
+    const byRp = data.ngByReasonProduct || {};
+    const codes = fillReasonProducts();
+    const qtyOf = (r) => (reasonProduct ? ((byRp[r] || {})[reasonProduct] || 0) : data.ngByReason[r]);
+    const reasons = Object.keys(data.ngByReason).filter((r) => qtyOf(r) > 0).sort((a, b) => qtyOf(b) - qtyOf(a));
+    const rowTotal = reasons.map(qtyOf);
+    const total = rowTotal.reduce((s, v) => s + v, 0);
+    let datasets;
+    if (reasonProduct) {
+      datasets = [{ label: reasonProduct, data: rowTotal, backgroundColor: '#C8102E' }];
+    } else {
+      const main = codes.slice(0, REASON_TOP_PRODUCTS), rest = codes.slice(REASON_TOP_PRODUCTS);
+      datasets = main.map((pc, i) => ({ label: pc, data: reasons.map((r) => (byRp[r] || {})[pc] || 0), backgroundColor: PALETTE[i % PALETTE.length], stack: 'ng' }));
+      if (rest.length) datasets.push({ label: 'รุ่นอื่น', data: reasons.map((r) => rest.reduce((a, pc) => a + ((byRp[r] || {})[pc] || 0), 0)), backgroundColor: PALETTE[7], stack: 'ng' });
+      if (!datasets.length) datasets = [{ label: 'NG', data: rowTotal, backgroundColor: '#C8102E' }];
+    }
+    const stacked = datasets.length > 1;
+    // แบบ stacked: ตัวเลขรวมของอาการแสดงที่ปลายแท่งบนสุด (dataset สุดท้ายที่มีค่า)
+    const lastIdx = (chart, idx) => { for (let i = chart.data.datasets.length - 1; i >= 0; i--) if (chart.isDatasetVisible(i) && chart.data.datasets[i].data[idx] > 0) return i; return -1; };
+    const visTotal = (chart, idx) => chart.data.datasets.reduce((s, ds, i) => s + (chart.isDatasetVisible(i) ? ds.data[idx] || 0 : 0), 0);
+    const base = ChartTools.dataLabelOptions({ anchor: 'end', align: 'end' });
+    const labels = stacked ? Object.assign({}, base, {
+      display: (ctx) => (base.display(ctx) && lastIdx(ctx.chart, ctx.dataIndex) === ctx.datasetIndex ? 'auto' : false),
+      formatter: (v, ctx) => { const t = visTotal(ctx.chart, ctx.dataIndex); return `${n(t)} (${total ? UI.formatNumber(t * 100 / total, 1) : 0}%)`; },
+      color: '#16171B'
+    }) : base;
+    chart('cReason', { type: 'bar', data: { labels: reasons, datasets },
       plugins: DL(),
       options: { maintainAspectRatio: false, indexAxis: 'y', layout: { padding: { top: 26, right: 12 } },
-        plugins: { datalabels: ChartTools.dataLabelOptions({ anchor: 'end', align: 'end' }), zoom: ChartTools.zoomOptions('y', () => reasonZoom.sync()) } } });
+        scales: { x: { stacked, suggestedMax: Math.max(0, ...rowTotal) * 1.2 }, y: { stacked } },
+        plugins: { datalabels: labels, zoom: ChartTools.zoomOptions('y', () => reasonZoom.sync()),
+          tooltip: stacked ? { callbacks: { footer: (items) => items.length ? 'รวม ' + n(rowTotal[items[0].dataIndex]) : '' } } : {} } } });
     const c = charts.cReason; if (!c) return;
-    Object.assign(c, { $fmtPoint: (ds, idx, v) => `${n(v)} (${total ? UI.formatNumber(v * 100 / total, 1) : 0}%)`, $axisFmt: { x: (v) => n(v) } });
+    Object.assign(c, { $fmtPoint: (ds, idx, v) => (stacked ? `${ds.label}: ${n(v)}` : `${n(v)} (${total ? UI.formatNumber(v * 100 / total, 1) : 0}%)`), $axisFmt: { x: (v) => n(v) } });
     ChartTools.initChartDrawTool(c, 'cReason', { tools: BAR_TOOLS });
     ChartTools.setValueMode(c, reasonValues.value);
     reasonZoom.sync();

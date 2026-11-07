@@ -99,6 +99,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
 
   var totals = { actual: 0, defect: 0, plan: 0, entries: rows.length };
   var byMachine = {}, byProduct = {}, byShift = {}, daily = {}, ngByReason = {}, ngByPart = {};
+  var ngByReasonProduct = {}; // อาการ → { รุ่น: qty } (Pareto แยกรุ่น)
   var ngDaily = {}; // date → { อาการ: qty } (กราฟ NG ตามอาการรายวันในรายงาน PDF)
   var hourlyPlan = {}; // 'machine|date|กะ' → { machineId, hours: { ช่วงเวลา: {cap, productCode} } }
   var oeeAgg = {}; // machine → { shifts: { 'date|Day': {actual, hours, shiftPlan, hourlyRows} } }
@@ -135,6 +136,8 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
     if (r.defectQty > 0) {
       var reason = ngReasonOf(r.remark);
       ngByReason[reason] = (ngByReason[reason] || 0) + r.defectQty;
+      var rp = ngByReasonProduct[reason] = ngByReasonProduct[reason] || {};
+      rp[r.productCode] = (rp[r.productCode] || 0) + r.defectQty;
       var nd = ngDaily[r.date] = ngDaily[r.date] || {};
       nd[reason] = (nd[reason] || 0) + r.defectQty;
       var det = r.defectDetails || {};
@@ -284,7 +287,7 @@ function getDashboardData(token, dateRange, shiftAB, shiftDN, productCode, jobOr
       },
       byMachine: Object.keys(byMachine).sort().map(function (k) { return byMachine[k]; }),
       byProduct: Object.keys(byProduct).map(function (k) { var p = byProduct[k]; p.defectRate = pct(p.defect, p.actual + p.defect); p.yield = pct(p.actual, p.actual + p.defect); return p; }),
-      byShift: byShift, trend: trend, ngByReason: ngByReason, ngByPart: ngByPart, ngDaily: ngDaily,
+      byShift: byShift, trend: trend, ngByReason: ngByReason, ngByReasonProduct: ngByReasonProduct, ngByPart: ngByPart, ngDaily: ngDaily,
       defectPartGroups: LINE_CONFIG.DEFECT_PART_GROUPS, maintenance: maint, jobOrders: joList, dailyCheck: dailyCheck
     }
   };
