@@ -74,10 +74,10 @@
   </div>
 
   <div class="grid-2">
-    <div class="card"><div class="card-title">ยอดผลิตตามเครื่อง</div><div class="chart-container"><canvas id="cMachine"></canvas></div></div>
+    <div class="card"><div class="card-title">ยอดผลิตตามเครื่อง</div><div class="ct-controls" id="machineCtl"></div><div class="chart-container"><canvas id="cMachine"></canvas></div></div>
     <div class="card"><div class="card-title">แนวโน้ม <span class="spacer"></span></div><div class="ct-controls" id="trendCtl"></div><div class="chart-container"><canvas id="cTrend"></canvas></div></div>
-    <div class="card"><div class="card-title">สัดส่วนผลิตภัณฑ์</div><div class="chart-container"><canvas id="cProduct"></canvas></div></div>
-    <div class="card"><div class="card-title">NG ตามอาการ (Pareto)</div><div class="chart-container"><canvas id="cReason"></canvas></div></div>
+    <div class="card"><div class="card-title">สัดส่วนผลิตภัณฑ์</div><div class="ct-controls" id="productCtl"></div><div class="chart-container"><canvas id="cProduct"></canvas></div></div>
+    <div class="card"><div class="card-title">NG ตามอาการ (Pareto)</div><div class="ct-controls" id="reasonCtl"></div><div class="chart-container"><canvas id="cReason"></canvas></div></div>
   </div>
 
   <div class="grid-2">
@@ -189,16 +189,11 @@
     generateReport(reportMode);
     reportMode = 'auto';
 
-    chart('cMachine', { type: 'bar', data: { labels: data.byMachine.map((m) => m.machineName), datasets: [
-      { label: 'FG', data: data.byMachine.map((m) => m.actual), backgroundColor: '#1E9E5A', yAxisID: 'y' },
-      { label: 'NG', data: data.byMachine.map((m) => m.defect), backgroundColor: '#C8102E', yAxisID: 'y' },
-      { label: '% OEE', type: 'line', data: data.byMachine.map((m) => m.oee), borderColor: '#16171B', yAxisID: 'y1' }] },
-      options: { maintainAspectRatio: false, scales: { y1: { position: 'right', min: 0, grid: { display: false } } } } });
+    renderMachineChart();
     fillTrendProducts();
     renderTrend();
-    chart('cProduct', { type: 'doughnut', data: { labels: data.byProduct.map((p) => p.productCode), datasets: [{ data: data.byProduct.map((p) => p.actual) }] }, options: { maintainAspectRatio: false } });
-    const reasons = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a]);
-    chart('cReason', { type: 'bar', data: { labels: reasons, datasets: [{ label: 'NG', data: reasons.map((r) => data.ngByReason[r]), backgroundColor: '#C8102E' }] }, options: { maintainAspectRatio: false, indexAxis: 'y' } });
+    renderProductChart();
+    renderReasonChart();
 
     $('tProduct').innerHTML = '<thead><tr><th>รุ่น</th><th class="num">แผน</th><th class="num">FG</th><th class="num">NG</th><th class="num">%Yield</th><th class="num">%NG</th></tr></thead><tbody>' +
       data.byProduct.map((p) => `<tr><td>${UI.esc(p.productCode)}</td><td class="num">${n(p.plan)}</td><td class="num">${n(p.actual)}</td><td class="num">${n(p.defect)}</td><td class="num">${p.yield}%</td><td class="num">${p.defectRate}%</td></tr>`).join('') + '</tbody>';
@@ -220,6 +215,53 @@
       Object.keys(data.byShift).map((s) => `<tr><td><b>${UI.esc(UI.shiftLabel(s))}</b></td><td><b>รวม</b></td><td class="num"><b>${n(data.byShift[s].actual)}</b></td><td class="num"><b>${n(data.byShift[s].defect)}</b></td></tr>` +
         shiftProducts(s).map(([pc, v]) => `<tr><td></td><td>${UI.esc(pc)}</td><td class="num">${n(v.actual)}</td><td class="num">${n(v.defect)}</td></tr>`).join('')).join('') + '</tbody>';
     renderTable();
+  }
+
+  // ---------- กราฟอื่น ๆ: ตัวเลขบนกราฟ (เปิด/ปิด + crosshair) + เครื่องมือตีเส้น (กราฟแท่ง) ----------
+  const DL = () => (typeof ChartDataLabels !== 'undefined' ? [ChartDataLabels] : []);
+  const BAR_TOOLS = ['trend', 'hline', 'select', 'erase', 'color', 'undo', 'clear']; // ไม่ใช่กราฟเวลา → ไม่มีวัดช่วง/คาบซ้ำ
+  const machineValues = ChartTools.valuesToggle($('machineCtl'), { key: 'cMachine', onChange: (on) => ChartTools.setValueMode(charts.cMachine, on) });
+  const productValues = ChartTools.valuesToggle($('productCtl'), { key: 'cProduct', onChange: (on) => ChartTools.setValueMode(charts.cProduct, on) });
+  const reasonValues = ChartTools.valuesToggle($('reasonCtl'), { key: 'cReason', onChange: (on) => ChartTools.setValueMode(charts.cReason, on) });
+
+  function renderMachineChart() {
+    chart('cMachine', { type: 'bar', data: { labels: data.byMachine.map((m) => m.machineName), datasets: [
+      { label: 'FG', data: data.byMachine.map((m) => m.actual), backgroundColor: '#1E9E5A', yAxisID: 'y' },
+      { label: 'NG', data: data.byMachine.map((m) => m.defect), backgroundColor: '#C8102E', yAxisID: 'y' },
+      { label: '% OEE', type: 'line', data: data.byMachine.map((m) => m.oee), borderColor: '#16171B', backgroundColor: '#16171B', yAxisID: 'y1' }] },
+      plugins: DL(),
+      options: { maintainAspectRatio: false, layout: { padding: { top: 26 } },
+        plugins: { datalabels: ChartTools.dataLabelOptions({ anchor: 'end', align: 'end' }) },
+        scales: { y1: { position: 'right', min: 0, grid: { display: false } } } } });
+    const c = charts.cMachine; if (!c) return;
+    Object.assign(c, { $fmtPoint: (ds, idx, v) => (ds.yAxisID === 'y1' ? UI.formatNumber(v, 1) + '%' : n(v)),
+      $axisFmt: { y: (v) => n(v), y1: (v) => UI.formatNumber(v, 1) + '%' } });
+    ChartTools.initChartDrawTool(c, 'cMachine', { tools: BAR_TOOLS });
+    ChartTools.setValueMode(c, machineValues.value);
+  }
+
+  function renderProductChart() {
+    chart('cProduct', { type: 'doughnut', data: { labels: data.byProduct.map((p) => p.productCode), datasets: [{ data: data.byProduct.map((p) => p.actual) }] },
+      plugins: DL(),
+      options: { maintainAspectRatio: false,
+        plugins: { datalabels: ChartTools.dataLabelOptions({ anchor: 'center', align: 'center', offset: 0, color: '#fff', textStrokeColor: 'rgba(0,0,0,.35)', textStrokeWidth: 2 }) } } });
+    const c = charts.cProduct; if (!c) return;
+    const total = data.byProduct.reduce((s, p) => s + p.actual, 0);
+    c.$fmtPoint = (ds, idx, v) => `${n(v)} (${total ? UI.formatNumber(v * 100 / total, 1) : 0}%)`;
+    ChartTools.setValueMode(c, productValues.value);
+  }
+
+  function renderReasonChart() {
+    const reasons = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a]);
+    const total = reasons.reduce((s, r) => s + data.ngByReason[r], 0);
+    chart('cReason', { type: 'bar', data: { labels: reasons, datasets: [{ label: 'NG', data: reasons.map((r) => data.ngByReason[r]), backgroundColor: '#C8102E' }] },
+      plugins: DL(),
+      options: { maintainAspectRatio: false, indexAxis: 'y', layout: { padding: { top: 26, right: 12 } },
+        plugins: { datalabels: ChartTools.dataLabelOptions({ anchor: 'end', align: 'end' }) } } });
+    const c = charts.cReason; if (!c) return;
+    Object.assign(c, { $fmtPoint: (ds, idx, v) => `${n(v)} (${total ? UI.formatNumber(v * 100 / total, 1) : 0}%)`, $axisFmt: { x: (v) => n(v) } });
+    ChartTools.initChartDrawTool(c, 'cReason', { tools: BAR_TOOLS });
+    ChartTools.setValueMode(c, reasonValues.value);
   }
 
   // ---------- กราฟแนวโน้ม: ช่วงเวลา / ตัวกรองรุ่น / ตัวเลข / ตีเส้น / Projection 95% ----------
