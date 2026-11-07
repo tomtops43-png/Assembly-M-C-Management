@@ -5,6 +5,8 @@
  *  - aggregate(rows, period, opt)    รวมข้อมูลรายวันเป็นช่วง (ค่าอัตราคำนวณจากผลรวม)
  *  - valuesToggle(el, opts) / setValueMode(chart, on)   ตัวเลขบนจุด (datalabels) หรือ crosshair
  *  - buildProjection(agg, period, specs, opts)          เส้น Projection + ช่วงคาดการณ์ 95% ตามช่วงที่เลือก
+ *  - zoomOptions / zoomReset / syncZoom                 ซูม-เลื่อนกราฟ (chartjs-plugin-zoom) + ปุ่มรีเซ็ต
+ *  - expandButton(el, card)                             ขยายการ์ดกราฟเต็มจอ
  * พิกัดเส้นที่วาดเก็บเป็นพิกัดข้อมูล (label แกน X + ค่าแกน Y) ใน localStorage (prefix amc_)
  * ต้องโหลดหลัง chart.js, config.js และ ui.js
  */
@@ -206,6 +208,75 @@ const ChartTools = (() => {
     btn.onclick = () => { on = !on; store.set(sk, on); paint(); onChange && onChange(on); };
     paint(); el.appendChild(btn);
     return { get value() { return on; } };
+  }
+
+  // ---------- ซูม / เลื่อน (chartjs-plugin-zoom) ----------
+  const hasZoom = () => typeof Chart !== 'undefined' && !!(Chart.registry && Chart.registry.plugins.get('zoom'));
+  /**
+   * ใส่ใน options.plugins.zoom — Ctrl + ล้อเมาส์ (หรือ pinch บนมือถือ/ทัชแพด) = ซูม, ลาก = เลื่อน
+   * mode: 'x' (กราฟปกติ) หรือ 'y' (กราฟแนวนอน) ; onChange(chart) เรียกหลังซูม/เลื่อนเสร็จ
+   */
+  function zoomOptions(mode = 'x', onChange) {
+    if (!hasZoom()) return undefined;
+    const done = ({ chart }) => { if (onChange) onChange(chart); };
+    return {
+      limits: { [mode]: { minRange: 2 } },
+      pan: { enabled: true, mode, threshold: 8, onPanComplete: (ctx) => { ctx.chart.$panAt = Date.now(); done(ctx); } }, // $panAt: กันคลิกหลังลากเลื่อน
+      zoom: { wheel: { enabled: true, modifierKey: 'ctrl' }, pinch: { enabled: true }, mode, onZoomComplete: done }
+    };
+  }
+  /** ปุ่ม "↺ รีเซ็ตซูม" — แสดงเฉพาะตอนกราฟถูกซูม/เลื่อน ; getCharts() คืนกราฟของการ์ดนี้ */
+  function zoomReset(el, getCharts) {
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'ct-btn ct-zoom-reset';
+    btn.textContent = '↺ รีเซ็ตซูม'; btn.title = 'กลับไปดูทั้งช่วง';
+    btn.style.display = 'none';
+    const charts = () => (getCharts() || []).filter(Boolean);
+    const sync = () => { btn.style.display = charts().some((c) => c.isZoomedOrPanned && c.isZoomedOrPanned()) ? '' : 'none'; };
+    btn.onclick = () => { charts().forEach((c) => c.resetZoom && c.resetZoom()); sync(); };
+    if (hasZoom()) {
+      const hint = document.createElement('span');
+      hint.className = 'ct-hint'; hint.textContent = 'Ctrl + ล้อเมาส์ = ซูม · ลาก = เลื่อน';
+      el.appendChild(hint);
+    }
+    el.appendChild(btn);
+    return { sync };
+  }
+  /** ซูมกราฟอื่นตามกราฟต้นทาง (แกน X ร่วมกัน) */
+  function syncZoom(src, others) {
+    const sc = src.scales.x; if (!sc) return;
+    others.filter((c) => c && c !== src && c.zoomScale).forEach((c) => {
+      if (src.isZoomedOrPanned()) c.zoomScale('x', { min: sc.min, max: sc.max }, 'none');
+      else c.resetZoom('none');
+    });
+  }
+
+  // ---------- ขยายเต็มจอ ----------
+  /** ปุ่ม "⛶ ขยาย" — ขยายการ์ด (กราฟ + แถบควบคุม + เครื่องมือ) เต็มจอ ; กดอีกครั้งหรือ Esc เพื่อย่อ */
+  function expandButton(el, card) {
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'ct-btn ct-expand';
+    let backdrop = null;
+    const isOpen = () => card.classList.contains('ct-full');
+    const paint = () => { btn.textContent = isOpen() ? '✕ ย่อ' : '⛶ ขยาย'; btn.title = isOpen() ? 'ย่อกลับ (Esc)' : 'ขยายกราฟเต็มจอ'; };
+    const close = () => {
+      if (!isOpen()) return;
+      card.classList.remove('ct-full'); document.body.classList.remove('ct-full-open');
+      if (backdrop) { backdrop.remove(); backdrop = null; }
+      paint();
+    };
+    const open = () => {
+      document.querySelectorAll('.ct-full').forEach((c) => { if (c !== card && c.$ctClose) c.$ctClose(); });
+      backdrop = document.createElement('div'); backdrop.className = 'ct-backdrop'; backdrop.onclick = close;
+      document.body.appendChild(backdrop);
+      card.classList.add('ct-full'); document.body.classList.add('ct-full-open');
+      paint();
+    };
+    card.$ctClose = close;
+    btn.onclick = () => (isOpen() ? close() : open());
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && isOpen()) close(); });
+    paint(); el.appendChild(btn);
+    return { open, close, get isOpen() { return isOpen(); } };
   }
 
   // ---------- Period switcher (Segmented control) ----------
@@ -628,6 +699,7 @@ const ChartTools = (() => {
 
   return {
     PERIODS, periodLabel, periodStart, periodEnd, nextPeriod, aggregate, buildProjection,
-    initChartDrawTool, periodSwitcher, valuesToggle, setValueMode, dataLabelOptions, store
+    initChartDrawTool, periodSwitcher, valuesToggle, setValueMode, dataLabelOptions, store,
+    zoomOptions, zoomReset, syncZoom, expandButton
   };
 })();

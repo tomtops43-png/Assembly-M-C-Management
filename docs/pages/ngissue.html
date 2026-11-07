@@ -17,6 +17,8 @@
 <link rel="stylesheet" href="../css/style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
 <style>
   /* ---- วิเคราะห์ NG ---- */
   .an-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -27,6 +29,8 @@
   .an-kpi .kpi-sub.bad { color: var(--primary); } .an-kpi .kpi-sub.good { color: var(--success); }
   .an-chart { position: relative; width: 100%; height: 260px; }
   .an-chart.an-vol { height: 170px; }
+  .card.ct-full .an-chart { height: calc(62vh - 90px); min-height: 220px; }
+  .card.ct-full .an-chart.an-vol { height: calc(38vh - 90px); min-height: 150px; }
   .an-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-3); margin: 4px 0 8px; }
   .an-legend i { display: inline-block; vertical-align: middle; margin-right: 5px; }
   .an-tip { position: fixed; z-index: 2000; pointer-events: none; background: var(--ink); color: #fff; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.5; box-shadow: 0 6px 18px rgba(0,0,0,.2); max-width: 260px; display: none; }
@@ -498,6 +502,10 @@
   const DL = () => (typeof ChartDataLabels !== 'undefined' ? [ChartDataLabels] : []);
   const anPeriod = ChartTools.periodSwitcher($('aTrendCtl'), { key: 'ngTrend', onChange: () => { anSel = ''; renderTrend(); renderDay(); } });
   const anValues = ChartTools.valuesToggle($('aTrendCtl'), { key: 'ngTrend', onChange: (on) => Object.values(anCharts).forEach((c) => ChartTools.setValueMode(c, on)) });
+  // ซูม/เลื่อน (สองกราฟซูมพร้อมกันเพราะใช้แกน X ร่วมกัน) + ขยายเต็มจอ
+  const anZoom = ChartTools.zoomReset($('aTrendCtl'), () => Object.values(anCharts));
+  const anZoomDone = (c) => { ChartTools.syncZoom(c, Object.values(anCharts)); anZoom.sync(); };
+  ChartTools.expandButton($('aTrendCtl'), $('aTrendCtl').closest('.card'));
   const PERIOD_TXT = { day: 'รายวัน', week: 'รายสัปดาห์', month: 'รายเดือน', quarter: 'รายไตรมาส', year: 'รายปี' };
 
   function anChart(id, cfg) {
@@ -518,14 +526,15 @@
     id: 'anMarks',
     beforeDatasetsDraw(c) {
       const idx = c.data.labels.indexOf(anSel); if (!anSel || idx < 0) return;
-      const a = c.chartArea, x = c.scales.x, w = Math.max(6, (x.width / Math.max(1, c.data.labels.length)));
-      c.ctx.save(); c.ctx.fillStyle = 'rgba(22,23,27,.07)'; c.ctx.fillRect(x.getPixelForValue(idx) - w / 2, a.top, w, a.bottom - a.top); c.ctx.restore();
+      const a = c.chartArea, x = c.scales.x, w = Math.max(6, x.width / Math.max(1, x.max - x.min + 1));
+      c.ctx.save(); c.ctx.beginPath(); c.ctx.rect(a.left, a.top, a.right - a.left, a.bottom - a.top); c.ctx.clip(); // ซูมแล้วไม่วาดล้นกรอบ
+      c.ctx.fillStyle = 'rgba(22,23,27,.07)'; c.ctx.fillRect(x.getPixelForValue(idx) - w / 2, a.top, w, a.bottom - a.top); c.ctx.restore();
     },
     afterDatasetsDraw(c) {
       if (!c.$issues) return;
       const ctx = c.ctx, a = c.chartArea;
       ctx.save(); ctx.fillStyle = RED; ctx.font = "11px 'IBM Plex Sans Thai', sans-serif"; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      c.$issues.forEach((has, i) => { if (has) ctx.fillText('▼', c.scales.x.getPixelForValue(i), a.top + 1); });
+      c.$issues.forEach((has, i) => { const x = c.scales.x.getPixelForValue(i); if (has && x >= a.left - 1 && x <= a.right + 1) ctx.fillText('▼', x, a.top + 1); });
       ctx.restore();
     }
   };
@@ -572,7 +581,7 @@
       }
     });
     const onClick = (evt, els, c) => {
-      if (period !== 'day' || (c.$draw && c.$draw.mode)) return;
+      if (period !== 'day' || (c.$draw && c.$draw.mode) || Date.now() - (c.$panAt || 0) < 400) return;
       const i = Math.round(c.scales.x.getValueForPixel(evt.x)), d = ids[i];
       if (!d || !byId[d]) return;
       anSel = anSel === d ? '' : d;
@@ -594,7 +603,7 @@
       ].concat(pj.datasets)) },
       plugins: DL().concat([anMarks]),
       options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, layout: { padding: { top: 26 } }, onClick,
-        plugins: { legend, tooltip: tooltip(pj.meta, fmtNg), datalabels: ChartTools.dataLabelOptions() },
+        plugins: { legend, tooltip: tooltip(pj.meta, fmtNg), datalabels: ChartTools.dataLabelOptions(), zoom: ChartTools.zoomOptions('x', anZoomDone) },
         scales: { x: xScale, y: { min: 0, suggestedMax: tg * 1.5, ticks: { callback: (v) => +Number(v).toFixed(2) + '%' } } } } });
     const c1 = anCharts.aTrend;
     Object.assign(c1, { $period: period, $projMeta: pj.meta, $fmtLabel: lab, $fmtPoint: fmtNg, $issues: issues, $axisFmt: { y: (v) => fmtPct(v) } });
@@ -609,12 +618,13 @@
       ].concat(pjV.datasets.map((d) => Object.assign({ type: 'line' }, d)))) },
       plugins: DL().concat([anMarks]),
       options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, layout: { padding: { top: 26 } }, onClick,
-        plugins: { legend, tooltip: tooltip(pjV.meta, fmtVol), datalabels: ChartTools.dataLabelOptions({ color: (ctx) => (ctx.dataset.type === 'bar' ? '#6B6F7A' : TEAL) }) },
+        plugins: { legend, tooltip: tooltip(pjV.meta, fmtVol), datalabels: ChartTools.dataLabelOptions({ color: (ctx) => (ctx.dataset.type === 'bar' ? '#6B6F7A' : TEAL) }), zoom: ChartTools.zoomOptions('x', anZoomDone) },
         scales: { x: xScale, y: { min: 0, ticks: { callback: (v) => (v >= 1000 ? +(v / 1000).toFixed(1) + 'k' : v) } } } } });
     const c2 = anCharts.aVolume;
     Object.assign(c2, { $period: period, $projMeta: pjV.meta, $fmtLabel: lab, $fmtPoint: fmtVol, $axisFmt: { y: (v) => UI.formatNumber(Math.round(v)) } });
     ChartTools.initChartDrawTool(c2, 'ngVolume_' + period, { toolbarKey: 'ngVolume', tools: ['trend', 'hline', 'range', 'select', 'erase', 'color', 'undo', 'clear'] });
     ChartTools.setValueMode(c2, anValues.value);
+    anZoom.sync();
   }
 
   function renderDailyTable() {
