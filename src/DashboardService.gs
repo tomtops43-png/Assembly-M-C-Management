@@ -39,11 +39,34 @@ function classifyDefectComponent(code, name) {
   return 'OTHER';
 }
 
+/**
+ * อาการ NG จากหมายเหตุของแถวยอดผลิต
+ * แถวปรับยอดจากการคัดแยก (Remark = "ปรับยอดจากการคัดแยก ST-... (FG)") → ใช้อาการจริงจากหมายเหตุของงานคัดแยกต้นทาง
+ * (ไม่พบงานคัดแยก/ไม่มีหมายเหตุ → คงเป็น "ปรับยอดจากการคัดแยก")
+ */
 function ngReasonOf(remark) {
   var r = String(remark || '').trim();
   if (!r) return 'ไม่ระบุอาการ';
-  if (r.indexOf(LINE_CONFIG.SORTING_ADJUST_NG_REASON) === 0) return LINE_CONFIG.SORTING_ADJUST_NG_REASON;
+  var adj = LINE_CONFIG.SORTING_ADJUST_NG_REASON;
+  if (r.indexOf(adj) === 0) {
+    var m = r.substring(adj.length).match(/ST-[0-9A-Za-z-]+/);
+    var src = m ? sortingReasonMap_()[m[0]] : '';
+    return src || adj;
+  }
   return r;
+}
+
+var _sortingReasonCache = null;
+/** JobID งานคัดแยก → หมายเหตุ (อาการ NG) — โหลดครั้งเดียวต่อ execution */
+function sortingReasonMap_() {
+  if (_sortingReasonCache) return _sortingReasonCache;
+  var map = {};
+  getAllRows('SortingLog').forEach(function (s) {
+    var rm = String(s.Remark || '').trim();
+    if (s.JobID && rm) map[String(s.JobID)] = rm;
+  });
+  _sortingReasonCache = map;
+  return map;
 }
 
 /** key 'เครื่อง|วันที่' ที่วัตถุดิบหมด */
