@@ -34,7 +34,9 @@
   .form-tabs button { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--gray-light); background: #fff; cursor: pointer; font-weight: 600; font-family: inherit; }
   .form-tabs button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
   .form-tabs button small { font-weight: 500; opacity: .75; margin-left: 4px; }
-  @media print { .sheet td, .sheet th { font-size: 10px; } }
+  .doc-no { font-size: 12px; font-weight: 600; border: 1.5px solid var(--ink); border-radius: 4px; padding: 3px 8px; white-space: nowrap; font-family: 'IBM Plex Mono', monospace; }
+  .doc-no.hidden { display: none; }
+  @media print { .sheet td, .sheet th { font-size: 10px; } .doc-no { font-size: 10px; } }
 </style>
 </head>
 <body>
@@ -55,7 +57,7 @@
     <div class="shift-grid" id="shiftGrid"></div>
   </div>
   <div class="card hidden" id="sheetCard">
-    <div class="card-title"><i class="bi bi-table"></i> <span id="sheetTitle"></span> <span class="spacer"></span><button class="btn btn-outline btn-sm no-print" onclick="window.print()"><i class="bi bi-printer"></i> พิมพ์</button></div>
+    <div class="card-title"><i class="bi bi-table"></i> <span id="sheetTitle"></span> <span class="spacer"></span><span class="doc-no hidden" id="sheetDocNo"></span><button class="btn btn-outline btn-sm no-print" onclick="window.print()"><i class="bi bi-printer"></i> พิมพ์</button></div>
     <div class="table-wrap"><table class="data-table sheet" id="sheet"></table></div>
     <div class="small text-gray mt-2" id="sheetLegend"></div>
   </div>
@@ -65,6 +67,7 @@
   <button class="modal-close" data-close-modal>&times;</button>
   <h3 class="modal-title" id="fTitle"></h3>
   <div class="small text-gray mb-2" id="fInfo"></div>
+  <div class="small text-gray mb-2" id="fDocNo"></div>
   <div class="btn-group mb-2"><button class="btn btn-outline btn-sm" id="fAllOk"><i class="bi bi-check2-all"></i> <span id="fAllOkLabel">ปกติทุกข้อ</span></button></div>
   <div id="fItems"></div>
   <div class="form-group"><label class="form-label">หมายเหตุ <span id="remarkReq" class="req hidden">* (มีข้อผิดปกติ)</span></label><textarea class="form-input" id="fRemark" rows="2"></textarea></div>
@@ -159,7 +162,9 @@
     const days = [];
     for (let x = data.monthFrom; x <= data.monthTo; x = UI.addDays(x, 1)) days.push(x);
     const ym = data.monthFrom.slice(0, 7).split('-');
-    $('sheetTitle').textContent = `${f.name} · ${machineName(selMachine)} · เดือน ${Number(ym[1])}/${ym[0]}` + (f.docNo ? ` · ${f.docNo}` : '');
+    $('sheetTitle').textContent = `${f.name} · ${machineName(selMachine)} · เดือน ${Number(ym[1])}/${ym[0]}`;
+    $('sheetDocNo').textContent = f.docNo ? 'Document Number : ' + f.docNo : '';
+    $('sheetDocNo').classList.toggle('hidden', !f.docNo);
     const head = `<tr><th>ลำดับ</th><th>รายละเอียดการตรวจสอบ</th>${days.map((x) => `<th>${Number(x.slice(8))}</th>`).join('')}</tr>`;
     const sigRow = (label, fn) => `<tr><td></td><td class="item small">${label}</td>` + days.map((x) => `<td class="sig">${fn(x)}</td>`).join('') + '</tr>';
     let html = '<thead>' + head + '</thead><tbody>';
@@ -196,6 +201,7 @@
     selDate = d; selShift = s; reqId = API.newRequestId(); formOpenAt = Date.now();
     results = c ? c.results.slice() : f.items.map(() => '');
     $('fTitle').textContent = `${machineName(selMachine)} · ${f.tab || f.name} · ${SHIFT_LABEL[s]}`;
+    $('fDocNo').textContent = f.docNo ? 'Document Number : ' + f.docNo : '';
     $('fInfo').textContent = UI.formatDate(d) + (c ? ` · บันทึกโดย ${c.recorderName} ${hhmm(c.timestamp)}` + (c.verifiedBy ? ` · ยืนยันโดย ${c.verifiedBy}` : '') : '');
     $('fRemark').value = c ? c.remark : '';
     $('fAllOkLabel').textContent = okLabel(f) + 'ทุกข้อ';
