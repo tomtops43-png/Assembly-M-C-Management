@@ -52,6 +52,7 @@
   .fp .fp-row.click { cursor: pointer; } .fp .fp-row.click:hover td { background: #fff7e6; }
   .fp td.ng, .fp td.nok { color: #C8102E; font-weight: 700; }
   .fp td.mk { font-size: 14px; font-weight: 700; }
+  .fp td.bo { background: #3a3a3a; color: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; } /* ข้อที่ไม่ใช้ — คาดดำ แต่ยังอ่านตัวหนังสือได้ */
   .fp .fp-rtitle td { font-size: 16px; font-weight: 700; height: 34px; text-align: left; }
   .fp .fp-rhead td { height: 32px; font-weight: 600; }
   .fp .fp-note td { text-align: left; height: 20px; font-size: 11.5px; }
@@ -225,7 +226,14 @@
     $('sheetDocNo').classList.add('hidden'); // ต้นฉบับพิมพ์เลขเอกสารไว้ท้ายใบ
     $('sheetLegend').textContent = 'แตะแถวเพื่อเปิดดู/แก้ไข · เพิ่มการตรวจจากปุ่มกะด้านบน (ทุกครั้งที่เริ่มกะ / เปลี่ยนรุ่น)';
     const E = UI.esc, it = f.items, mk = (v) => (v === 'NG' ? 'X' : v === 'OK' ? '√' : '');
-    const N = it.length - 1, main = it.slice(0, N), last = it[N]; // ข้อตรวจหลัก + ข้อชิ้นงานตัวสุดท้าย (คอลัมน์ขวาสุด)
+    const N = it.length - 1, last = it[N]; // ข้อชิ้นงานตัวสุดท้าย (คอลัมน์ขวาสุด)
+    // คอลัมน์ข้อตรวจ: ri = index ใน results ; ri < 0 = ข้อที่ไม่ใช้ (คาดดำ ตามใบจริงหน้างาน)
+    const main = [];
+    it.slice(0, N).forEach((x, i) => {
+      main.push({ x, ri: i });
+      if (f.blackoutAfter && x.no === f.blackoutAfter) (f.blackout || []).forEach((b) => main.push({ x: b, ri: -1 }));
+    });
+    const bo = (m) => (m.ri < 0 ? ' bo' : '');
     const XW = [8.8, 13, 13, 13, 13, 13, 13, 13, 13, 13]; // ความกว้างคอลัมน์ D–M ตาม Excel
     const W = [40.2, 15.8, 13].concat(main.map((x, i) => XW[i] || 13), [10.8, 13, 8.8]);
     const NC = W.length, TW = W.reduce((a, b) => a + b, 0);
@@ -236,18 +244,19 @@
     let h = col;
     h += `<tr class="fp-title"><td class="nb" colspan="${NC}">${E(f.name)}</td></tr><tr><td class="nb" colspan="${NC}" style="height:8px"></td></tr>`;
     h += `<tr class="fp-line"><td class="nb">Line : ${E(data.lineName || '')}</td><td class="nb" colspan="4"></td><td class="nb">MC : </td><td class="nb" colspan="3">${E(machineName(selMachine))}</td><td class="nb" colspan="${NC - 9}"></td></tr><tr><td class="nb" colspan="${NC}" style="height:6px"></td></tr>`;
-    const freq = main.map((x) => `<td>${E(x.freq)}</td>`).join('');
+    const freq = main.map((m) => `<td class="${bo(m)}">${E(m.x.freq)}</td>`).join('');
     h += `<tr class="fp-freq"><td></td><td colspan="2">ความถี่\nfrequency</td>${freq}<td></td><td></td><td>${E(last.freq)}</td></tr>`;
-    h += `<tr class="fp-no"><td></td><td colspan="2">รายการตรวจสอบ</td>${main.map((x) => `<td>${E(x.no)}</td>`).join('')}<td></td><td></td><td>${E(last.no)}</td></tr>`;
-    const hd = (x) => `<td>${E(x.th)}\n${E(x.q)}</td>`;
-    h += `<tr class="fp-head"><td class="c">Product reference </td><td class="c">วันที่\nDate</td><td class="c">เวลา\nTime</td>${main.map(hd).join('')}<td class="c">สรุปผลการตรวจสอบ (OK/NOK)\n\nลงชื่อผู้ตรวจสอบ</td><td class="c">สรุปผลการตรวจสอบ (OK/NOK)\n\nหัวหน้างานยืนยัน</td>${hd(last)}</tr>`;
+    h += `<tr class="fp-no"><td></td><td colspan="2">รายการตรวจสอบ</td>${main.map((m) => `<td class="${bo(m)}">${E(m.x.no)}</td>`).join('')}<td></td><td></td><td>${E(last.no)}</td></tr>`;
+    const hd = (x, cls) => `<td class="${cls || ''}">${E(x.th)}\n${E(x.q)}</td>`;
+    h += `<tr class="fp-head"><td class="c">Product reference </td><td class="c">วันที่\nDate</td><td class="c">เวลา\nTime</td>${main.map((m) => hd(m.x, bo(m))).join('')}<td class="c">สรุปผลการตรวจสอบ (OK/NOK)\n\nลงชื่อผู้ตรวจสอบ</td><td class="c">สรุปผลการตรวจสอบ (OK/NOK)\n\nหัวหน้างานยืนยัน</td>${hd(last)}</tr>`;
     rows.forEach((c) => {
       const ok = c.decision === 'Accept';
       h += `<tr class="fp-row click" data-id="${E(c.checkId)}" data-d="${c.date}" data-s="${c.shiftDN}"><td>${E(c.productCode)}</td><td>${dt(c)}</td><td>${hhmm(c.timestamp)}</td>` +
-        main.map((x, i) => `<td class="mk ${c.results[i] === 'NG' ? 'ng' : ''}">${mk(c.results[i])}</td>`).join('') +
+        main.map((m) => (m.ri < 0 ? '<td class="bo"></td>' : `<td class="mk ${c.results[m.ri] === 'NG' ? 'ng' : ''}">${mk(c.results[m.ri])}</td>`)).join('') +
         `<td class="${ok ? '' : 'nok'}">${ok ? 'OK' : 'NOK'}\n${E(c.recorderName || '')}</td><td>${E(c.verifiedBy || '')}</td><td class="mk ${c.results[N] === 'NG' ? 'ng' : ''}">${mk(c.results[N])}</td></tr>`;
     });
-    for (let i = rows.length; i < 38; i++) h += '<tr class="fp-row">' + '<td></td>'.repeat(NC) + '</tr>'; // ต้นฉบับมี 38 แถว (แถว 8–45)
+    const blank = '<tr class="fp-row"><td></td><td></td><td></td>' + main.map((m) => `<td class="${bo(m)}"></td>`).join('') + '<td></td><td></td><td></td></tr>';
+    for (let i = rows.length; i < 38; i++) h += blank; // ต้นฉบับมี 38 แถว (แถว 8–45)
     // ---- recovery plan (จากรายการที่ NOK) ----
     const P1 = Math.ceil((NC - 8) / 2), P2 = NC - 8 - P1; // ช่องปัญหา / การแก้ไข แบ่งคอลัมน์ที่เหลือ
     const bad = rows.filter((c) => c.decision !== 'Accept');
@@ -258,7 +267,7 @@
       h += `<tr class="fp-row click" data-id="${E(c.checkId)}" data-d="${c.date}" data-s="${c.shiftDN}"><td>${E(c.productCode)}</td><td>${dt(c)}</td><td>${hhmm(c.timestamp)}</td><td class="nok">${E(items)}</td><td class="l" colspan="${P1}">${E(c.remark)}</td><td class="l" colspan="${P2}">${E(c.countermeasure || '')}</td><td colspan="2">${E(c.recorderName || '')}</td><td>${E(c.verifiedBy || '')}</td><td class="nok">NOK</td></tr>`;
     });
     for (let i = bad.length; i < 6; i++) h += `<tr class="fp-row"><td></td><td></td><td></td><td></td><td colspan="${P1}"></td><td colspan="${P2}"></td><td colspan="2"></td><td></td><td></td></tr>`;
-    h += '<tr><td class="nb" colspan="${NC}" style="height:6px"></td></tr>';
+    h += `<tr><td class="nb" colspan="${NC}" style="height:6px"></td></tr>`;
     (f.notes || []).forEach((n) => { h += `<tr class="fp-note"><td class="nb" colspan="${NC}">${E(n)}</td></tr>`; });
     h += `<tr class="fp-doc"><td class="nb" colspan="${NC}">${E(f.docNo || '')}</td></tr>`;
     $('fpSheet').innerHTML = h;
