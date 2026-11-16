@@ -8,8 +8,8 @@
 ## A. Master data (กรอกผ่านหน้า "จัดการ" ได้)
 | # | ข้อมูล | รูปแบบที่ต้องการ |
 |---|---|---|
-| A1 | ✅ เครื่องจักร (Arc chute 06/07/08/Beta, GV.2, Arc Stack medium/High) + Capacity ตามป้าย JRTL-EI-030 | ✅ Arc chute 06/07/08/Beta = Cut chamber #6/#7/#8/#5 · Capacity คิด 1 เครื่อง = 1 คน |
-| A2 | ✅ สินค้า + รหัส FG จริง + ราคาต่อหน่วย | ✅ Arc stack Medium `S1A23976-D` · Arc stack High `S1A23969-D` · GV2 6 Plate `W813890060190-JR` · GV2 9 Plate `W813890890211-JR` · Cut chamber #5–#8 ใช้รหัสเดียวกัน `51207116JR` (รวมเป็นสินค้าเดียว, capacity ตั้งที่เครื่อง Arc chute) |
+| A1 | ✅ เครื่องจักร (Arc chute 06/07/08/Beta, GV.2, Arc Stack medium/High) + Capacity ตามป้าย JRTL-EI-030 | ✅ Arc chute 06/07/08/Beta = Cut chamber #6/#7/#8/No.3 · Capacity คิด 1 เครื่อง = 1 คน |
+| A2 | ✅ สินค้า + รหัส FG จริง + ราคาต่อหน่วย | ✅ Arc stack Medium `S1A23976-D` · Arc stack High `S1A23969-D` · GV2 6 Plate `W813890060190-JR` · GV2 9 Plate `W813890890211-JR` · Cut chamber No.3 (Beta), #6–#8 ใช้รหัสเดียวกัน `51207116JR` (รวมเป็นสินค้าเดียว, capacity ตั้งที่เครื่อง Arc chute) |
 | A3 | BOM ของแต่ละสินค้า (รอ **รหัส RM**) | รหัสชิ้นส่วน / ชื่อ / จำนวนต่อชิ้น / Supplier |
 | A4 | ✅ เครื่องไหนผลิตสินค้าอะไรได้บ้าง | ✅ ยืนยันแล้ว (GV.2 ผลิตได้ทั้ง 6 และ 9 Plate) |
 | A5 | Material Alias (รหัสบนฉลาก → รหัส BOM) | ถ้ารหัสบนฉลากผู้ขายไม่ตรงกับ BOM |
