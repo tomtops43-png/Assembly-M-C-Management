@@ -107,7 +107,7 @@ var LINE_CONFIG = {
 
   // ---- Daily Check + Check Witness (ตรวจกะละครั้ง: กะเช้า / กะดึก, √ / X) ----
   // FORMS = แบบฟอร์มแยกตามเครื่อง (1 เครื่องมีได้หลายใบ เช่น Daily + Witness) ; เครื่องที่ไม่มีฟอร์มจะขึ้นว่า "ยังไม่มีหัวข้อ"
-  //   type: 'daily' | 'witness' | 'firstpart' ; machines: ['*'] = ทุกเครื่อง ; note = คำแนะนำในฟอร์ม ; tab = ชื่อแท็บในหน้าเว็บ ; products = ใช้เฉพาะตอนผลิตรุ่นนี้ (ไม่ใส่ = ทุกรุ่น)
+  //   type: 'daily' | 'witness' | 'firstpart' ; machines: ['*'] = ทุกเครื่อง ; perProduct = แยกใบตามรุ่น ; tab = ชื่อแท็บในหน้าเว็บ ; products = ใช้เฉพาะตอนผลิตรุ่นนี้ (ไม่ใส่ = ทุกรุ่น)
   DAILY_CHECK: {
     TITLE: 'รายการตรวจสอบเครื่องจักรประจำวัน',
     FORMS: [
@@ -204,21 +204,28 @@ var LINE_CONFIG = {
       // machines: ['*'] = ทุกเครื่อง ; นับเป็นใบที่ต้องตรวจเฉพาะเครื่อง/กะที่มีการผลิต (buildDailyCheckSummary)
       // ข้อที่มี (*) ผิดปกติ → แก้ไขเบื้องต้น แจ้ง Leader/Supervisor หยุดไลน์ เปลี่ยน Card สีแดง ; ผล OK → เปลี่ยน Card สีเขียวก่อนเริ่มงาน
       {
-        id: 'OK-1ST-PART', type: 'firstpart', tab: 'OK 1st Part', name: 'Ok 1st Part Workstation Check list', docNo: 'THPLSTL-QA-FRM0-3434 Rev.0 (05/23)',
+        id: 'OK-1ST-PART', type: 'firstpart', tab: 'OK 1st Part', name: 'Ok 1st Part Workstation Check list', docNo: 'THPLSTL-QA-FRM0-3434  Rev.0 (05/23)',
+        perProduct: true, // ตรวจทุกครั้งที่เริ่ม / เปลี่ยนรุ่น → 1 ใบต่อกะต่อรุ่น (Product reference)
         okLabel: 'OK', ngLabel: 'NOK', machines: ['*'],
-        note: 'บันทึกก่อนเริ่มงาน และทุกครั้งที่เปลี่ยนรุ่นการผลิต · ข้อที่มี (*) ผิดปกติ → แก้ไขเบื้องต้น แจ้ง Leader/Supervisor หยุดไลน์ และเปลี่ยน Card สีแดง · ผล OK → เปลี่ยนเป็น Card สีเขียวก่อนเริ่มงาน',
+        // ข้อความตรงตามไฟล์ต้นฉบับ: no = เลขคอลัมน์ (* = ข้อสำคัญ), th = หัวข้อ, q = คำถามย่อย, freq = ความถี่
+        // ลำดับ results: [0..9] = คอลัมน์ 1*..10* ; [10] = ผลการตรวจสอบชิ้นงานตัวสุดท้าย (คอลัมน์ขวาสุด)
+        notes: [
+          '1) ให้พนักงานทำการลงบันทึกก่อนเริ่มงาน และทุกครั้งที่เปลี่ยนรุ่นการผลิต : โดยบันทึก P หรือ O',
+          '2) ถ้ารายการตรวจสอบที่มีเครื่องหมายดอกจัน (*) พบความผิดปรกติ, ให้ดำเนินการแก้ไขเบื้องต้นและแจ้ง Leader หรือ Supervisor  ทำการหยุดไลน์ และเปลี่ยน Card สีแดง',
+          '3) เมือ่ผลการตรวจสอบเป็น OK, ก่อนจะเริ่มงานให้เปลี่ยนเป็น card สีเขียว'
+        ],
         items: [
-          { th: '(*) ความปลอดภัยส่วนบุคคล: มี PPE ตามที่ระบุไว้ใน OWS และ PPE ไม่ชำรุดเสียหาย', en: 'เริ่มกะการทำงาน' },
-          { th: '(*) ความปลอดภัยของเครื่องจักร: ทำ AM checklist แล้ว', en: 'เริ่มกะการทำงาน' },
-          { th: '5S at station: ตรวจสอบ 5ส', en: 'เริ่มกะการทำงาน' },
-          { th: 'กล่องเหลือง / แดง: มีกล่องเหลือง/แดงตามที่กำหนด และกล่องไม่มีชิ้นงานก่อนเริ่มงาน', en: 'เริ่มกะการทำงาน' },
-          { th: '(*) OWS: มี OWS อยู่ ณ จุดที่ทำงาน', en: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' },
-          { th: 'วัตถุดิบ/ชิ้นส่วน: ชิ้นส่วนถูกต้อง ครบถ้วน และมีการชี้บ่งหมายเลขชิ้นส่วนอย่างชัดเจน', en: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' },
-          { th: '(*) เครื่องมือวัด: เครื่องมือวัด/ทดสอบมี sticker สอบเทียบ และ sticker ยังไม่หมดอายุ', en: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' },
-          { th: '(*) ตัวอย่างงานเสีย: ตัวอย่างงานเสียมีการชี้บ่งชัดเจน และยังไม่หมดอายุ', en: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' },
-          { th: '(*) PY-JD: มีการทดสอบ PY-JD และ PY-JD สามารถใช้งานได้', en: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' },
-          { th: '(*) ผลการตรวจชิ้นงานตัวแรก: ชิ้นงานตัวแรกถูกต้อง ตรงตาม CTQ ที่กำหนดไว้', en: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' },
-          { th: '(*) ผลการตรวจสอบชิ้นงานตัวสุดท้าย: ชิ้นงานตัวสุดท้ายถูกต้อง ตรงตาม CTQ ที่กำหนดไว้', en: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' }
+          { no: '1*', th: 'ความปลอดภัยส่วนบุคคล', q: '1) มี PPE ตามที่ระบุไว้ใน OWS?\n2) PPE ชำรุด เสียหาย?', freq: 'เริ่มกะการทำงาน' },
+          { no: '2*', th: 'ความปลอดภัยของเครื่องจักร', q: '1) ทำ AM checklist ?', freq: 'เริ่มกะการทำงาน' },
+          { no: '3', th: '5S at station', q: '1) ตรวจสอบ 5ส', freq: 'เริ่มกะการทำงาน' },
+          { no: '4', th: 'กล่องเหลือง / แดง', q: '1) มีกล่องเหลือง/แดง ตามที่กำหนดไว้ ?\n2) กล่องต้องไม่มีชิ้นงาน ก่อนเริ่มงาน', freq: 'เริ่มกะการทำงาน' },
+          { no: '5*', th: 'OWS', q: '1) มี OWS อยู่ ณ จุดที่ทำงาน?', freq: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' },
+          { no: '6', th: 'วัตถุดิบ/ชิ้นส่วน', q: '1) ชิ้นส่วนถูกต้อง ครบถ้วน ?\n2) มีการชี้บ่งหมายเลขชิ้นส่วนอย่างชัดเจน ?', freq: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' },
+          { no: '7*', th: 'เครื่องมือวัด', q: '1) เครืองมือวัด/ทดสอบ มี sticker สอบเทียบ ?\n2) ดู sticker สอบเทียบว่าหมดอายุ ?', freq: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' },
+          { no: '8*', th: 'ตัวอย่างงานเสีย', q: '1) ตัวอย่างงานเสียมีการชี้บ่งชัดเจน ?\n2) ดูตัวอย่างหมดอายุหรือไม่ ?', freq: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' },
+          { no: '9*', th: 'PY-JD', q: '1) มีการทดสอบ PY-JD ?\n2) PY-JD สามารถใช้งานได้ ?', freq: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' },
+          { no: '10*', th: 'ผลการตรวจชิ้นงานตัวแรก', q: '1) ชิ้นงานตัวแรกถูกต้อง ตรงตาม CTQ ที่กำหนดไว้ ?', freq: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' },
+          { no: '*', th: 'ผลการตรวจสอบชิ้นงานตัวสุดท้าย', q: '1) ชิ้นงานตัวสุดท้ายถูกต้องตรงตาม CTQ ที่กำหนดไว้ ?', freq: 'ทุกครั้งที่เริ่ม / เปลี่ยนรุ่น' }
         ]
       }
     ]
@@ -314,7 +321,7 @@ var SHEET_SCHEMAS = {
   NgIssues: ['IssueID', 'Title', 'Category', 'MachineID', 'ProductCode', 'Description', 'RootCause', 'Countermeasure', 'Status', 'CreatedAt', 'CreatedBy', 'CreatorName', 'UpdatedAt', 'UpdatedBy', 'ClosedAt', 'ClosedBy'],
   NgIssueLog: ['OccurrenceID', 'IssueID', 'Timestamp', 'Date', 'Shift', 'MachineID', 'ProductCode', 'NgQty', 'Detail', 'Photos', 'RecordedBy', 'RecorderName', 'ClientRequestID'],
   AlarmLog: ['AlarmID', 'Timestamp', 'Date', 'Shift', 'MachineID', 'AlarmType', 'Count', 'DurationMinutes', 'RecordedBy', 'RecorderName', 'Remark'],
-  DailyCheckLog: ['CheckID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'TimePeriod', 'MachineID', 'Results', 'Decision', 'Remark', 'RecordedBy', 'RecorderName', 'Status', 'ClientRequestID', 'UpdatedAt', 'UpdatedBy', 'FormID', 'VerifiedBy', 'VerifiedAt'],
+  DailyCheckLog: ['CheckID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'TimePeriod', 'MachineID', 'Results', 'Decision', 'Remark', 'RecordedBy', 'RecorderName', 'Status', 'ClientRequestID', 'UpdatedAt', 'UpdatedBy', 'FormID', 'VerifiedBy', 'VerifiedAt', 'ProductCode', 'Countermeasure'],
 
   // เดิมอยู่ไฟล์ลับ — ไลน์นี้เก็บในไฟล์เดียวตามที่กำหนด (ใช้ในเฟส 2)
   LaborEmployees: ['EmployeeID', 'EmployeeName', 'PositionID', 'PositionName', 'Category', 'Shift', 'DailyRate', 'OTHourlyRate', 'Active', 'CreatedAt', 'CreatedBy'],

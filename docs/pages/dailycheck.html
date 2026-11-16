@@ -36,7 +36,28 @@
   .form-tabs button small { font-weight: 500; opacity: .75; margin-left: 4px; }
   .doc-no { font-size: 12px; font-weight: 600; border: 1.5px solid var(--ink); border-radius: 4px; padding: 3px 8px; white-space: nowrap; font-family: 'IBM Plex Mono', monospace; }
   .doc-no.hidden { display: none; }
-  @media print { .sheet td, .sheet th { font-size: 10px; } .doc-no { font-size: 10px; } }
+  /* OK 1st Part — ใบแบบต้นฉบับ (THPLSTL-QA-FRM0-3434) */
+  .fp-wrap { overflow-x: auto; }
+  .fp { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 1100px; font-size: 11px; color: #000; background: #fff; }
+  .fp td { border: 1px solid #000; padding: 2px 3px; text-align: center; vertical-align: middle; white-space: pre-line; word-break: break-word; }
+  .fp td.nb { border: none; }
+  .fp td.l { text-align: left; }
+  .fp .fp-title td { font-size: 22px; font-weight: 700; height: 40px; }
+  .fp .fp-line td { font-size: 14px; font-weight: 700; height: 34px; text-align: left; }
+  .fp .fp-freq td { height: 46px; font-weight: 600; }
+  .fp .fp-no td { height: 22px; font-weight: 700; }
+  .fp .fp-head td { height: 230px; font-size: 10.5px; vertical-align: top; text-align: left; }
+  .fp .fp-head td.c { text-align: center; vertical-align: middle; }
+  .fp .fp-row td { height: 22px; }
+  .fp .fp-row.click { cursor: pointer; } .fp .fp-row.click:hover td { background: #fff7e6; }
+  .fp td.ng, .fp td.nok { color: #C8102E; font-weight: 700; }
+  .fp td.mk { font-size: 14px; font-weight: 700; }
+  .fp .fp-rtitle td { font-size: 16px; font-weight: 700; height: 34px; text-align: left; }
+  .fp .fp-rhead td { height: 32px; font-weight: 600; }
+  .fp .fp-note td { text-align: left; height: 20px; font-size: 11.5px; }
+  .fp .fp-doc td { text-align: left; height: 20px; font-size: 10.5px; }
+  .item-row .q { white-space: pre-line; }
+  @media print { .sheet td, .sheet th { font-size: 10px; } .doc-no { font-size: 10px; } .fp { width: 100%; font-size: 9px; } .fp .fp-head td { font-size: 8.5px; } }
 </style>
 </head>
 <body>
@@ -58,7 +79,8 @@
   </div>
   <div class="card hidden" id="sheetCard">
     <div class="card-title"><i class="bi bi-table"></i> <span id="sheetTitle"></span> <span class="spacer"></span><span class="doc-no hidden" id="sheetDocNo"></span><button class="btn btn-outline btn-sm no-print" onclick="window.print()"><i class="bi bi-printer"></i> พิมพ์</button></div>
-    <div class="table-wrap"><table class="data-table sheet" id="sheet"></table></div>
+    <div class="table-wrap" id="sheetWrap"><table class="data-table sheet" id="sheet"></table></div>
+    <div class="fp-wrap hidden" id="fpWrap"><table class="fp" id="fpSheet"></table></div>
     <div class="small text-gray mt-2" id="sheetLegend"></div>
   </div>
 </div></main>
@@ -69,8 +91,10 @@
   <div class="small text-gray mb-2" id="fInfo"></div>
   <div class="small text-gray mb-2" id="fDocNo"></div>
   <div class="btn-group mb-2"><button class="btn btn-outline btn-sm" id="fAllOk"><i class="bi bi-check2-all"></i> <span id="fAllOkLabel">ปกติทุกข้อ</span></button></div>
+  <div class="form-group hidden" id="fProdWrap"><label class="form-label">Product reference <span class="req">*</span></label><select class="form-input" id="fProd"></select></div>
   <div id="fItems"></div>
-  <div class="form-group"><label class="form-label">หมายเหตุ <span id="remarkReq" class="req hidden">* (มีข้อผิดปกติ)</span></label><textarea class="form-input" id="fRemark" rows="2"></textarea></div>
+  <div class="form-group"><label class="form-label" id="fRemarkLabel">หมายเหตุ</label> <span id="remarkReq" class="req hidden">* (มีข้อผิดปกติ)</span><textarea class="form-input" id="fRemark" rows="2"></textarea></div>
+  <div class="form-group hidden" id="fCmWrap"><label class="form-label">การแก้ไข / COUNTERMEASURE</label><textarea class="form-input" id="fCm" rows="2"></textarea></div>
   <div class="btn-group">
     <button class="btn btn-primary flex-1" id="fSave">บันทึก</button>
     <button class="btn btn-success hidden" id="fVerify"><i class="bi bi-patch-check"></i> ยืนยันการตรวจสอบ</button>
@@ -89,7 +113,7 @@
   const P = APP_CONFIG.STORAGE_PREFIX, user = Auth.getUser();
   const isSup = Auth.hasRole('supervisor');
   const SHIFT_LABEL = { Day: 'กะเช้า', Night: 'กะดึก' };
-  let data = null, selMachine = '', selFormId = '', selDate = '', selShift = '', results = [], reqId = null, formOpenAt = 0;
+  let data = null, selMachine = '', selFormId = '', selDate = '', selShift = '', selProduct = '', curCheck = null, results = [], reqId = null, formOpenAt = 0;
 
   async function load() {
     const r = await API.get('getDailyChecks', { date: $('date').value });
@@ -119,6 +143,9 @@
   const okLabel = (f) => f.okLabel || 'ปกติ', ngLabel = (f) => f.ngLabel || 'ผิดปกติ';
   const machineName = (m) => (data.machines.find((x) => x.machineId === m) || {}).machineName || m;
   const checkOf = (m, d, s, fid) => data.checks.find((c) => c.machineId === m && c.date === d && c.shiftDN === s && c.formId === fid);
+  /** ใบที่แยกตามรุ่น (perProduct) — 1 กะมีได้หลายใบ (เปลี่ยนรุ่น) */
+  const checksOf = (m, d, s, fid) => data.checks.filter((c) => c.machineId === m && c.date === d && c.shiftDN === s && c.formId === fid);
+  const machineOf = (m) => data.machines.find((x) => x.machineId === m) || {};
   /** กะนี้ถึงเวลาแล้วหรือยัง (วันทำงานตัด 08:00, กะดึก 20:00–07:59) */
   function isDue(d, s) {
     const today = UI.getToday();
@@ -150,8 +177,11 @@
     $('shiftDate').textContent = '(' + UI.formatDate(d) + ')';
     $('shiftGrid').innerHTML = data.shifts.map((s) => {
       const c = checkOf(selMachine, d, s, f.id);
-      const sub = c ? (c.decision === 'Accept' ? okLabel(f) : ngLabel(f)) + (c.verifiedBy ? ' · ยืนยันแล้ว' : '') : (isDue(d, s) ? 'ยังไม่ตรวจ' : 'ยังไม่ถึงกะ');
-      return `<button class="period-btn ${c ? (c.decision === 'Accept' ? 'accept' : 'reject') : ''}" data-s="${s}" ${!c && !isDue(d, s) ? 'disabled' : ''}>${SHIFT_LABEL[s]}<small>${sub}</small></button>`;
+      const cs = f.perProduct ? checksOf(selMachine, d, s, f.id) : [];
+      const sub = f.perProduct && cs.length ? cs.map((x) => (x.productCode || '-') + ' ' + (x.decision === 'Accept' ? okLabel(f) : ngLabel(f))).join(' · ') + ' · แตะเพื่อเพิ่ม/แก้ไข'
+        : c ? (c.decision === 'Accept' ? okLabel(f) : ngLabel(f)) + (c.verifiedBy ? ' · ยืนยันแล้ว' : '') : (isDue(d, s) ? 'ยังไม่ตรวจ' : 'ยังไม่ถึงกะ');
+      const bad = f.perProduct ? cs.some((x) => x.decision !== 'Accept') : c && c.decision !== 'Accept';
+      return `<button class="period-btn ${c ? (bad ? 'reject' : 'accept') : ''}" data-s="${s}" ${!c && !isDue(d, s) ? 'disabled' : ''}>${SHIFT_LABEL[s]}<small>${sub}</small></button>`;
     }).join('');
     $('sheetLegend').textContent = `√ = ${okLabel(f)} · X = ${ngLabel(f)} · ช่องส้ม = ถึงกะแล้วยังไม่ตรวจ · แตะวันที่เพื่อเปิดดู/แก้ไข` + (f.note ? ' · ' + f.note : '');
     renderSheet(f);
@@ -159,6 +189,9 @@
 
   /** ใบแบบกระดาษ: แถว = หัวข้อ, คอลัมน์ = วันที่ 1..31, แยกกะเช้า / กะดึก */
   function renderSheet(f) {
+    const fp = f.type === 'firstpart';
+    $('sheetWrap').classList.toggle('hidden', fp); $('fpWrap').classList.toggle('hidden', !fp);
+    if (fp) return renderFirstPart(f);
     const days = [];
     for (let x = data.monthFrom; x <= data.monthTo; x = UI.addDays(x, 1)) days.push(x);
     const ym = data.monthFrom.slice(0, 7).split('-');
@@ -185,34 +218,98 @@
     $('sheet').innerHTML = html + '</tbody>';
   }
 
+  /** OK 1st Part — วาดใบให้เหมือนไฟล์ต้นฉบับ ok_1part_Assembly_MC.xlsx (คอลัมน์ A–P) ; แถว = การตรวจแต่ละครั้งของเดือน */
+  function renderFirstPart(f) {
+    const ym = data.monthFrom.slice(0, 7).split('-');
+    $('sheetTitle').textContent = `${f.name} · ${machineName(selMachine)} · เดือน ${Number(ym[1])}/${ym[0]}`;
+    $('sheetDocNo').classList.add('hidden'); // ต้นฉบับพิมพ์เลขเอกสารไว้ท้ายใบ
+    $('sheetLegend').textContent = 'แตะแถวเพื่อเปิดดู/แก้ไข · เพิ่มการตรวจจากปุ่มกะด้านบน (ทุกครั้งที่เริ่มกะ / เปลี่ยนรุ่น)';
+    const E = UI.esc, it = f.items, mk = (v) => (v === 'NG' ? 'X' : v === 'OK' ? '√' : '');
+    const W = [40.2, 15.8, 13, 8.8, 13, 13, 13, 13, 13, 13, 13, 13, 13, 10.8, 13, 8.8]; // ความกว้างคอลัมน์ตาม Excel
+    const col = '<colgroup>' + W.map((w) => `<col style="width:${(w / 222.6 * 100).toFixed(2)}%">`).join('') + '</colgroup>';
+    const rows = data.checks.filter((c) => c.machineId === selMachine && c.formId === f.id)
+      .sort((a, b) => (a.date + (a.shiftDN === 'Night' ? 1 : 0) + a.timestamp).localeCompare(b.date + (b.shiftDN === 'Night' ? 1 : 0) + b.timestamp));
+    const dt = (c) => { const p = c.date.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; };
+    let h = col;
+    h += `<tr class="fp-title"><td class="nb" colspan="16">${E(f.name)}</td></tr><tr><td class="nb" colspan="16" style="height:8px"></td></tr>`;
+    h += `<tr class="fp-line"><td class="nb">Line : ${E(data.lineName || '')}</td><td class="nb" colspan="4"></td><td class="nb">MC : </td><td class="nb" colspan="3">${E(machineName(selMachine))}</td><td class="nb" colspan="7"></td></tr><tr><td class="nb" colspan="16" style="height:6px"></td></tr>`;
+    const freq = it.slice(0, 10).map((x) => `<td>${E(x.freq)}</td>`).join('');
+    h += `<tr class="fp-freq"><td></td><td colspan="2">ความถี่\nfrequency</td>${freq}<td></td><td></td><td>${E(it[10].freq)}</td></tr>`;
+    h += `<tr class="fp-no"><td></td><td colspan="2">รายการตรวจสอบ</td>${it.slice(0, 10).map((x) => `<td>${E(x.no)}</td>`).join('')}<td></td><td></td><td>${E(it[10].no)}</td></tr>`;
+    const hd = (x) => `<td>${E(x.th)}\n${E(x.q)}</td>`;
+    h += `<tr class="fp-head"><td class="c">Product reference </td><td class="c">วันที่\nDate</td><td class="c">เวลา\nTime</td>${it.slice(0, 10).map(hd).join('')}<td class="c">สรุปผลการตรวจสอบ (OK/NOK)\n\nลงชื่อผู้ตรวจสอบ</td><td class="c">สรุปผลการตรวจสอบ (OK/NOK)\n\nหัวหน้างานยืนยัน</td>${hd(it[10])}</tr>`;
+    rows.forEach((c) => {
+      const ok = c.decision === 'Accept';
+      h += `<tr class="fp-row click" data-id="${E(c.checkId)}" data-d="${c.date}" data-s="${c.shiftDN}"><td>${E(c.productCode)}</td><td>${dt(c)}</td><td>${hhmm(c.timestamp)}</td>` +
+        it.slice(0, 10).map((x, i) => `<td class="mk ${c.results[i] === 'NG' ? 'ng' : ''}">${mk(c.results[i])}</td>`).join('') +
+        `<td class="${ok ? '' : 'nok'}">${ok ? 'OK' : 'NOK'}\n${E(c.recorderName || '')}</td><td>${E(c.verifiedBy || '')}</td><td class="mk ${c.results[10] === 'NG' ? 'ng' : ''}">${mk(c.results[10])}</td></tr>`;
+    });
+    for (let i = rows.length; i < 38; i++) h += '<tr class="fp-row">' + '<td></td>'.repeat(16) + '</tr>'; // ต้นฉบับมี 38 แถว (แถว 8–45)
+    // ---- recovery plan (จากรายการที่ NOK) ----
+    const bad = rows.filter((c) => c.decision !== 'Accept');
+    h += `<tr class="fp-rtitle"><td colspan="15">Ok 1st Part Workstation recovery plan</td><td></td></tr>`;
+    h += `<tr class="fp-rhead"><td>Product reference </td><td>วันที่\nDate</td><td>เวลา\nTime</td><td>รายการตรวจสอบ</td><td colspan="4">ปัญหา / PROBLEM </td><td colspan="4">การแก้ไข / COUNTERMEASURE</td><td colspan="2">ลงชื่อพนักงาน</td><td>ลงชื่อ Leader</td><td>ผลการตัดสินใจ</td></tr>`;
+    bad.forEach((c) => {
+      const items = c.results.map((r, i) => (r === 'NG' ? it[i].no : null)).filter(Boolean).join(', ');
+      h += `<tr class="fp-row click" data-id="${E(c.checkId)}" data-d="${c.date}" data-s="${c.shiftDN}"><td>${E(c.productCode)}</td><td>${dt(c)}</td><td>${hhmm(c.timestamp)}</td><td class="nok">${E(items)}</td><td class="l" colspan="4">${E(c.remark)}</td><td class="l" colspan="4">${E(c.countermeasure || '')}</td><td colspan="2">${E(c.recorderName || '')}</td><td>${E(c.verifiedBy || '')}</td><td class="nok">NOK</td></tr>`;
+    });
+    for (let i = bad.length; i < 6; i++) h += '<tr class="fp-row"><td></td><td></td><td></td><td></td><td colspan="4"></td><td colspan="4"></td><td colspan="2"></td><td></td><td></td></tr>';
+    h += '<tr><td class="nb" colspan="16" style="height:6px"></td></tr>';
+    (f.notes || []).forEach((n) => { h += `<tr class="fp-note"><td class="nb" colspan="16">${E(n)}</td></tr>`; });
+    h += `<tr class="fp-doc"><td class="nb" colspan="16">${E(f.docNo || '')}</td></tr>`;
+    $('fpSheet').innerHTML = h;
+  }
+
   $('machineGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (b) { if (selMachine !== b.dataset.m) selFormId = ''; selMachine = b.dataset.m; try { localStorage.setItem(P + 'dailycheck_machine_v2', selMachine); } catch (er) {} render(); } });
   $('formTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { selFormId = b.dataset.f; render(); } });
   $('shiftGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-s]'); if (b && !b.disabled) openForm($('date').value, b.dataset.s); });
+  $('fpSheet').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) openForm(tr.dataset.d, tr.dataset.s, tr.dataset.id); });
   $('sheet').addEventListener('click', (e) => {
     const td = e.target.closest('td[data-d]'); if (!td) return;
     const c = checkOf(selMachine, td.dataset.d, td.dataset.s, selFormId);
     if (c || (isDue(td.dataset.d, td.dataset.s) && td.dataset.d <= UI.getToday())) openForm(td.dataset.d, td.dataset.s);
   });
 
-  function openForm(d, s) {
+  function openForm(d, s, checkId) {
     const f = selForm(); if (!f) return;
-    const c = checkOf(selMachine, d, s, f.id);
+    selDate = d; selShift = s;
+    if (f.perProduct) {
+      const m = machineOf(selMachine);
+      const byId = checkId && data.checks.find((x) => x.checkId === checkId);
+      const prods = (m.assignedProducts || []).slice();
+      checksOf(selMachine, d, s, f.id).forEach((x) => { if (x.productCode && prods.indexOf(x.productCode) < 0) prods.push(x.productCode); });
+      if (m.currentProduct && prods.indexOf(m.currentProduct) < 0) prods.unshift(m.currentProduct);
+      selProduct = byId ? byId.productCode : (m.currentProduct || prods[0] || '');
+      $('fProd').innerHTML = (prods.length ? '' : '<option value="">— ไม่มีรุ่นที่ assign ให้เครื่องนี้ —</option>') + prods.map((p) => `<option value="${UI.esc(p)}">${UI.esc(p)}</option>`).join('');
+      $('fProd').value = selProduct;
+    }
+    loadCheck();
+  }
+  /** โหลดผลของกะ/รุ่นที่เลือกเข้าฟอร์ม */
+  function loadCheck() {
+    const f = selForm(), d = selDate, s = selShift;
+    const c = f.perProduct ? checksOf(selMachine, d, s, f.id).find((x) => x.productCode === selProduct) : checkOf(selMachine, d, s, f.id);
     if (c && c.recordedBy !== user.employeeId && !isSup) return UI.showToast('กะนี้บันทึกโดย ' + c.recorderName + ' แล้ว', 'info');
-    selDate = d; selShift = s; reqId = API.newRequestId(); formOpenAt = Date.now();
+    curCheck = c || null; reqId = API.newRequestId(); formOpenAt = Date.now();
     results = c ? c.results.slice() : f.items.map(() => '');
     $('fTitle').textContent = `${machineName(selMachine)} · ${f.tab || f.name} · ${SHIFT_LABEL[s]}`;
-    $('fDocNo').textContent = (f.docNo ? 'Document Number : ' + f.docNo : '') + (f.note ? (f.docNo ? ' · ' : '') + f.note : '');
+    $('fDocNo').textContent = f.docNo ? 'Document Number : ' + f.docNo : '';
     $('fInfo').textContent = UI.formatDate(d) + (c ? ` · บันทึกโดย ${c.recorderName} ${hhmm(c.timestamp)}` + (c.verifiedBy ? ` · ยืนยันโดย ${c.verifiedBy}` : '') : '');
+    $('fProdWrap').classList.toggle('hidden', !f.perProduct);
+    $('fCmWrap').classList.toggle('hidden', !f.perProduct);
+    $('fRemarkLabel').textContent = f.perProduct ? 'ปัญหา / PROBLEM' : 'หมายเหตุ';
     $('fRemark').value = c ? c.remark : '';
+    $('fCm').value = c ? c.countermeasure || '' : '';
     $('fAllOkLabel').textContent = okLabel(f) + 'ทุกข้อ';
     $('fCancel').classList.toggle('hidden', !(c && isSup));
     $('fVerify').classList.toggle('hidden', !(c && isSup && !c.verifiedBy));
     renderItems();
     UI.openModal('formModal');
   }
+  $('fProd').onchange = () => { selProduct = $('fProd').value; loadCheck(); };
   function renderItems() {
     const f = selForm();
-    $('fItems').innerHTML = f.items.map((it, i) => `<div class="item-row"><div class="fw-bold">${i + 1}. ${UI.esc(it.th)}</div>${it.en ? `<div class="small text-gray">${UI.esc(it.en)}</div>` : ''}
+    $('fItems').innerHTML = f.items.map((it, i) => `<div class="item-row"><div class="fw-bold">${UI.esc(it.no || String(i + 1))}. ${UI.esc(it.th)}</div>${it.q ? `<div class="small q">${UI.esc(it.q)}</div>` : ''}${it.en ? `<div class="small text-gray">${UI.esc(it.en)}</div>` : ''}${it.freq ? `<div class="small text-gray">ความถี่: ${UI.esc(it.freq)}</div>` : ''}
       <div class="okng"><button class="btn btn-outline flex-1 ok ${results[i] === 'OK' ? 'active' : ''}" data-i="${i}" data-v="OK">√ ${okLabel(f)}</button>
       <button class="btn btn-outline flex-1 ng ${results[i] === 'NG' ? 'active' : ''}" data-i="${i}" data-v="NG">X ${ngLabel(f)}</button></div></div>`).join('');
     $('remarkReq').classList.toggle('hidden', !results.includes('NG'));
@@ -221,19 +318,22 @@
   $('fAllOk').onclick = () => { results = results.map(() => 'OK'); renderItems(); };
   $('fSave').onclick = () => UI.withButton($('fSave'), async () => {
     if (results.includes('')) return UI.showToast('กรุณาตรวจให้ครบทุกหัวข้อ', 'warning');
-    if (results.includes('NG') && !$('fRemark').value.trim()) return UI.showToast('มีข้อที่ไม่ผ่าน ต้องระบุหมายเหตุ', 'warning');
-    const r = await API.post('submitDailyCheck', { data: { machineId: selMachine, formId: selFormId, shiftDN: selShift, results, remark: $('fRemark').value.trim(), date: selDate, clientRequestId: reqId } });
+    const pp = selForm().perProduct;
+    if (pp && !selProduct) return UI.showToast('กรุณาเลือก Product reference', 'warning');
+    if (results.includes('NG') && !$('fRemark').value.trim()) return UI.showToast(pp ? 'มีข้อที่ไม่ผ่าน ต้องระบุปัญหา' : 'มีข้อที่ไม่ผ่าน ต้องระบุหมายเหตุ', 'warning');
+    const r = await API.post('submitDailyCheck', { data: { machineId: selMachine, formId: selFormId, shiftDN: selShift, results, remark: $('fRemark').value.trim(), date: selDate, clientRequestId: reqId,
+      productCode: pp ? selProduct : '', countermeasure: pp ? $('fCm').value.trim() : '' } });
     if (!r.success) return UI.showToast(r.message, 'error');
     UI.closeModal('formModal'); formOpenAt = 0; UI.showToast(r.updated ? 'แก้ไขแล้ว' : 'บันทึกแล้ว', 'success'); load();
   });
   $('fVerify').onclick = () => UI.withButton($('fVerify'), async () => {
-    const c = checkOf(selMachine, selDate, selShift, selFormId); if (!c) return;
+    const c = curCheck; if (!c) return;
     const r = await API.post('verifyDailyCheck', { checkId: c.checkId });
     if (!r.success) return UI.showToast(r.message, 'error');
     UI.closeModal('formModal'); formOpenAt = 0; UI.showToast('ยืนยันแล้ว', 'success'); load();
   });
   $('fCancel').onclick = async () => {
-    const c = checkOf(selMachine, selDate, selShift, selFormId);
+    const c = curCheck;
     if (!c || !await UI.confirm({ title: 'ลบรายการนี้?', danger: true })) return;
     UI.withButton($('fCancel'), async () => {
       const r = await API.post('cancelDailyCheck', { checkId: c.checkId });

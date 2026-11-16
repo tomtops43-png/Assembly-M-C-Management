@@ -37,7 +37,8 @@ function dailyCheckToObj(r) {
     formId: String(r.FormID || '') || ((dailyCheckFormFor(r.MachineID) || {}).id || ''),
     results: safeJson(r.Results, []), decision: r.Decision, remark: r.Remark || '',
     recordedBy: String(r.RecordedBy), recorderName: r.RecorderName, status: r.Status || 'active',
-    updatedAt: r.UpdatedAt || '', updatedBy: r.UpdatedBy || '', verifiedBy: r.VerifiedBy || '', verifiedAt: r.VerifiedAt || ''
+    updatedAt: r.UpdatedAt || '', updatedBy: r.UpdatedBy || '', verifiedBy: r.VerifiedBy || '', verifiedAt: r.VerifiedAt || '',
+    productCode: String(r.ProductCode || ''), countermeasure: r.Countermeasure || ''
   };
 }
 
@@ -56,7 +57,7 @@ function getDailyChecks(token, date) {
   return {
     success: true,
     data: {
-      date: date, monthFrom: from, monthTo: to, title: dc.TITLE, forms: dc.FORMS || [], shifts: DC_SHIFTS,
+      date: date, monthFrom: from, monthTo: to, title: dc.TITLE, lineName: LINE_CONFIG.LINE_NAME, forms: dc.FORMS || [], shifts: DC_SHIFTS,
       checks: readDailyChecks(from, to), machines: getMachines().filter(function (m) { return m.installed; })
     }
   };
@@ -76,10 +77,12 @@ function submitDailyCheck(token, data) {
   var results = (data.results || []).map(function (r) { return r === 'NG' ? 'NG' : (r === 'OK' ? 'OK' : ''); });
   if (results.length !== form.items.length || results.indexOf('') >= 0) throw new Error('กรุณาตรวจให้ครบทุกหัวข้อ');
   var decision = results.indexOf('NG') >= 0 ? 'Reject' : 'Accept';
-  if (decision === 'Reject' && !String(data.remark || '').trim()) throw new Error('มีข้อที่ไม่ผ่าน ต้องระบุหมายเหตุ');
+  if (decision === 'Reject' && !String(data.remark || '').trim()) throw new Error(form.perProduct ? 'มีข้อที่ไม่ผ่าน ต้องระบุปัญหา' : 'มีข้อที่ไม่ผ่าน ต้องระบุหมายเหตุ');
+  var productCode = String(data.productCode || '').trim();
+  if (form.perProduct && !productCode) throw new Error('กรุณาเลือก Product reference');
 
   var existing = readDailyChecks(date, date).filter(function (c) {
-    return c.machineId === String(data.machineId) && c.shiftDN === shiftDN && c.formId === form.id;
+    return c.machineId === String(data.machineId) && c.shiftDN === shiftDN && c.formId === form.id && (!form.perProduct || c.productCode === productCode);
   })[0];
   if (data.clientRequestId && existing && existing.checkId) {
     var raw = findRow('DailyCheckLog', 'CheckID', existing.checkId);
@@ -91,6 +94,7 @@ function submitDailyCheck(token, data) {
     }
     updateRow('DailyCheckLog', 'CheckID', existing.checkId, {
       Results: JSON.stringify(results), Decision: decision, Remark: data.remark || '', FormID: form.id,
+      ProductCode: productCode, Countermeasure: data.countermeasure || '',
       UpdatedAt: formatDate(), UpdatedBy: u.name, ClientRequestID: data.clientRequestId || '',
       VerifiedBy: '', VerifiedAt: '' // แก้ผลแล้วต้องยืนยันใหม่
     });
@@ -101,7 +105,8 @@ function submitDailyCheck(token, data) {
     CheckID: id, Timestamp: formatDate(), Date: date, Shift: shiftDN,
     ShiftDN: shiftDN, TimePeriod: shiftDN, MachineID: data.machineId, FormID: form.id,
     Results: JSON.stringify(results), Decision: decision, Remark: data.remark || '', RecordedBy: u.employeeId,
-    RecorderName: u.name, Status: 'active', ClientRequestID: data.clientRequestId || '', UpdatedAt: '', UpdatedBy: ''
+    RecorderName: u.name, Status: 'active', ClientRequestID: data.clientRequestId || '', UpdatedAt: '', UpdatedBy: '',
+    ProductCode: productCode, Countermeasure: data.countermeasure || ''
   });
   return { success: true, checkId: id };
 }
@@ -126,7 +131,7 @@ function buildDailyCheckSummary(dateFrom, dateTo, productionRows) {
   (productionRows || readProductionRange(dateFrom, dateTo)).forEach(function (r) {
     if (r.status === 'cancelled' || r.status === 'sort-adjust') return;
     dailyCheckFormsForProduct(r.machineId, r.productCode).forEach(function (f) {
-      expected[r.date + '|' + r.machineId + '|' + r.shiftDN + '|' + f.id] = r;
+      expected[r.date + '|' + r.machineId + '|' + r.shiftDN + '|' + f.id + (f.perProduct ? '|' + r.productCode : '')] = r;
     });
   });
   var checks = readDailyChecks(dateFrom, dateTo);
@@ -134,7 +139,8 @@ function buildDailyCheckSummary(dateFrom, dateTo, productionRows) {
   var byMachine = {}, byShift = {}, byDate = {};
   var accept = 0, reject = 0;
   checks.forEach(function (c) {
-    checked[c.date + '|' + c.machineId + '|' + c.shiftDN + '|' + c.formId] = c;
+    var cf = dailyCheckFormById(c.machineId, c.formId) || {};
+    checked[c.date + '|' + c.machineId + '|' + c.shiftDN + '|' + c.formId + (cf.perProduct ? '|' + c.productCode : '')] = c;
     if (c.decision === 'Accept') accept++; else reject++;
     [[byMachine, c.machineId], [byShift, c.shiftDN || '-'], [byDate, c.date]].forEach(function (p) {
       var o = p[0][p[1]] = p[0][p[1]] || { accept: 0, reject: 0 };
@@ -145,7 +151,7 @@ function buildDailyCheckSummary(dateFrom, dateTo, productionRows) {
   var done = keys.filter(function (k) { return checked[k]; }).length;
   var missing = keys.filter(function (k) { return !checked[k]; }).slice(0, 100).map(function (k) {
     var p = k.split('|'), f = dailyCheckFormById(p[1], p[3]) || {};
-    return { date: p[0], machineId: p[1], shiftDN: p[2], formId: p[3], formTab: f.tab || '' };
+    return { date: p[0], machineId: p[1], shiftDN: p[2], formId: p[3], formTab: (f.tab || '') + (p[4] ? ' ' + p[4] : ''), productCode: p[4] || '' };
   });
   return {
     expected: keys.length, checked: done, compliance: keys.length ? Math.round(done / keys.length * 1000) / 10 : null,
