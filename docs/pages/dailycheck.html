@@ -98,7 +98,7 @@
     $('docTitle').textContent = data.title + ' / Check Witness';
     render();
   }
-  const formsOf = (m) => data.forms.filter((f) => f.machines.indexOf(m) >= 0);
+  const formsOf = (m) => data.forms.filter((f) => f.machines.indexOf('*') >= 0 || f.machines.indexOf(m) >= 0); // '*' = ทุกเครื่อง
   /** ฟอร์มที่ต้องตรวจตามรุ่นที่เครื่องกำลังผลิต (ฟอร์มที่ระบุ products อื่นไม่นับ) */
   const requiredFormsOf = (m) => {
     const cur = (data.machines.find((x) => x.machineId === m) || {}).currentProduct;
@@ -153,7 +153,7 @@
       const sub = c ? (c.decision === 'Accept' ? okLabel(f) : ngLabel(f)) + (c.verifiedBy ? ' · ยืนยันแล้ว' : '') : (isDue(d, s) ? 'ยังไม่ตรวจ' : 'ยังไม่ถึงกะ');
       return `<button class="period-btn ${c ? (c.decision === 'Accept' ? 'accept' : 'reject') : ''}" data-s="${s}" ${!c && !isDue(d, s) ? 'disabled' : ''}>${SHIFT_LABEL[s]}<small>${sub}</small></button>`;
     }).join('');
-    $('sheetLegend').textContent = `√ = ${okLabel(f)} · X = ${ngLabel(f)} · ช่องส้ม = ถึงกะแล้วยังไม่ตรวจ · แตะวันที่เพื่อเปิดดู/แก้ไข`;
+    $('sheetLegend').textContent = `√ = ${okLabel(f)} · X = ${ngLabel(f)} · ช่องส้ม = ถึงกะแล้วยังไม่ตรวจ · แตะวันที่เพื่อเปิดดู/แก้ไข` + (f.note ? ' · ' + f.note : '');
     renderSheet(f);
   }
 
@@ -201,7 +201,7 @@
     selDate = d; selShift = s; reqId = API.newRequestId(); formOpenAt = Date.now();
     results = c ? c.results.slice() : f.items.map(() => '');
     $('fTitle').textContent = `${machineName(selMachine)} · ${f.tab || f.name} · ${SHIFT_LABEL[s]}`;
-    $('fDocNo').textContent = f.docNo ? 'Document Number : ' + f.docNo : '';
+    $('fDocNo').textContent = (f.docNo ? 'Document Number : ' + f.docNo : '') + (f.note ? (f.docNo ? ' · ' : '') + f.note : '');
     $('fInfo').textContent = UI.formatDate(d) + (c ? ` · บันทึกโดย ${c.recorderName} ${hhmm(c.timestamp)}` + (c.verifiedBy ? ` · ยืนยันโดย ${c.verifiedBy}` : '') : '');
     $('fRemark').value = c ? c.remark : '';
     $('fAllOkLabel').textContent = okLabel(f) + 'ทุกข้อ';
