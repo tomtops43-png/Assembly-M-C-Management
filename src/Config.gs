@@ -247,6 +247,21 @@ var LINE_CONFIG = {
     BLOCK_PRODUCTION: false    // true = เครื่องในรายการข้างบนลงยอดผลิตไม่ได้ ถ้าไม่มีม้วนที่อบครบและยังไม่เกินเวลาอยู่ที่เครื่อง
   },
 
+  // ---- เบิกไฟเบอร์ (เมนู วัตถุดิบ > เบิกไฟเบอร์) — ใบ "ยอดการใช้ไฟเบอร์ Cut Chamber ประจำวัน" ----
+  // 1 รายการ = 1 ชุดที่เบิก ; rolls = จำนวนม้วนต่อชุดของเครื่องนั้น ; label = หมายเลขเครื่องที่แสดงในใบ
+  // Arc Stack ไม่ต้องลง ; ไม่ผูกกับแท็กอบไฟเบอร์
+  FIBER_USAGE: {
+    TITLE: 'ยอดการใช้ไฟเบอร์ Cut Chamber ประจำวัน',
+    ROWS_PER_PAGE: 33, // จำนวนแถวต่อหน้าในใบกระดาษ
+    MACHINES: [
+      { id: 'AC-06', label: '#6', rolls: 2 },
+      { id: 'AC-07', label: '#7', rolls: 2 },
+      { id: 'AC-08', label: '#8', rolls: 2 },
+      { id: 'AC-BETA', label: '#5', rolls: 4 },
+      { id: 'GV-2', label: 'GV2', rolls: 1 }
+    ]
+  },
+
   INBOX_AM_CHECKSHEET: false, // TODO(ข้อมูลไลน์) ต้องการข้อความ AM Check Sheet ทุกวันไหม
 
   // กลุ่มเครื่องจักร (ไลน์ย่อย) — ใช้จัดลำดับการแสดงผล ; กลุ่มที่ไม่อยู่ในรายการจะต่อท้าย
@@ -319,6 +334,7 @@ var SHEET_SCHEMAS = {
   RawMaterialLog: ['ReceiveID', 'Timestamp', 'Date', 'ReceivedBy', 'ReceiverName', 'MachineID', 'PartCode', 'SupplierCode', 'PartName', 'Specification', 'Quantity', 'Unit', 'LotNumber', 'Inspector', 'Customer', 'NetWeight', 'GrossWeight', 'CartonNo', 'PackingDate', 'RefNo', 'Remark', 'Photos', 'Status'],
   FiberRolls: ['RollID', 'CreatedAt', 'CreatedBy', 'PartCode', 'LotNumber', 'Oven', 'Status', 'Cycle', 'DryStart', 'ReadyAt', 'OutAt', 'ExpireAt', 'MachineID', 'Moisture', 'UpdatedAt', 'UpdatedBy', 'UpdatedByName', 'Remark'],
   FiberLog: ['LogID', 'Timestamp', 'RollID', 'Action', 'Cycle', 'MachineID', 'Moisture', 'ByID', 'ByName', 'Remark'],
+  FiberUsage: ['UsageID', 'Timestamp', 'Date', 'ShiftDN', 'MachineID', 'Rolls', 'Weight', 'Scrap', 'Qtys', 'TotalQty', 'Remark', 'RecordedBy', 'RecorderName', 'Status', 'ClientRequestID', 'UpdatedAt', 'UpdatedBy'],
   SortingLog: ['JobID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'MachineID', 'ProductCode', 'FoundProcess', 'TotalQty', 'GoodQty', 'DefectQty', 'DefectDetails', 'Status', 'RegisteredBy', 'RegisteredByName', 'SortedBy', 'SortedByName', 'PulledAt', 'CompletedAt', 'Remark', 'JobOrderID'],
   DisassemblyLog: ['JobID', 'Timestamp', 'Date', 'Shift', 'MachineID', 'ProductCode', 'SourceType', 'SourceRef', 'JobOrderID', 'TotalQty', 'DoneQty', 'MatDetails', 'Status', 'RegisteredBy', 'RegisteredByName', 'WorkedBy', 'WorkedByName', 'PulledAt', 'CompletedAt', 'Remark'],
   WasteLog: ['WasteID', 'Timestamp', 'Date', 'RecordedBy', 'RecorderName', 'WasteType', 'WeightKg', 'Remark', 'Category'],
