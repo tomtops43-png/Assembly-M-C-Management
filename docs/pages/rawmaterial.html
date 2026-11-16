@@ -74,6 +74,7 @@
         <div class="form-group"><label class="form-label">กะ</label><div class="fu-seg" id="fuShift"><button data-v="Day">กะเช้า</button><button data-v="Night">กะดึก</button></div></div>
       </div>
       <div class="form-group"><label class="form-label">หมายเลขเครื่อง</label><div class="fu-mcs" id="fuMachines"></div></div>
+      <div class="form-group hidden" id="fuVarWrap"><label class="form-label">รุ่น *</label><div class="fu-seg" id="fuVariants"></div></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">จำนวน</label><div class="fu-rolls" id="fuRolls">-</div></div>
         <div class="form-group"><label class="form-label">น้ำหนัก (กก.) *</label>
@@ -498,7 +499,7 @@ const FiberTag = (() => {
   }
 
   // ================= เบิกไฟเบอร์ (ยอดการใช้ไฟเบอร์ Cut Chamber ประจำวัน) =================
-  let fu = null, fuMc = '', fuShift = '', fuEdit = null, fuQtys = [''];
+  let fu = null, fuMc = '', fuShift = '', fuVar = '', fuEdit = null, fuQtys = [''];
   const fuReq = UI.requestIdKeeper(), fuUser = Auth.getUser(), fuIsSup = Auth.hasRole('supervisor');
   const FU_MC_KEY = APP_CONFIG.STORAGE_PREFIX + 'fiberusage_machine';
   const fuMcOf = (id) => (fu && fu.machines.find((m) => m.machineId === id)) || null;
@@ -521,6 +522,11 @@ const FiberTag = (() => {
     $('fuMachines').innerHTML = fu.machines.map((m) => `<button class="${m.machineId === fuMc ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.label)}<small>${UI.esc(m.machineName)} · ${m.rolls} ม้วน</small></button>`).join('');
     const m = fuMcOf(fuMc);
     $('fuRolls').textContent = m ? m.rolls + ' ม้วน' : '-';
+    const vs = (m && m.variants) || [];
+    if (vs.length && !vs.some((v) => v.product === fuVar)) fuVar = (vs.find((v) => v.product === m.currentProduct) || vs[0]).product; // ค่าเริ่มต้น = รุ่นที่เครื่องกำลังผลิต
+    if (!vs.length) fuVar = '';
+    $('fuVarWrap').classList.toggle('hidden', !vs.length);
+    $('fuVariants').innerHTML = vs.map((v) => `<button class="${v.product === fuVar ? 'active' : ''}" data-v="${UI.esc(v.product)}">${UI.esc(v.name)}</button>`).join('');
     [...$('fuShift').children].forEach((b) => b.classList.toggle('active', b.dataset.v === fuShift));
     $('fuQtys').innerHTML = fuQtys.map((q, i) => `<div class="fu-qty"><span class="plus">${i ? '+' : ''}</span><input type="number" inputmode="numeric" class="form-input" data-q="${i}" value="${UI.esc(String(q))}" placeholder="จำนวนชิ้น">${i ? `<button class="btn btn-outline btn-sm" data-rm="${i}"><i class="bi bi-x-lg"></i></button>` : ''}</div>`).join('');
     fuRenderHelp(); fuRenderPending();
@@ -534,8 +540,8 @@ const FiberTag = (() => {
     const list = fu.pending || [], seen = {};
     $('fuPendCount').textContent = list.length;
     $('fuPending').innerHTML = list.length ? list.map((r) => {
-      const n = (seen[r.machineId] = (seen[r.machineId] || 0) + 1), m = fuMcOf(r.machineId) || {};
-      return `<div class="fu-pend ${n === 1 ? 'next' : 'wait'}"><div class="q">${UI.esc(m.label || r.machineId)}<div class="small text-gray">คิว ${n}</div></div>
+      const n = (seen[r.machineId] = (seen[r.machineId] || 0) + 1);
+      return `<div class="fu-pend ${n === 1 ? 'next' : 'wait'}"><div class="q">${UI.esc(fuMcLabel(r))}<div class="small text-gray">คิว ${n}</div></div>
         <div class="info">เบิก ${fuDMY(r.date)} ${String(r.timestamp).slice(11, 16)} · ${r.shiftDN === 'Night' ? 'กะดึก' : 'กะเช้า'} · ${r.rolls} ม้วน · ${(r.weight || 0).toFixed(2)} กก.<br><span class="text-gray">${UI.esc(r.recorderName)}${r.remark ? ' · ' + UI.esc(r.remark) : ''}</span></div>
         ${n === 1 ? `<button class="btn btn-success btn-sm" data-fill="${UI.esc(r.usageId)}">ลงยอด</button>` : '<span class="small text-gray">รอชุดก่อนหน้า</span>'}</div>`;
     }).join('') : '<div class="small text-gray">ไม่มีชุดที่รอลงยอด</div>';
@@ -543,12 +549,21 @@ const FiberTag = (() => {
   /** ตัวช่วย: ยอดผลิตกะนี้จากบันทึกยอด เทียบกับที่ลงในใบเบิกไฟเบอร์แล้ว */
   function fuRenderHelp() {
     const d = $('fuDate').value, total = fuQtys.reduce((a, q) => a + (Number(q) || 0), 0);
-    const prod = (fu.produced || {})[d + '|' + fuMc + '|' + fuShift] || 0;
-    const logged = fu.rows.filter((r) => r.date === d && r.machineId === fuMc && r.shiftDN === fuShift && (!fuEdit || r.usageId !== fuEdit.usageId)).reduce((a, r) => a + r.totalQty, 0);
+    const prod = fuProduced(d), logged = fuLogged(d);
     const left = prod - logged;
     $('fuHelp').innerHTML = (fuQtys.length > 1 ? `รวมชุดนี้: <b>${fmtN(total)}</b> ชิ้น<br>` : '') +
       `ยอดผลิตกะนี้ (จากบันทึกยอด): <b>${fmtN(prod)}</b> · ลงในใบเบิกไฟเบอร์แล้ว: <b>${fmtN(logged)}</b> · ยังไม่ลง: <b>${fmtN(Math.max(0, left))}</b>` +
       (left > 0 ? ` <button class="btn btn-outline btn-sm" id="fuFill">ใส่ยอดที่เหลือ</button>` : '');
+  }
+  /** ยอดผลิตจากบันทึกยอด / ยอดที่ลงในใบแล้ว ของ วัน|เครื่อง|กะ (|รุ่น ถ้าเครื่องมีหลายรุ่น เช่น GV2) */
+  function fuProduced(d) { return (fu.produced || {})[d + '|' + fuMc + '|' + fuShift + (fuVar ? '|' + fuVar : '')] || 0; }
+  function fuLogged(d) {
+    return fu.rows.filter((r) => r.date === d && r.machineId === fuMc && r.shiftDN === fuShift && (!fuVar || r.productCode === fuVar) && (!fuEdit || r.usageId !== fuEdit.usageId)).reduce((a, r) => a + r.totalQty, 0);
+  }
+  /** หมายเลขเครื่องในใบ เช่น #7, #3, GV2 6P */
+  function fuMcLabel(r) {
+    const m = fuMcOf(r.machineId) || {}, v = (m.variants || []).find((x) => x.product === r.productCode);
+    return (m.label || r.machineId) + (v ? ' ' + v.short : '');
   }
   function fuQtyCell(r) {
     return (r.qtys.length ? r.qtys.map(fmtN).join(' + ') : '') + (r.remark ? (r.qtys.length ? ' ' : '') + `(${r.remark})` : '');
@@ -566,8 +581,7 @@ const FiberTag = (() => {
     for (let p = 0; p < pages; p++) {
       const part = rows.slice(p * per, (p + 1) * per);
       let body = part.map((r) => {
-        const m = fuMcOf(r.machineId) || {};
-        return `<tr class="r click ${r.totalQty ? '' : 'pend'}" data-id="${UI.esc(r.usageId)}"><td></td><td>${r.rolls} ม้วน</td><td>${(r.weight || 0).toFixed(2)}</td><td class="l" title="${UI.esc(fuQtyCell(r))}">${UI.esc(fuQtyCell(r))}</td><td>${UI.esc(m.label || r.machineId)}</td><td>${fuDMY(r.date)}</td><td>${UI.esc(r.recorderName)}</td></tr>`;
+        return `<tr class="r click ${r.totalQty ? '' : 'pend'}" data-id="${UI.esc(r.usageId)}"><td></td><td>${r.rolls} ม้วน</td><td>${(r.weight || 0).toFixed(2)}</td><td class="l" title="${UI.esc(fuQtyCell(r))}">${UI.esc(fuQtyCell(r))}</td><td>${UI.esc(fuMcLabel(r))}</td><td>${fuDMY(r.date)}</td><td>${UI.esc(r.recorderName)}</td></tr>`;
       }).join('');
       for (let i = part.length; i < per; i++) body += '<tr class="r blank"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
       html += `<div class="fu-sheet-wrap"><table class="fu-sheet">${col}${head}${body}</table></div>`;
@@ -586,7 +600,7 @@ const FiberTag = (() => {
   function fuOpenEdit(id) {
     const r = fu.rows.find((x) => x.usageId === id); if (!r) return;
     if (r.recordedBy !== fuUser.employeeId && !fuIsSup) return UI.showToast('แก้ไขได้เฉพาะผู้บันทึก (' + r.recorderName + ') หรือหัวหน้า', 'info');
-    fuEdit = r; fuMc = r.machineId; fuShift = r.shiftDN; fuQtys = r.qtys.length ? r.qtys.map(String) : [''];
+    fuEdit = r; fuMc = r.machineId; fuShift = r.shiftDN; fuVar = r.productCode || ''; fuQtys = r.qtys.length ? r.qtys.map(String) : [''];
     $('fuDate').value = r.date; fuSetWeight(r.weight); $('fuRemark').value = r.remark;
     $('fuFormTitle').textContent = `${r.totalQty ? 'แก้ไขรายการ' : 'ลงยอดชุดที่เบิก'} ${fuDMY(r.date)} ${String(r.timestamp).slice(11, 16)} · บันทึกโดย ${r.recorderName}`;
     $('fuCancelEdit').classList.remove('hidden'); $('fuDelete').classList.remove('hidden');
@@ -605,6 +619,7 @@ const FiberTag = (() => {
     try { fuMc = localStorage.getItem(FU_MC_KEY) || ''; } catch (e) {}
     fuReset();
     $('fuMachines').addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (!b) return; fuMc = b.dataset.m; try { localStorage.setItem(FU_MC_KEY, fuMc); } catch (er) {} fuRenderForm(); });
+    $('fuVariants').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) { fuVar = b.dataset.v; fuRenderForm(); } });
     $('fuShift').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) { fuShift = b.dataset.v; fuRenderForm(); } });
     $('fuDate').onchange = async () => { if (!$('fuDate').value) $('fuDate').value = UI.getToday(); const m = $('fuDate').value.slice(0, 7); if (m !== fu.monthFrom.slice(0, 7)) { $('fuMonth').value = m; await fuLoad(m); } else fuRenderHelp(); };
     // ช่องน้ำหนัก: รับเลข 1 หลักต่อช่อง พิมพ์แล้วข้ามช่องถัดไป ลบแล้วถอยกลับ
@@ -629,8 +644,7 @@ const FiberTag = (() => {
     $('fuAddQty').onclick = () => { fuQtys.push(''); fuRenderForm(); const ins = $('fuQtys').querySelectorAll('input'); ins[ins.length - 1].focus(); };
     $('fuHelp').addEventListener('click', (e) => {
       if (!e.target.closest('#fuFill')) return;
-      const d = $('fuDate').value, prod = (fu.produced || {})[d + '|' + fuMc + '|' + fuShift] || 0;
-      const logged = fu.rows.filter((r) => r.date === d && r.machineId === fuMc && r.shiftDN === fuShift && (!fuEdit || r.usageId !== fuEdit.usageId)).reduce((a, r) => a + r.totalQty, 0);
+      const d = $('fuDate').value, prod = fuProduced(d), logged = fuLogged(d);
       const others = fuQtys.slice(0, -1).reduce((a, q) => a + (Number(q) || 0), 0);
       fuQtys[fuQtys.length - 1] = String(Math.max(0, prod - logged - others)); fuRenderForm();
     });
@@ -650,7 +664,7 @@ const FiberTag = (() => {
         const blk = fuEdit ? fuFifoBlock(fuEdit) : (fu.pending || []).find((x) => x.machineId === fuMc);
         if (blk) return UI.showToast(`FIFO: ต้องลงยอดชุดที่เบิกก่อน (${fuDMY(blk.date)} ${String(blk.timestamp).slice(11, 16)}) ให้เสร็จก่อน`, 'warning');
       }
-      const data = { usageId: fuEdit ? fuEdit.usageId : '', date: $('fuDate').value, shiftDN: fuShift, machineId: fuMc, rolls: m.rolls, weight: wStr, qtys, remark: $('fuRemark').value.trim() };
+      const data = { usageId: fuEdit ? fuEdit.usageId : '', date: $('fuDate').value, shiftDN: fuShift, machineId: fuMc, productCode: fuVar, rolls: m.rolls, weight: wStr, qtys, remark: $('fuRemark').value.trim() };
       data.clientRequestId = fuReq.get(data);
       const r = await API.post('saveFiberUsage', { data });
       if (!r.success) return UI.showToast(r.message, 'error');

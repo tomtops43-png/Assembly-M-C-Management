@@ -16,7 +16,7 @@ function fiberUsageMachine(machineId) {
 function fiberUsageToObj(r) {
   return {
     usageId: String(r.UsageID), timestamp: r.Timestamp, date: r.Date, shiftDN: r.ShiftDN, machineId: String(r.MachineID),
-    rolls: toNumber(r.Rolls), weight: r.Weight === '' || r.Weight === null ? null : toNumber(r.Weight), scrap: String(r.Scrap) === 'Y',
+    productCode: String(r.ProductCode || ''), rolls: toNumber(r.Rolls), weight: r.Weight === '' || r.Weight === null ? null : toNumber(r.Weight), scrap: String(r.Scrap) === 'Y',
     qtys: safeJson(r.Qtys, []), totalQty: toNumber(r.TotalQty), remark: r.Remark || '',
     recordedBy: String(r.RecordedBy), recorderName: r.RecorderName || '', status: r.Status || 'active',
     updatedAt: r.UpdatedAt || '', updatedBy: r.UpdatedBy || ''
@@ -55,14 +55,15 @@ function getFiberUsage(token, date) {
     if (r.status === 'cancelled' || r.status === 'sort-adjust' || ids.indexOf(r.machineId) < 0) return;
     var k = r.date + '|' + r.machineId + '|' + r.shiftDN;
     produced[k] = (produced[k] || 0) + r.actualQty;
+    produced[k + '|' + r.productCode] = (produced[k + '|' + r.productCode] || 0) + r.actualQty; // แยกรุ่น (GV2 6/9 Plate)
   });
-  var names = {};
-  getMachines().forEach(function (m) { names[m.machineId] = m.machineName; });
+  var names = {}, cur = {};
+  getMachines().forEach(function (m) { names[m.machineId] = m.machineName; cur[m.machineId] = m.currentProduct; });
   return {
     success: true,
     data: {
       date: date, monthFrom: from, monthTo: to, title: cfg.TITLE, rowsPerPage: cfg.ROWS_PER_PAGE || 33,
-      machines: (cfg.MACHINES || []).map(function (m) { return { machineId: m.id, label: m.label, rolls: m.rolls, machineName: names[m.id] || m.id }; }),
+      machines: (cfg.MACHINES || []).map(function (m) { return { machineId: m.id, label: m.label, rolls: m.rolls, machineName: names[m.id] || m.id, variants: m.variants || [], currentProduct: cur[m.id] || '' }; }),
       rows: readFiberUsage(from, to), pending: readPendingFiberUsage(), produced: produced
     }
   };
@@ -79,6 +80,10 @@ function saveFiberUsage(token, data) {
   if (date === getWorkDate() && shiftDN === 'Night' && detectShift() === 'Day') throw new Error('ยังไม่ถึงกะดึก');
   var mc = fiberUsageMachine(data.machineId);
   if (!mc) throw new Error('เครื่องนี้ไม่ได้ลงเบิกไฟเบอร์');
+  var productCode = String(data.productCode || '').trim();
+  if (mc.variants && mc.variants.length) {
+    if (!mc.variants.some(function (v) { return v.product === productCode; })) throw new Error('กรุณาเลือกรุ่น (' + mc.variants.map(function (v) { return v.name; }).join(' / ') + ')');
+  } else productCode = '';
   var rolls = toNumber(data.rolls, mc.rolls);
   if (!(rolls > 0)) throw new Error('จำนวนม้วนไม่ถูกต้อง');
   var weight = Math.round(toNumber(data.weight) * 100) / 100;
@@ -87,7 +92,7 @@ function saveFiberUsage(token, data) {
   var qtys = (data.qtys || []).map(function (q) { return Math.round(toNumber(q)); }).filter(function (q) { return q > 0; });
   var total = qtys.reduce(function (a, b) { return a + b; }, 0);
   var fields = {
-    Date: date, ShiftDN: shiftDN, MachineID: mc.id, Rolls: rolls, Weight: weight.toFixed(2), Scrap: '',
+    Date: date, ShiftDN: shiftDN, MachineID: mc.id, ProductCode: productCode, Rolls: rolls, Weight: weight.toFixed(2), Scrap: '',
     Qtys: JSON.stringify(qtys), TotalQty: total, Remark: String(data.remark || '').trim()
   };
 

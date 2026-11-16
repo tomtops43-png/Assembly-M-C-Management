@@ -257,8 +257,9 @@ var LINE_CONFIG = {
       { id: 'AC-06', label: '#6', rolls: 2 },
       { id: 'AC-07', label: '#7', rolls: 2 },
       { id: 'AC-08', label: '#8', rolls: 2 },
-      { id: 'AC-BETA', label: '#5', rolls: 4 },
-      { id: 'GV-2', label: 'GV2', rolls: 1 }
+      { id: 'AC-BETA', label: '#3', rolls: 4 },
+      { id: 'GV-2', label: 'GV2', rolls: 1, // GV2 ต้องเลือกรุ่นที่ผลิต (6 / 9 Plate)
+        variants: [{ product: 'W813890060190-JR', name: '6 Plate', short: '6P' }, { product: 'W813890890211-JR', name: '9 Plate', short: '9P' }] }
     ]
   },
 
@@ -268,7 +269,7 @@ var LINE_CONFIG = {
   MACHINE_GROUPS: ['Arc chute', 'GV.2', 'Arc Stack'],
 
   // รหัสสินค้าชั่วคราว → รหัส FG จริง (migrateProductCodes ใน ProductService.gs เปลี่ยนให้ทุกชีทอัตโนมัติครั้งเดียว)
-  // Cut chamber #5–#8 ใช้รหัส FG เดียวกัน → รวมเป็นสินค้าเดียว
+  // Cut chamber No.3 (Beta), #6–#8 ใช้รหัส FG เดียวกัน → รวมเป็นสินค้าเดียว
   PRODUCT_CODE_MIGRATION: {
     'AS-MEDIUM': 'S1A23976-D', 'AS-HIGH': 'S1A23969-D',
     'GV2-6P': 'W813890060190-JR', 'GV2-9P': 'W813890890211-JR',
@@ -286,7 +287,7 @@ var LINE_CONFIG = {
   SEED: {
     // กลุ่ม (ไลน์ย่อย) → เครื่อง → สินค้าที่ผลิตได้
     // capacity เครื่อง = 0 → ใช้ capacity ของสินค้าที่กำลังผลิต
-    // Arc chute 06/07/08/Beta = Cut chamber #6/#7/#8/#5 (ยืนยันแล้ว)
+    // Arc chute 06/07/08/Beta = Cut chamber #6/#7/#8/No.3 (Beta = No.3 — แก้ 16/11/2026)
     machines: [
       // Arc chute 4 เครื่องผลิตรหัส FG เดียวกัน (51207116JR) → capacity ตั้งที่เครื่อง (สินค้า capacity = 0)
       { id: 'AC-06', name: 'Arc chute 06', group: 'Arc chute', capacity: 2000, products: ['51207116JR'] },
@@ -334,7 +335,7 @@ var SHEET_SCHEMAS = {
   RawMaterialLog: ['ReceiveID', 'Timestamp', 'Date', 'ReceivedBy', 'ReceiverName', 'MachineID', 'PartCode', 'SupplierCode', 'PartName', 'Specification', 'Quantity', 'Unit', 'LotNumber', 'Inspector', 'Customer', 'NetWeight', 'GrossWeight', 'CartonNo', 'PackingDate', 'RefNo', 'Remark', 'Photos', 'Status'],
   FiberRolls: ['RollID', 'CreatedAt', 'CreatedBy', 'PartCode', 'LotNumber', 'Oven', 'Status', 'Cycle', 'DryStart', 'ReadyAt', 'OutAt', 'ExpireAt', 'MachineID', 'Moisture', 'UpdatedAt', 'UpdatedBy', 'UpdatedByName', 'Remark'],
   FiberLog: ['LogID', 'Timestamp', 'RollID', 'Action', 'Cycle', 'MachineID', 'Moisture', 'ByID', 'ByName', 'Remark'],
-  FiberUsage: ['UsageID', 'Timestamp', 'Date', 'ShiftDN', 'MachineID', 'Rolls', 'Weight', 'Scrap', 'Qtys', 'TotalQty', 'Remark', 'RecordedBy', 'RecorderName', 'Status', 'ClientRequestID', 'UpdatedAt', 'UpdatedBy'],
+  FiberUsage: ['UsageID', 'Timestamp', 'Date', 'ShiftDN', 'MachineID', 'ProductCode', 'Rolls', 'Weight', 'Scrap', 'Qtys', 'TotalQty', 'Remark', 'RecordedBy', 'RecorderName', 'Status', 'ClientRequestID', 'UpdatedAt', 'UpdatedBy'],
   SortingLog: ['JobID', 'Timestamp', 'Date', 'Shift', 'ShiftDN', 'MachineID', 'ProductCode', 'FoundProcess', 'TotalQty', 'GoodQty', 'DefectQty', 'DefectDetails', 'Status', 'RegisteredBy', 'RegisteredByName', 'SortedBy', 'SortedByName', 'PulledAt', 'CompletedAt', 'Remark', 'JobOrderID'],
   DisassemblyLog: ['JobID', 'Timestamp', 'Date', 'Shift', 'MachineID', 'ProductCode', 'SourceType', 'SourceRef', 'JobOrderID', 'TotalQty', 'DoneQty', 'MatDetails', 'Status', 'RegisteredBy', 'RegisteredByName', 'WorkedBy', 'WorkedByName', 'PulledAt', 'CompletedAt', 'Remark'],
   WasteLog: ['WasteID', 'Timestamp', 'Date', 'RecordedBy', 'RecorderName', 'WasteType', 'WeightKg', 'Remark', 'Category'],
