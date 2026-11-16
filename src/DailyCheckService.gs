@@ -6,7 +6,9 @@ var DC_SHIFTS = ['Day', 'Night'];
 
 /** ทุกฟอร์มของเครื่อง (ตามลำดับใน Config) */
 function dailyCheckFormsFor(machineId) {
-  return (LINE_CONFIG.DAILY_CHECK.FORMS || []).filter(function (f) { return f.machines.indexOf(String(machineId)) >= 0; });
+  return (LINE_CONFIG.DAILY_CHECK.FORMS || []).filter(function (f) {
+    return f.machines.indexOf('*') >= 0 || f.machines.indexOf(String(machineId)) >= 0; // '*' = ทุกเครื่อง
+  });
 }
 
 /** ฟอร์มแรกของเครื่อง (ใช้กับแถวเก่าที่ยังไม่มี FormID) */
