@@ -62,6 +62,11 @@
   </div>
 
   <div data-panel="usage" class="hidden">
+    <div class="card no-print">
+      <div class="card-title"><i class="bi bi-hourglass-split"></i> กำลังใช้ / รอลงยอด <span class="badge badge-count" id="fuPendCount">0</span></div>
+      <div class="small text-gray mb-2">เรียงตามลำดับที่เบิก (FIFO) — แต่ละเครื่องต้องลงยอดชุดที่เบิกก่อนให้เสร็จก่อน</div>
+      <div id="fuPending"></div>
+    </div>
     <div class="card no-print" id="fuFormCard">
       <div class="card-title"><i class="bi bi-journal-plus"></i> <span id="fuFormTitle">ลงเบิกไฟเบอร์ (1 ชุด)</span></div>
       <div class="form-row">
@@ -81,16 +86,11 @@
       </div>
       <div class="form-group"><label class="form-label">หมายเหตุ</label>
         <div class="d-flex gap-2"><input class="form-input" id="fuRemark"><button class="btn btn-outline btn-sm" id="fuChange">เปลี่ยน</button></div></div>
-      <div class="btn-group">
+      <div class="btn-group fu-actions">
         <button class="btn btn-success flex-1 btn-lg" id="fuSave"><i class="bi bi-check2"></i> บันทึก</button>
         <button class="btn btn-outline hidden" id="fuCancelEdit">ยกเลิกแก้ไข</button>
         <button class="btn btn-danger hidden" id="fuDelete">ลบ</button>
       </div>
-    </div>
-    <div class="card no-print">
-      <div class="card-title"><i class="bi bi-hourglass-split"></i> กำลังใช้ / รอลงยอด <span class="badge badge-count" id="fuPendCount">0</span></div>
-      <div class="small text-gray mb-2">เรียงตามลำดับที่เบิก (FIFO) — แต่ละเครื่องต้องลงยอดชุดที่เบิกก่อนให้เสร็จก่อน</div>
-      <div id="fuPending"></div>
     </div>
     <div class="card">
       <div class="card-title no-print"><i class="bi bi-table"></i> ใบยอดการใช้ไฟเบอร์ <span class="spacer"></span>
@@ -98,6 +98,7 @@
         <select class="form-input fu-filter" id="fuFilter"></select>
         <button class="btn btn-outline btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> พิมพ์</button></div>
       <div class="small text-gray mb-2 no-print" id="fuSummary"></div>
+      <div class="small text-gray mb-2 fu-swipe">เลื่อนซ้าย-ขวาเพื่อดูทั้งใบ · บนมือถือแสดงเฉพาะแถวที่มีข้อมูล (พิมพ์ออกมาเต็มใบ)</div>
       <div id="fuSheets"></div>
       <div class="small text-gray mt-2 no-print">แตะแถวเพื่อแก้ไข</div>
     </div>
@@ -188,6 +189,22 @@
 .fu-pend .q { font-weight: 700; min-width: 54px; text-align: center; }
 .fu-pend .info { flex: 1; font-size: 13.5px; }
 .fu-sheet .r.pend td { background: #fffbea; }
+.fu-swipe { display: none; }
+@media (max-width: 640px) {
+  .fu-mcs { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .fu-mcs button { padding: 12px 6px; font-size: 16px; }
+  .fu-seg button { flex: 1; padding: 12px; font-size: 15px; }
+  .fu-wt input { width: 56px; height: 62px; font-size: 30px; }
+  .fu-qty input { font-size: 18px; height: 48px; }
+  .fu-actions { flex-wrap: wrap; } .fu-actions #fuSave { flex: 1 1 100%; }
+  .fu-actions #fuCancelEdit, .fu-actions #fuDelete { flex: 1; }
+  .fu-pend { flex-wrap: wrap; } .fu-pend .info { min-width: 0; }
+  .fu-pend [data-fill] { padding: 10px 16px; font-size: 15px; }
+  .fu-swipe { display: block; }
+  .fu-sheet .r.blank { display: none; }
+  .fu-sheet .t td { font-size: 22px; }
+}
+@media print { .fu-sheet .r.blank { display: table-row !important; } .fu-swipe { display: none !important; } }
 @media print { .fu-sheet .r.pend td { background: #fff; } }
 .fu-qty { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
 .fu-qty .plus { font-weight: 700; width: 14px; text-align: center; color: var(--gray); }
@@ -552,7 +569,7 @@ const FiberTag = (() => {
         const m = fuMcOf(r.machineId) || {};
         return `<tr class="r click ${r.totalQty ? '' : 'pend'}" data-id="${UI.esc(r.usageId)}"><td></td><td>${r.rolls} ม้วน</td><td>${(r.weight || 0).toFixed(2)}</td><td class="l" title="${UI.esc(fuQtyCell(r))}">${UI.esc(fuQtyCell(r))}</td><td>${UI.esc(m.label || r.machineId)}</td><td>${fuDMY(r.date)}</td><td>${UI.esc(r.recorderName)}</td></tr>`;
       }).join('');
-      for (let i = part.length; i < per; i++) body += '<tr class="r"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+      for (let i = part.length; i < per; i++) body += '<tr class="r blank"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
       html += `<div class="fu-sheet-wrap"><table class="fu-sheet">${col}${head}${body}</table></div>`;
     }
     $('fuSheets').innerHTML = html;
