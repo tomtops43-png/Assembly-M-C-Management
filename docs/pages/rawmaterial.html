@@ -20,6 +20,7 @@
 <main class="main"><div class="container">
   <div class="tabs" id="tabs">
     <button class="tab-btn" data-tab="fiber"><i class="bi bi-fire"></i> อบไฟเบอร์</button>
+    <button class="tab-btn" data-tab="usage"><i class="bi bi-journal-text"></i> เบิกไฟเบอร์</button>
     <button class="tab-btn" data-tab="receive"><i class="bi bi-box-seam"></i> รับวัตถุดิบ</button>
   </div>
 
@@ -57,6 +58,44 @@
         <div class="card-title mt-3"><i class="bi bi-check2-all"></i> ใช้หมดแล้ว (3 วันล่าสุด)</div>
         <div id="fbDoneList"></div>
       </div>
+    </div>
+  </div>
+
+  <div data-panel="usage" class="hidden">
+    <div class="card no-print" id="fuFormCard">
+      <div class="card-title"><i class="bi bi-journal-plus"></i> <span id="fuFormTitle">ลงเบิกไฟเบอร์ (1 ชุด)</span></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">วันที่ผลิต</label><input type="date" class="form-input" id="fuDate"></div>
+        <div class="form-group"><label class="form-label">กะ</label><div class="fu-seg" id="fuShift"><button data-v="Day">กะเช้า</button><button data-v="Night">กะดึก</button></div></div>
+      </div>
+      <div class="form-group"><label class="form-label">หมายเลขเครื่อง</label><div class="fu-mcs" id="fuMachines"></div></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">จำนวน</label><div class="fu-rolls" id="fuRolls">-</div></div>
+        <div class="form-group"><label class="form-label">น้ำหนัก (กก.) *</label>
+          <div class="d-flex gap-2 align-center"><input type="number" step="0.01" inputmode="decimal" class="form-input" id="fuWeight" placeholder="เช่น 2.43">
+          <label class="fu-check"><input type="checkbox" id="fuScrap"> เศษ</label></div></div>
+      </div>
+      <div class="form-group"><label class="form-label">จำนวนงานที่ผลิตได้ *</label>
+        <div id="fuQtys"></div>
+        <button class="btn btn-outline btn-sm mt-2" id="fuAddQty"><i class="bi bi-plus-lg"></i> เพิ่มยอด (+)</button>
+        <div class="fu-help" id="fuHelp"></div>
+      </div>
+      <div class="form-group"><label class="form-label">หมายเหตุ</label>
+        <div class="d-flex gap-2"><input class="form-input" id="fuRemark"><button class="btn btn-outline btn-sm" id="fuChange">เปลี่ยน</button></div></div>
+      <div class="btn-group">
+        <button class="btn btn-success flex-1 btn-lg" id="fuSave"><i class="bi bi-check2"></i> บันทึก</button>
+        <button class="btn btn-outline hidden" id="fuCancelEdit">ยกเลิกแก้ไข</button>
+        <button class="btn btn-danger hidden" id="fuDelete">ลบ</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title no-print"><i class="bi bi-table"></i> ใบยอดการใช้ไฟเบอร์ <span class="spacer"></span>
+        <input type="month" class="date-input" id="fuMonth">
+        <select class="form-input fu-filter" id="fuFilter"></select>
+        <button class="btn btn-outline btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> พิมพ์</button></div>
+      <div class="small text-gray mb-2 no-print" id="fuSummary"></div>
+      <div id="fuSheets"></div>
+      <div class="small text-gray mt-2 no-print">แตะแถวเพื่อแก้ไข</div>
     </div>
   </div>
 
@@ -127,6 +166,30 @@
 .fb-card.ready { border-color: var(--success); } .fb-card.expired { border-color: var(--primary); background: var(--danger-light); }
 .fb-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .fb-time { font-size: 13px; margin-top: 6px; }
+/* ---- เบิกไฟเบอร์ ---- */
+.fu-mcs, .fu-seg { display: flex; gap: 8px; flex-wrap: wrap; }
+.fu-mcs button, .fu-seg button { padding: 10px 14px; border-radius: 8px; border: 1px solid var(--gray-light); background: #fff; font-family: inherit; font-weight: 600; cursor: pointer; }
+.fu-mcs button.active, .fu-seg button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+.fu-mcs button small { display: block; font-weight: 500; font-size: 11px; opacity: .75; }
+.fu-rolls { font-size: 20px; font-weight: 700; padding: 6px 0; }
+.fu-check { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-weight: 600; }
+.fu-qty { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.fu-qty .plus { font-weight: 700; width: 14px; text-align: center; color: var(--gray); }
+.fu-help { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--bg); font-size: 13px; }
+.fu-filter { width: auto; min-width: 130px; padding: 6px 8px; }
+/* ใบกระดาษ "ยอดการใช้ไฟเบอร์ Cut Chamber ประจำวัน" */
+.fu-sheet-wrap { overflow-x: auto; margin-bottom: 16px; }
+.fu-sheet { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 760px; max-width: 900px; margin: 0 auto; color: #000; background: #fff; font-size: 14px; }
+.fu-sheet td { border: 1px solid #000; height: 28px; padding: 2px 6px; text-align: center; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fu-sheet .t td { font-size: 30px; font-weight: 700; height: 52px; letter-spacing: .5px; border-width: 1.5px; }
+.fu-sheet .h td { font-weight: 700; font-size: 15px; height: 32px; white-space: normal; line-height: 1.2; }
+.fu-sheet .r.click { cursor: pointer; } .fu-sheet .r.click:hover td { background: #fff7e6; }
+.fu-sheet td.l { text-align: left; }
+@media print {
+  [data-panel="usage"] .card { box-shadow: none; border: none; padding: 0; }
+  .fu-sheet-wrap { page-break-after: always; overflow: visible; } .fu-sheet-wrap:last-child { page-break-after: auto; }
+  .fu-sheet { font-size: 12px; } .fu-sheet td { height: 24px; } .fu-sheet .t td { font-size: 24px; }
+}
 </style>
 <script>
 /** แท็กไฟเบอร์: ตัวเลข ms ของ server เทียบกับนาฬิกาเครื่อง (กันนาฬิกามือถือเพี้ยน) */
@@ -150,7 +213,7 @@ const FiberTag = (() => {
   if (!UI.initPage('rawmaterial', 'วัตถุดิบ', 'bi-box-seam')) return;
   const $ = (id) => document.getElementById(id);
   const canFiber = Auth.hasKey('fiber'), canReceive = Auth.hasKey('rawmaterial');
-  if (!canFiber) document.querySelector('[data-tab="fiber"]').remove();
+  if (!canFiber) { document.querySelector('[data-tab="fiber"]').remove(); document.querySelector('[data-tab="usage"]').remove(); }
   if (!canReceive) document.querySelector('[data-tab="receive"]').remove();
   const TAB_KEY = APP_CONFIG.STORAGE_PREFIX + 'rawmaterial_tab';
   let started = {};
@@ -158,7 +221,7 @@ const FiberTag = (() => {
     document.querySelectorAll('.tab-btn').forEach((x) => x.classList.toggle('active', x.dataset.tab === tab));
     document.querySelectorAll('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== tab));
     try { localStorage.setItem(TAB_KEY, tab); } catch (e) {}
-    if (!started[tab]) { started[tab] = true; (tab === 'fiber' ? initFiber : initReceive)(); }
+    if (!started[tab]) { started[tab] = true; ({ fiber: initFiber, usage: initUsage, receive: initReceive })[tab](); }
   }
   $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
 
@@ -399,6 +462,139 @@ const FiberTag = (() => {
     machines = m.success ? m.data.filter((x) => x.installed) : [];
     renderMachines(); await loadHist(0);
     UI.hideLoading();
+  }
+
+  // ================= เบิกไฟเบอร์ (ยอดการใช้ไฟเบอร์ Cut Chamber ประจำวัน) =================
+  let fu = null, fuMc = '', fuShift = '', fuEdit = null, fuQtys = [''];
+  const fuReq = UI.requestIdKeeper(), fuUser = Auth.getUser(), fuIsSup = Auth.hasRole('supervisor');
+  const FU_MC_KEY = APP_CONFIG.STORAGE_PREFIX + 'fiberusage_machine';
+  const fuMcOf = (id) => (fu && fu.machines.find((m) => m.machineId === id)) || null;
+  const fmtN = (n) => Number(n || 0).toLocaleString('en-US');
+  const fuDMY = (d) => { const p = String(d).split('-'); return `${p[2]}/${p[1]}/${p[0]}`; };
+
+  async function fuLoad(month) {
+    const r = await API.get('getFiberUsage', { date: (month || $('fuMonth').value || UI.getToday().slice(0, 7)) + '-01' });
+    if (!r.success) return UI.showToast(r.message, 'error');
+    fu = r.data;
+    if (!fuMcOf(fuMc)) fuMc = (fu.machines[0] || {}).machineId || '';
+    $('fuFilter').innerHTML = '<option value="">ทุกเครื่อง</option>' + fu.machines.map((m) => `<option value="${UI.esc(m.machineId)}">${UI.esc(m.label)} · ${UI.esc(m.machineName)}</option>`).join('');
+    $('fuFilter').value = fuFilterVal;
+    fuRenderForm(); fuRenderSheet();
+  }
+  let fuFilterVal = '';
+
+  function fuRenderForm() {
+    if (!fu) return; // ยังโหลดข้อมูลไม่เสร็จ
+    $('fuMachines').innerHTML = fu.machines.map((m) => `<button class="${m.machineId === fuMc ? 'active' : ''}" data-m="${UI.esc(m.machineId)}">${UI.esc(m.label)}<small>${UI.esc(m.machineName)} · ${m.rolls} ม้วน</small></button>`).join('');
+    const m = fuMcOf(fuMc);
+    $('fuRolls').textContent = m ? m.rolls + ' ม้วน' : '-';
+    [...$('fuShift').children].forEach((b) => b.classList.toggle('active', b.dataset.v === fuShift));
+    $('fuWeight').disabled = $('fuScrap').checked;
+    $('fuQtys').innerHTML = fuQtys.map((q, i) => `<div class="fu-qty"><span class="plus">${i ? '+' : ''}</span><input type="number" inputmode="numeric" class="form-input" data-q="${i}" value="${UI.esc(String(q))}" placeholder="จำนวนชิ้น">${i ? `<button class="btn btn-outline btn-sm" data-rm="${i}"><i class="bi bi-x-lg"></i></button>` : ''}</div>`).join('');
+    fuRenderHelp();
+  }
+  /** ตัวช่วย: ยอดผลิตกะนี้จากบันทึกยอด เทียบกับที่ลงในใบเบิกไฟเบอร์แล้ว */
+  function fuRenderHelp() {
+    const d = $('fuDate').value, total = fuQtys.reduce((a, q) => a + (Number(q) || 0), 0);
+    const prod = (fu.produced || {})[d + '|' + fuMc + '|' + fuShift] || 0;
+    const logged = fu.rows.filter((r) => r.date === d && r.machineId === fuMc && r.shiftDN === fuShift && (!fuEdit || r.usageId !== fuEdit.usageId)).reduce((a, r) => a + r.totalQty, 0);
+    const left = prod - logged;
+    $('fuHelp').innerHTML = (fuQtys.length > 1 ? `รวมชุดนี้: <b>${fmtN(total)}</b> ชิ้น<br>` : '') +
+      `ยอดผลิตกะนี้ (จากบันทึกยอด): <b>${fmtN(prod)}</b> · ลงในใบเบิกไฟเบอร์แล้ว: <b>${fmtN(logged)}</b> · ยังไม่ลง: <b>${fmtN(Math.max(0, left))}</b>` +
+      (left > 0 ? ` <button class="btn btn-outline btn-sm" id="fuFill">ใส่ยอดที่เหลือ</button>` : '');
+  }
+  function fuQtyCell(r) {
+    return r.qtys.map(fmtN).join(' + ') + (r.remark ? ` (${r.remark})` : '');
+  }
+  function fuRenderSheet() {
+    const ym = fu.monthFrom.slice(0, 7).split('-');
+    const rows = fu.rows.filter((r) => !fuFilterVal || r.machineId === fuFilterVal)
+      .sort((a, b) => (a.date + (a.shiftDN === 'Night' ? 1 : 0) + a.timestamp).localeCompare(b.date + (b.shiftDN === 'Night' ? 1 : 0) + b.timestamp));
+    const sum = rows.reduce((o, r) => { o.rolls += r.rolls; o.qty += r.totalQty; if (!r.scrap && r.weight) { o.kg += r.weight; o.kgQty += r.totalQty; } return o; }, { rolls: 0, kg: 0, qty: 0, kgQty: 0 });
+    $('fuSummary').textContent = `เดือน ${Number(ym[1])}/${ym[0]} · ${rows.length} ชุด · ${fmtN(sum.rolls)} ม้วน · ${sum.kg.toFixed(2)} กก. · ผลิตได้ ${fmtN(sum.qty)} ชิ้น` + (sum.kg ? ` · ${fmtN(Math.round(sum.kgQty / sum.kg))} ชิ้น/กก. (ไม่นับชุดที่เป็นเศษ)` : '');
+    const per = fu.rowsPerPage || 33, pages = Math.max(1, Math.ceil(rows.length / per));
+    const col = '<colgroup><col style="width:12%"><col style="width:13%"><col style="width:13%"><col style="width:23%"><col style="width:10%"><col style="width:14%"><col style="width:15%"></colgroup>';
+    const head = `<tr class="t"><td colspan="7">${UI.esc(fu.title)}</td></tr><tr class="h"><td>วันรับเข้า</td><td>จำนวน</td><td>น้ำหนัก</td><td>จำนวนงานที่ผลิตได้</td><td>หมายเลขเครื่อง</td><td>วันที่ผลิต</td><td>ลงชื่อ</td></tr>`;
+    let html = '';
+    for (let p = 0; p < pages; p++) {
+      const part = rows.slice(p * per, (p + 1) * per);
+      let body = part.map((r) => {
+        const m = fuMcOf(r.machineId) || {};
+        return `<tr class="r click" data-id="${UI.esc(r.usageId)}"><td></td><td>${r.rolls} ม้วน</td><td>${r.scrap ? 'เศษ' : (r.weight || 0).toFixed(2)}</td><td class="l" title="${UI.esc(fuQtyCell(r))}">${UI.esc(fuQtyCell(r))}</td><td>${UI.esc(m.label || r.machineId)}</td><td>${fuDMY(r.date)}</td><td>${UI.esc(r.recorderName)}</td></tr>`;
+      }).join('');
+      for (let i = part.length; i < per; i++) body += '<tr class="r"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+      html += `<div class="fu-sheet-wrap"><table class="fu-sheet">${col}${head}${body}</table></div>`;
+    }
+    $('fuSheets').innerHTML = html;
+  }
+
+  function fuReset(keepCtx) {
+    fuEdit = null; fuQtys = ['']; fuReq.reset();
+    $('fuWeight').value = ''; $('fuScrap').checked = false; $('fuRemark').value = '';
+    if (!keepCtx) { $('fuDate').value = UI.getToday(); fuShift = UI.isDayHour(UI.getBkkHour()) ? 'Day' : 'Night'; }
+    $('fuFormTitle').textContent = 'ลงเบิกไฟเบอร์ (1 ชุด)';
+    $('fuCancelEdit').classList.add('hidden'); $('fuDelete').classList.add('hidden');
+    fuRenderForm();
+  }
+  function fuOpenEdit(id) {
+    const r = fu.rows.find((x) => x.usageId === id); if (!r) return;
+    if (r.recordedBy !== fuUser.employeeId && !fuIsSup) return UI.showToast('แก้ไขได้เฉพาะผู้บันทึก (' + r.recorderName + ') หรือหัวหน้า', 'info');
+    fuEdit = r; fuMc = r.machineId; fuShift = r.shiftDN; fuQtys = r.qtys.map(String);
+    $('fuDate').value = r.date; $('fuScrap').checked = r.scrap; $('fuWeight').value = r.scrap ? '' : r.weight; $('fuRemark').value = r.remark;
+    $('fuFormTitle').textContent = `แก้ไขรายการ ${fuDMY(r.date)} · บันทึกโดย ${r.recorderName}`;
+    $('fuCancelEdit').classList.remove('hidden'); $('fuDelete').classList.remove('hidden');
+    fuRenderForm();
+    $('fuFormCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function initUsage() {
+    $('fuMonth').value = UI.getToday().slice(0, 7); $('fuMonth').max = UI.getToday().slice(0, 7);
+    $('fuDate').max = UI.getToday();
+    try { fuMc = localStorage.getItem(FU_MC_KEY) || ''; } catch (e) {}
+    fuReset();
+    $('fuMachines').addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (!b) return; fuMc = b.dataset.m; try { localStorage.setItem(FU_MC_KEY, fuMc); } catch (er) {} fuRenderForm(); });
+    $('fuShift').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) { fuShift = b.dataset.v; fuRenderForm(); } });
+    $('fuDate').onchange = async () => { if (!$('fuDate').value) $('fuDate').value = UI.getToday(); const m = $('fuDate').value.slice(0, 7); if (m !== fu.monthFrom.slice(0, 7)) { $('fuMonth').value = m; await fuLoad(m); } else fuRenderHelp(); };
+    $('fuScrap').onchange = () => { $('fuWeight').disabled = $('fuScrap').checked; if ($('fuScrap').checked) $('fuWeight').value = ''; };
+    $('fuQtys').addEventListener('input', (e) => { const i = e.target.dataset.q; if (i !== undefined) { fuQtys[Number(i)] = e.target.value; fuRenderHelp(); } });
+    $('fuQtys').addEventListener('click', (e) => { const b = e.target.closest('[data-rm]'); if (b) { fuQtys.splice(Number(b.dataset.rm), 1); fuRenderForm(); } });
+    $('fuAddQty').onclick = () => { fuQtys.push(''); fuRenderForm(); const ins = $('fuQtys').querySelectorAll('input'); ins[ins.length - 1].focus(); };
+    $('fuHelp').addEventListener('click', (e) => {
+      if (!e.target.closest('#fuFill')) return;
+      const d = $('fuDate').value, prod = (fu.produced || {})[d + '|' + fuMc + '|' + fuShift] || 0;
+      const logged = fu.rows.filter((r) => r.date === d && r.machineId === fuMc && r.shiftDN === fuShift && (!fuEdit || r.usageId !== fuEdit.usageId)).reduce((a, r) => a + r.totalQty, 0);
+      const others = fuQtys.slice(0, -1).reduce((a, q) => a + (Number(q) || 0), 0);
+      fuQtys[fuQtys.length - 1] = String(Math.max(0, prod - logged - others)); fuRenderForm();
+    });
+    $('fuChange').onclick = () => { const v = $('fuRemark').value.trim(); if (!/เปลี่ยน/.test(v)) $('fuRemark').value = v ? v + ' เปลี่ยน' : 'เปลี่ยน'; };
+    $('fuFilter').onchange = () => { fuFilterVal = $('fuFilter').value; fuRenderSheet(); };
+    $('fuMonth').onchange = () => { if ($('fuMonth').value) fuLoad($('fuMonth').value); };
+    $('fuSheets').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) fuOpenEdit(tr.dataset.id); });
+    $('fuCancelEdit').onclick = () => fuReset(true);
+    $('fuSave').onclick = () => UI.withButton($('fuSave'), async () => {
+      const m = fuMcOf(fuMc);
+      if (!m) return UI.showToast('กรุณาเลือกเครื่อง', 'warning');
+      if (!fuShift) return UI.showToast('กรุณาเลือกกะ', 'warning');
+      const scrap = $('fuScrap').checked, weight = Number($('fuWeight').value);
+      if (!scrap && !(weight > 0)) return UI.showToast('กรุณากรอกน้ำหนัก (หรือเลือก "เศษ")', 'warning');
+      const qtys = fuQtys.map((q) => Number(q)).filter((q) => q > 0);
+      if (!qtys.length) return UI.showToast('กรุณากรอกจำนวนงานที่ผลิตได้', 'warning');
+      const data = { usageId: fuEdit ? fuEdit.usageId : '', date: $('fuDate').value, shiftDN: fuShift, machineId: fuMc, rolls: m.rolls, weight: scrap ? '' : weight, scrap, qtys, remark: $('fuRemark').value.trim() };
+      data.clientRequestId = fuReq.get(data);
+      const r = await API.post('saveFiberUsage', { data });
+      if (!r.success) return UI.showToast(r.message, 'error');
+      UI.showToast(r.updated ? 'แก้ไขแล้ว' : 'บันทึกแล้ว', 'success');
+      fuReset(true); await fuLoad();
+    });
+    $('fuDelete').onclick = async () => {
+      if (!fuEdit || !await UI.confirm({ title: 'ลบรายการนี้?', danger: true })) return;
+      UI.withButton($('fuDelete'), async () => {
+        const r = await API.post('cancelFiberUsage', { usageId: fuEdit.usageId });
+        if (!r.success) return UI.showToast(r.message, 'error');
+        UI.showToast('ลบแล้ว', 'success'); fuReset(true); await fuLoad();
+      });
+    };
+    UI.showLoading(); fuLoad().finally(() => UI.hideLoading());
   }
 
   let first = 'fiber';
