@@ -99,7 +99,6 @@ function saveFiberUsage(token, data) {
   if (data.usageId) {
     var cur = findRow('FiberUsage', 'UsageID', data.usageId);
     if (!cur || String(cur.Status || 'active') !== 'active') throw new Error('ไม่พบรายการ');
-    if (String(cur.RecordedBy) !== u.employeeId && roleLevel(u.role) < roleLevel('supervisor')) throw new Error('แก้ไขได้เฉพาะผู้บันทึกหรือหัวหน้า');
     if (total && !toNumber(cur.TotalQty)) {
       var older = olderPendingFiberUsage(mc.id, cur.Timestamp, data.usageId);
       if (older) throw new Error('FIFO: ต้องลงยอดชุดที่เบิกก่อน (' + older.date + ' · ' + older.recorderName + ') ให้เสร็จก่อน');

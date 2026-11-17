@@ -599,11 +599,12 @@ const FiberTag = (() => {
   }
   function fuOpenEdit(id) {
     const r = fu.rows.find((x) => x.usageId === id); if (!r) return;
-    if (r.recordedBy !== fuUser.employeeId && !fuIsSup) return UI.showToast('แก้ไขได้เฉพาะผู้บันทึก (' + r.recorderName + ') หรือหัวหน้า', 'info');
     fuEdit = r; fuMc = r.machineId; fuShift = r.shiftDN; fuVar = r.productCode || ''; fuQtys = r.qtys.length ? r.qtys.map(String) : [''];
     $('fuDate').value = r.date; fuSetWeight(r.weight); $('fuRemark').value = r.remark;
     $('fuFormTitle').textContent = `${r.totalQty ? 'แก้ไขรายการ' : 'ลงยอดชุดที่เบิก'} ${fuDMY(r.date)} ${String(r.timestamp).slice(11, 16)} · บันทึกโดย ${r.recorderName}`;
-    $('fuCancelEdit').classList.remove('hidden'); $('fuDelete').classList.remove('hidden');
+    $('fuCancelEdit').classList.remove('hidden');
+    // ทุกคนแก้ไขได้ แต่ลบได้เฉพาะผู้บันทึกหรือหัวหน้า
+    $('fuDelete').classList.toggle('hidden', r.recordedBy !== fuUser.employeeId && !fuIsSup);
     fuRenderForm();
     $('fuFormCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
     if (!r.totalQty) setTimeout(() => { const q = $('fuQtys').querySelector('input'); if (q) q.focus({ preventScroll: true }); }, 350);
