@@ -5,12 +5,13 @@ const Auth = (() => {
   const C = window.APP_CONFIG;
   const KEY_TOKEN = C.STORAGE_PREFIX + 'token';
   const KEY_USER = C.STORAGE_PREFIX + 'user';
-  const ROLE_LEVELS = { viewer: 0, operator: 1, maintenance: 2, supervisor: 3, admin: 4 };
-  const ROLE_LABELS = { viewer: 'ผู้ชม', operator: 'พนักงาน', maintenance: 'ช่างซ่อม', supervisor: 'หัวหน้า', admin: 'ผู้ดูแลระบบ' };
+  const ROLE_LEVELS = { viewer: 0, operator: 1, qc: 1, maintenance: 2, supervisor: 3, admin: 4 };
+  const ROLE_LABELS = { viewer: 'ผู้ชม', operator: 'พนักงาน', qc: 'QC', maintenance: 'ช่างซ่อม', supervisor: 'หัวหน้า', admin: 'ผู้ดูแลระบบ' };
 
   const _roleDefaults = {
     viewer:      ['inbox', 'dashboard'],
     operator:    ['production', 'inbox', 'maintenance', 'machines', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
+    qc:          ['inbox', 'dashboard', 'machines', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'ngExport'],
     maintenance: ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
     supervisor:  ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'joborders', 'cost', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber'],
     admin:       ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin', 'joborders', 'cost', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber']
