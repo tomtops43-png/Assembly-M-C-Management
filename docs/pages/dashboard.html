@@ -70,7 +70,8 @@
   <div class="card">
     <div class="card-title"><i class="bi bi-file-earmark-text"></i> Auto Generated Report <span class="spacer"></span>
       <button class="btn btn-outline btn-sm" id="repGen"><i class="bi bi-arrow-repeat"></i> Generate now</button>
-      <button class="btn btn-outline btn-sm" id="repPdf"><i class="bi bi-download"></i> Download PDF</button></div>
+      <button class="btn btn-outline btn-sm" id="repPdf"><i class="bi bi-download"></i> Download PDF</button>
+      <button class="btn btn-outline btn-sm" id="repXlsx"><i class="bi bi-file-earmark-excel"></i> Download Excel</button></div>
     <div class="small text-gray mb-2" id="repStamp"></div>
     <pre class="auto-report" id="autoReport"></pre>
   </div>
@@ -823,6 +824,133 @@
       w.document.close();
     } finally { holder.remove(); window.scrollTo(0, keepScroll); }
   }
+
+  // ---------- Excel (.xlsx หลายชีต — ใช้ข้อมูลชุดเดียวกับ Auto Report) ----------
+  const EXCELJS_SRC = ['https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js',
+    'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'];
+  async function loadExcelJs() {
+    for (const src of EXCELJS_SRC) {
+      if (window.ExcelJS) return;
+      await new Promise((resolve) => {
+        const s = document.createElement('script'); s.src = src; s.onload = resolve;
+        s.onerror = () => { s.remove(); resolve(); };
+        document.head.appendChild(s);
+      });
+    }
+    if (!window.ExcelJS) throw new Error('โหลดตัวสร้าง Excel ไม่ได้ — ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่');
+  }
+  const fixOnly = (t) => {
+    const r = String(t.resolution || ''), i = r.indexOf('[ซ่อม] ');
+    return (i >= 0 ? r.slice(i + 7) : r) || '';
+  };
+  const numOrNull = (v) => (v === null || v === undefined || v === '' || isNaN(Number(v)) ? null : Number(v));
+
+  /** สร้าง sheet: cols = [[หัวคอลัมน์, ความกว้าง, รูปแบบตัวเลข?]] , rows = array ของ array */
+  function addSheet(wb, name, cols, rows, opt = {}) {
+    const ws = wb.addWorksheet(name, { views: [{ state: 'frozen', ySplit: (opt.titleRows || 0) + 1 }] });
+    (opt.title || []).forEach((line, i) => { const r = ws.addRow([line]); if (i === 0) r.font = { bold: true, size: 13 }; });
+    const head = ws.addRow(cols.map((c) => c[0]));
+    head.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    head.eachCell((c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC8102E' } }; c.alignment = { vertical: 'middle', wrapText: true }; });
+    rows.forEach((r) => ws.addRow(r));
+    cols.forEach((c, i) => {
+      const col = ws.getColumn(i + 1); col.width = c[1] || 14;
+      if (c[2]) col.numFmt = c[2];
+      if (c[3]) col.alignment = { wrapText: true, vertical: 'top' };
+    });
+    if (!rows.length) ws.addRow(['ไม่มีข้อมูล']);
+    else ws.autoFilter = { from: { row: head.number, column: 1 }, to: { row: head.number, column: cols.length } };
+    return ws;
+  }
+
+  function buildWorkbook() {
+    const wb = new window.ExcelJS.Workbook();
+    wb.creator = APP_CONFIG.LINE_NAME; wb.created = reportAt || new Date();
+    const k = data.kpi, mt = data.maintenance, dc = data.dailyCheck;
+    const INT = '#,##0', PCT = '0.00', DT = 'yyyy-mm-dd';
+    const topM = data.byMachine.slice().sort((a, b) => b.actual - a.actual)[0];
+    const topP = data.byProduct.slice().sort((a, b) => b.actual - a.actual)[0];
+    const worst = data.byMachine.filter((m) => m.defect).sort((a, b) => b.defectRate - a.defectRate)[0];
+    const reasons = Object.keys(data.ngByReason).sort((a, b) => data.ngByReason[b] - data.ngByReason[a]);
+
+    // 1) สรุป
+    const filt = [shiftTxt(), $('fProduct').value ? 'รุ่น: ' + $('fProduct').value : 'ทุกรุ่น', $('fJo').value ? 'JO: ' + $('fJo').selectedOptions[0].text : 'ทุก Job Order'].join(' | ');
+    const ws1 = addSheet(wb, 'สรุป', [['หัวข้อ', 38], ['ค่า', 22, '#,##0.##'], ['หน่วย / หมายเหตุ', 44]], [
+      ['ไลน์', APP_CONFIG.LINE_NAME, ''],
+      ['สร้างเมื่อ', fmtStamp(reportAt || new Date()), ''],
+      ['ช่วงวันที่', rangeTxt(), ''],
+      ['ตัวกรอง', filt, ''],
+      ['ยอดผลิตรวม (FG)', numOrNull(k.actual), 'ชิ้น'],
+      ['แผน', numOrNull(k.plan), 'ชิ้น'],
+      ['OEE', numOrNull(k.oee), '% (แผนคิด 8 ชม./กะ + OT 2.5 ชม. เมื่อมี OT)'],
+      ['กะที่มี OT', numOrNull(k.otShifts) || 0, 'กะ'],
+      ['อัตรา NG', numOrNull(k.defectRate), '%'],
+      ['จำนวน NG', numOrNull(k.defect), 'ชิ้น'],
+      ['งานซ่อมเปิดอยู่', numOrNull(mt.open), mt.carriedOver ? `ยกมาจากวันก่อน ${mt.carriedOver}` : ''],
+      ['Job Order ที่อยู่ในรายงาน', joCount(), 'รายการ'],
+      ['เครื่องจักรที่ผลิตสูงสุด', topM && topM.actual ? topM.machineName : '-', topM && topM.actual ? `FG ${n(topM.actual)} ชิ้น` : ''],
+      ['รุ่นที่ผลิตสูงสุด', topP && topP.actual ? topP.productCode : '-', topP && topP.actual ? `FG ${n(topP.actual)} ชิ้น` : ''],
+      ['เครื่องที่ %NG สูงสุด', worst ? worst.machineName : '-', worst ? `${worst.defectRate}%` : ''],
+      ['อาการ NG อันดับ 1', reasons[0] || '-', reasons[0] ? `${n(data.ngByReason[reasons[0]])} ชิ้น` : '']
+    ]);
+    ws1.getColumn(1).font = { bold: true };
+    ws1.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    // 2) ตามเครื่องจักร
+    addSheet(wb, 'ตามเครื่องจักร', [['เครื่อง', 22], ['FG', 12, INT], ['NG', 10, INT], ['OEE %', 10, PCT], ['% NG', 10, PCT], ['จำนวนกะ OT', 12, INT], ['FG ช่วง OT', 12, INT]],
+      data.byMachine.map((m) => [m.machineName, numOrNull(m.actual), numOrNull(m.defect), numOrNull(m.oee), numOrNull(m.defectRate), numOrNull(m.otShifts) || 0, numOrNull(m.otActual) || 0]));
+
+    // 3) ตามรุ่น
+    addSheet(wb, 'ตามรุ่น', [['รุ่น', 22], ['แผน', 12, INT], ['FG', 12, INT], ['NG', 10, INT], ['% Yield', 10, PCT], ['% NG', 10, PCT]],
+      data.byProduct.map((p) => [p.productCode, numOrNull(p.plan), numOrNull(p.actual), numOrNull(p.defect), numOrNull(p.yield), numOrNull(p.defectRate)]));
+
+    // 4) ตามกะ (แถวรวมของกะ + แตกตามรุ่น)
+    const shiftRows = [];
+    Object.keys(data.byShift).forEach((s) => {
+      shiftRows.push([UI.shiftLabel(s), '(รวมทั้งกะ)', numOrNull(data.byShift[s].actual), numOrNull(data.byShift[s].defect)]);
+      shiftProducts(s).forEach(([pc, v]) => shiftRows.push([UI.shiftLabel(s), pc, numOrNull(v.actual), numOrNull(v.defect)]));
+    });
+    const ws4 = addSheet(wb, 'ตามกะ', [['กะ', 16], ['รุ่น', 22], ['FG', 12, INT], ['NG', 10, INT]], shiftRows);
+    ws4.eachRow((r, i) => { if (i > 1 && r.getCell(2).value === '(รวมทั้งกะ)') r.font = { bold: true }; });
+
+    // 5) NG Pareto (ทุกอาการ)
+    const ngTotal = reasons.reduce((a, r) => a + data.ngByReason[r], 0);
+    let cum = 0;
+    addSheet(wb, 'NG Pareto', [['อันดับ', 8], ['อาการ', 34], ['จำนวน (ชิ้น)', 13, INT], ['%', 9, PCT], ['% สะสม', 10, PCT]],
+      reasons.map((r, i) => { const q = data.ngByReason[r]; cum += q; return [i + 1, r, q, ngTotal ? +(q * 100 / ngTotal).toFixed(2) : 0, ngTotal ? +(cum * 100 / ngTotal).toFixed(2) : 0]; }));
+
+    // 6) งานซ่อมค้าง
+    addSheet(wb, 'งานซ่อมค้าง', [['Ticket', 24], ['เครื่อง', 20], ['สถานะ', 14], ['ค้างจากวันก่อน', 14], ['ประเภทปัญหา', 18], ['รายละเอียด', 50, null, true]],
+      (mt.unclosedList || []).map((t) => [t.ticketId, mNameOf(t.machineId), t.status, t.carried ? 'ใช่' : '', issueLbl(t.issueType), t.description || '']));
+
+    // 7) งานซ่อมเสร็จ
+    addSheet(wb, 'งานซ่อมเสร็จ', [['Ticket', 24], ['เครื่อง', 20], ['เวลาปิด', 20], ['Downtime (นาที)', 14, INT], ['ประเภทปัญหา', 18], ['รายละเอียด', 40, null, true], ['การแก้ไข', 60, null, true], ['เลข MMS', 18], ['ช่าง', 16]],
+      (mt.completedList || []).map((t) => [t.ticketId, mNameOf(t.machineId), t.resolvedAt || '', numOrNull(t.downtimeMinutes), issueLbl(t.issueType), t.description || '', fixOnly(t), t.mmsJobNo || '', t.assignedTo || '']));
+
+    // 8) Daily Check — สรุปด้านบน + รายการที่ยังไม่ตรวจ
+    const dcTitle = dc ? [`Daily Check — Compliance ${pctTxt(dc.compliance)} (ตรวจแล้ว ${dc.checked}/${dc.expected}) | Accept ${dc.accept} | Reject ${dc.reject}`, 'รายการที่ยังไม่ตรวจ:'] : ['Daily Check — ไม่มีข้อมูล', ''];
+    addSheet(wb, 'Daily Check', [['เครื่อง', 20], ['กะ', 12], ['ฟอร์ม', 24]],
+      dc ? dc.missing.map((m) => [m.machineId, m.shiftDN === 'Night' ? 'กะดึก' : 'กะเช้า', m.formTab || '']) : [], { title: dcTitle, titleRows: dcTitle.length });
+
+    // 9) Trend รายวัน
+    addSheet(wb, 'Trend รายวัน', [['วันที่', 12, DT], ['แผน', 12, INT], ['FG', 12, INT], ['NG', 10, INT], ['% NG', 9, PCT], ['OEE %', 9, PCT]],
+      (data.trend || []).map((t) => [t.date ? new Date(t.date + 'T00:00:00Z') : '', numOrNull(t.plan), numOrNull(t.actual), numOrNull(t.defect), numOrNull(t.defectRate), numOrNull(t.oee)]));
+    return wb;
+  }
+
+  $('repXlsx').onclick = () => UI.withButton($('repXlsx'), async () => {
+    if (!data) return UI.showToast('ยังไม่มีข้อมูล — กดค้นหาก่อน', 'warning');
+    if (!reportAt) generateReport('auto');
+    try {
+      await loadExcelJs();
+      const buf = await buildWorkbook().xlsx.writeBuffer();
+      const name = `${APP_CONFIG.LINE_NAME.replace(/[^A-Za-z0-9]+/g, '')}_report_${data.range.from || 'all'}${data.range.to && data.range.to !== data.range.from ? '_' + data.range.to : ''}_${($('fShiftDN').value || 'all').toLowerCase()}.xlsx`;
+      const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      UI.showToast('ดาวน์โหลด Excel แล้ว', 'success');
+    } catch (e) { UI.showToast(e.message, 'error'); }
+  });
 
   const COLS = [['date', 'วันที่'], ['timePeriod', 'ช่วง'], ['shift', 'กะ'], ['machineId', 'เครื่อง'], ['productCode', 'รุ่น'], ['jobOrderId', 'JO'], ['actualQty', 'FG'], ['defectQty', 'NG'], ['remark', 'อาการ'], ['employeeName', 'ผู้บันทึก'], ['status', 'สถานะ']];
   function renderTable() {
