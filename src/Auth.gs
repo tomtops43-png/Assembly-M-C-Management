@@ -1,7 +1,7 @@
 /**
  * Auth.gs — Login, session, roles, permissions, users
  */
-var ROLE_LEVELS = { viewer: 0, operator: 1, maintenance: 2, supervisor: 3, admin: 4 };
+var ROLE_LEVELS = { viewer: 0, operator: 1, qc: 1, maintenance: 2, supervisor: 3, admin: 4 };
 var SESSION_EXPIRED_MSG = 'กรุณาเข้าสู่ระบบใหม่';
 
 // ต้องตรงกับ docs/js/auth.js (_roleDefaults)
@@ -11,6 +11,7 @@ var PERMISSION_KEYS = ['production', 'inbox', 'maintenance', 'rawmaterial', 'mac
 var ROLE_DEFAULT_PERMISSIONS = {
   viewer:      ['inbox', 'dashboard'],
   operator:    ['production', 'inbox', 'maintenance', 'machines', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
+  qc:          ['inbox', 'dashboard', 'machines', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'ngExport'],
   maintenance: ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'fiber'],
   supervisor:  ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'joborders', 'cost', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber'],
   admin:       ['production', 'inbox', 'maintenance', 'rawmaterial', 'machines', 'dashboard', 'admin', 'joborders', 'cost', 'waste', 'sorting', 'disassembly', 'alarm', 'ngissue', 'dailycheck', 'ngExport', 'fiber']
